@@ -40,6 +40,10 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     case POLL_TYPE_SOCKET: {
             struct us_socket *s = (struct us_socket *) p;
 
+            if (events & LIBUS_SOCKET_WRITABLE) {
+                s->context->on_writable(s);
+            }
+
             if (events & LIBUS_SOCKET_READABLE) {
                 int length = bsd_recv(us_poll_fd(p), s->context->loop->recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
@@ -56,7 +60,6 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     free(s);
                 }
             }
-
         }
         break;
     }

@@ -63,6 +63,7 @@ struct us_socket_context {
 
     void (*on_accepted)(struct us_socket *);
     void (*on_data)(struct us_socket *, void *data, int length);
+    void (*on_writable)(struct us_socket *);
     void (*on_end)(struct us_socket *);
     //void (*on_timeout)(struct us_socket_context *);
     void (*on_socket_timeout)(struct us_socket *);

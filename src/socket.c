@@ -2,17 +2,24 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-/*int us_socket_fd(struct us_socket *s) {
-    return us_poll_fd(s->p);
-}*/
-
 int us_socket_write(struct us_socket *s, const char *data, int length) {
 
     int written = bsd_send(us_poll_fd(s), data, length, 0);
 
-    // automatically poll for writable here
+    if (written == -1) {
+        return 0;
+        printf("WRITE FAILED!\n");
+    }
 
-    return length;
+    // automatically poll for writable here
+    if (written != length) {
+        // only do this if at the first segment!
+        if (length == 104857646) {
+            us_poll_change(s, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
+        }
+    }
+
+    return written;
 }
 
 void *us_socket_ext(struct us_socket *s) {

@@ -18,4 +18,10 @@ Written with multiple backends in mind:
 * ASIO
 * Etc..
 
+Performance goals & characteristics:
+
+* 5-76x the HTTP throughput for small messages compared to Node.js
+* 1x the HTTP throughput for large streams of data (100mb+) compared to Node.js (system is limit)
+* Not to speak about the mass difference in memory usage..
+
 Under construction still..

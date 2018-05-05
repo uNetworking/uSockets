@@ -55,7 +55,10 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
 }
 
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
-
+    struct epoll_event event;
+    event.events = events;
+    event.data.ptr = p;
+    epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
@@ -67,7 +70,8 @@ int us_poll_type(struct us_poll *p) {
 }
 
 void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
-
+    struct epoll_event event;
+    epoll_ctl(loop->epfd, EPOLL_CTL_DEL, p->state.fd, &event);
 }
 
 #endif
