@@ -14,9 +14,9 @@ int us_socket_write(struct us_socket *s, const char *data, int length) {
     // automatically poll for writable here
     if (written != length) {
         // only do this if at the first segment!
-        if (length == 104857646) {
+        //if (length == 104857646) {
             us_poll_change(s, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
-        }
+        //}
     }
 
     return written;
