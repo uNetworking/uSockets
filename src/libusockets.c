@@ -64,3 +64,8 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
         break;
     }
 }
+
+// loop.c?
+void *us_loop_userdata(struct us_loop *loop) {
+    return loop + 1;
+}

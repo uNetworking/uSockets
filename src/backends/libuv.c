@@ -46,8 +46,8 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
 }
 
 // loop
-struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop)) {
-    struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop));
+struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int userdata_size) {
+    struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + userdata_size);
 
     // common init!
     loop->recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);

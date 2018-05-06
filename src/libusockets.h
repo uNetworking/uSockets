@@ -1,6 +1,10 @@
 #ifndef LIBUSOCKETS_H
 #define LIBUSOCKETS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
     OPTION_REUSE_PORT
 };
@@ -85,7 +89,8 @@ struct us_listen_socket {
 
 // void us_listen_socket_stop(..
 
-struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop));
+struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int userdata_size);
+void *us_loop_userdata(struct us_loop *loop);
 void us_loop_run(struct us_loop *loop);
 
 // per context
@@ -101,5 +106,9 @@ void us_socket_timeout(struct us_socket *s, unsigned int seconds);
 
 void *us_socket_ext(struct us_socket *s);
 int us_socket_type(struct us_socket *s);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // LIBUSOCKETS_H
