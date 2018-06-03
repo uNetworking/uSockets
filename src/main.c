@@ -25,8 +25,8 @@ struct app_http_context {
 };
 
 // small response
-char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
-int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
+//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
+//int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
 
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5120\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5120 - 1;
@@ -40,8 +40,8 @@ int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5242880\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5242880 - 1;
 
-//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
-//int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
+char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
+int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
 
 //large response
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 104857600\r\n\r\n";
@@ -103,38 +103,16 @@ char *receive_buffer;
 int receive_buffer_length;
 struct us_socket *receive_socket;
 
-// this is used for expected output from either SSL_write or SSL_read
-char *ssl_output_buffer_original;
-int ssl_output_buffer_original_length;
-char *ssl_output_buffer;
-int ssl_output_length;
+// note: we can share the same BIO pair among all SSL of the same thread!
+// only 6 kb of SSL state is needed and 16+16kb of temporary buffers!
 
-// borde ha en BIO för vår read där alla writes är direkt send
-// och en BIO för vår write som är
-
-// same as ssl_backpressure in case of read BIO!
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
-    // only openssl will call this, so just send whatever it gives us
-    int written = us_socket_write(receive_socket, data, length);
-    return written;
+    return us_socket_write(receive_socket, data, length);
 }
-
-// we can actually get spill data from what we read!
-char *ssl_read_spill;
-int ssl_read_spill_length = 0;
 
 // make sure to reset receive_buffer before ssl_write is called? no?
 int BIO_s_custom_read(BIO *bio, char *dst, int length) {
-
-    //printf("SSL asking to read: %d\n", length);
-
-    // if we have spill, empty it first of all!
-    if (ssl_read_spill_length) {
-
-    }
-
     if (receive_buffer_length == 0) {
-        //printf("We return ZERO from BIO_read\n");
         // we need to signal this was not an IO error but merely no more data!
         BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_READ);
         return 0;
@@ -151,9 +129,6 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
 
     receive_buffer += length;
     receive_buffer_length -= length;
-
-    //printf("We give back from BIO_read: %d\n", length);
-
     return length;
 }
 
@@ -182,7 +157,21 @@ void on_wakeup(struct us_loop *loop) {
 void on_http_socket_writable(struct us_socket *s) {
     struct app_http_socket *http_socket = (struct app_http_socket *) s;
 
-    printf("writable not implemented\n");
+
+    /*if (backpressure) {
+
+        printf("Sending off some of the backpressure\n");
+
+
+
+    }*/
+
+    //printf("writable not implemented\n");
+
+    //printf("Calling SSL_write\n");
+    int ssl_written = SSL_write(http_socket->ssl, largeHttpBuf, largeHttpBufSize);
+    http_socket->offset = ssl_written;
+    //printf("Wrote unencrypted: %d\n", ssl_written);
 
     /*void *pp;
     int to_write = BIO_get_mem_data(http_socket->wbio, &pp);
@@ -280,11 +269,25 @@ void on_http_socket_data(struct us_socket *s, void *data, int length) {
         //printf("%.*s", read, buf);
 
 
+        // we should problaby only write 16kb of data a go
+        // SSL_write calls BIO_write with 16.02 kb of raw data to send
+        // I guess if BIO_write can signal error as soon as we have backpressure it is okay
+        // we stream 16kb of data per syscall that is
+
+        // we might want to buffer up the data in a custom buffering BIO for writes?
+
+        // or just set some kind of variable bool buffer = true
 
         // stream data to openssl
         //printf("Calling SSL_write\n");
         int ssl_written = SSL_write(http_socket->ssl, largeHttpBuf, largeHttpBufSize);
+        http_socket->offset = ssl_written;
         //printf("Wrote unencrypted: %d\n", ssl_written);
+
+
+        // kolla felet här (ska vara wants write)
+
+
     }
 
    }
@@ -358,8 +361,8 @@ int passwordCallback(char *buf, int size, int rwflag, void *u) {
 int main() {
 
     // any buffer large for write
-    ssl_output_buffer_original_length = 1024 * 1024 * 1024;
-    ssl_output_buffer_original = malloc(ssl_output_buffer_original_length);
+    //ssl_output_buffer_original_length = 1024 * 1024 * 1024;
+    //ssl_output_buffer_original = malloc(ssl_output_buffer_original_length);
 
     printf("%d\n", largeHttpBufSize);
 
