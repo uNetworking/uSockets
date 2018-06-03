@@ -2,14 +2,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 
 struct app_http_socket {
     struct us_socket s;
-    struct SSL *ssl;
-    struct BIO *rbio, *wbio;
+    SSL *ssl;
+    BIO *rbio, *wbio;
     int offset;
 };
 
@@ -24,8 +25,8 @@ struct app_http_context {
 };
 
 // small response
-//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
-//int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
+char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
+int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
 
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5120\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5120 - 1;
@@ -39,8 +40,8 @@ struct app_http_context {
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5242880\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5242880 - 1;
 
-char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
-int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
+//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
+//int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
 
 //large response
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 104857600\r\n\r\n";
@@ -50,6 +51,126 @@ int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
 char *largeHttpBuf;
 
 char *discarder;
+
+
+////////////////////////////////////////////
+
+// trick is to not use any of BIO_write or BIO_read ourselves, only internal SSL
+// we control the BIO with zero-copy setters and getters
+
+int BIO_s_custom_create(BIO *bio) {
+    //printf("BIO_s_custom_create called\n");
+
+    BIO_set_data(bio, 0); // our user data
+
+    BIO_set_init(bio, 1);
+
+    return 1;
+}
+
+long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
+    //printf("Command: %d\n", cmd);
+
+    switch(cmd) {
+    case BIO_CTRL_FLUSH:
+        return 1;
+    }
+
+//# define BIO_CTRL_RESET          1/* opt - rewind/zero etc */
+//# define BIO_CTRL_EOF            2/* opt - are we at the eof */
+//# define BIO_CTRL_INFO           3/* opt - extra tit-bits */
+//# define BIO_CTRL_SET            4/* man - set the 'IO' type */
+//# define BIO_CTRL_GET            5/* man - get the 'IO' type */
+//# define BIO_CTRL_PUSH           6/* opt - internal, used to signify change */
+//# define BIO_CTRL_POP            7/* opt - internal, used to signify change */
+//# define BIO_CTRL_GET_CLOSE      8/* man - set the 'close' on free */
+//# define BIO_CTRL_SET_CLOSE      9/* man - set the 'close' on free */
+//# define BIO_CTRL_PENDING        10/* opt - is their more data buffered */
+//# define BIO_CTRL_FLUSH          11/* opt - 'flush' buffered output */
+//# define BIO_CTRL_DUP            12/* man - extra stuff for 'duped' BIO */
+//# define BIO_CTRL_WPENDING       13/* opt - number of bytes still to write */
+//# define BIO_CTRL_SET_CALLBACK   14/* opt - set callback function */
+//# define BIO_CTRL_GET_CALLBACK   15/* opt - set callback function */
+
+
+
+    // we do not understand
+    return 0;
+}
+
+// this is set before SSL_read, and set to 0 before SSL_write!
+char *receive_buffer;
+int receive_buffer_length;
+struct us_socket *receive_socket;
+
+// this is used for expected output from either SSL_write or SSL_read
+char *ssl_output_buffer_original;
+int ssl_output_buffer_original_length;
+char *ssl_output_buffer;
+int ssl_output_length;
+
+// borde ha en BIO för vår read där alla writes är direkt send
+// och en BIO för vår write som är
+
+// same as ssl_backpressure in case of read BIO!
+int BIO_s_custom_write(BIO *bio, const char *data, int length) {
+    // only openssl will call this, so just send whatever it gives us
+    int written = us_socket_write(receive_socket, data, length);
+    return written;
+}
+
+// we can actually get spill data from what we read!
+char *ssl_read_spill;
+int ssl_read_spill_length = 0;
+
+// make sure to reset receive_buffer before ssl_write is called? no?
+int BIO_s_custom_read(BIO *bio, char *dst, int length) {
+
+    //printf("SSL asking to read: %d\n", length);
+
+    // if we have spill, empty it first of all!
+    if (ssl_read_spill_length) {
+
+    }
+
+    if (receive_buffer_length == 0) {
+        //printf("We return ZERO from BIO_read\n");
+        // we need to signal this was not an IO error but merely no more data!
+        BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_READ);
+        return 0;
+    }
+
+    // only called by openssl to read from recv buffer?
+    // could also be called by ssl_write!
+
+    if (length > receive_buffer_length) {
+        length = receive_buffer_length;
+    }
+
+    memcpy(dst, receive_buffer, length);
+
+    receive_buffer += length;
+    receive_buffer_length -= length;
+
+    //printf("We give back from BIO_read: %d\n", length);
+
+    return length;
+}
+
+BIO_METHOD *BIO_s_custom() {
+    BIO_METHOD *biom = BIO_meth_new(/*BIO_TYPE_SOURCE_SINK*/ BIO_TYPE_MEM, "µS BIO type");
+
+    BIO_meth_set_create(biom, BIO_s_custom_create);
+    BIO_meth_set_write(biom, BIO_s_custom_write);
+    BIO_meth_set_read(biom, BIO_s_custom_read);
+    BIO_meth_set_ctrl(biom, BIO_s_custom_ctrl);
+
+    return biom;
+}
+
+
+///////////////////////////////////////////
+
 
 // us_wakeup_loop() triggers
 void on_wakeup(struct us_loop *loop) {
@@ -61,9 +182,9 @@ void on_wakeup(struct us_loop *loop) {
 void on_http_socket_writable(struct us_socket *s) {
     struct app_http_socket *http_socket = (struct app_http_socket *) s;
 
+    printf("writable not implemented\n");
 
-
-    void *pp;
+    /*void *pp;
     int to_write = BIO_get_mem_data(http_socket->wbio, &pp);
 
     //printf("We have %d bytes in out buffer\n", to_write);
@@ -77,49 +198,60 @@ void on_http_socket_writable(struct us_socket *s) {
     // target openssl 1.1.0+
     BIO_read(http_socket->wbio, discarder, written);
 
-    http_socket->offset += written;
+    http_socket->offset += written;*/
 
     //printf("Offset: %d\n", http_socket->offset);
     //http_socket->offset += us_socket_write(s, largeHttpBuf + http_socket->offset, largeHttpBufSize - http_socket->offset);
 }
 
 void on_http_socket_end(struct us_socket *s) {
-    printf("Disconnected!\n");
+    //printf("Disconnected!\n");
 }
 
 #define BUF_SIZE 10240
 char buf[BUF_SIZE];
 
 void on_http_socket_data(struct us_socket *s, void *data, int length) {
-    //printf("%.*s", length, data);
 
-    // let's just echo it back for now
-    //us_socket_write(s, buf, sizeof(buf) - 1);
-
-
-    //printf("Got data\n");
-
-
+    //printf("Got data\n\n");
 
     // start streaming the response
     struct app_http_socket *http_socket = (struct app_http_socket *) s;
 
+    // kernel -> recv buffer -> SSL -> ssl recv buffer -> application
 
-    int written = BIO_write(http_socket->rbio, data, length);
-    //printf("Wrote %d bytes of %d incoming\n", written, length);
+    // vs.
 
-    int read = SSL_read(http_socket->ssl, buf, BUF_SIZE);
+    // kernel -> recv buffer -> BIO buffer -> SSL -> BIO buffer -> recv buffer -> application
+    receive_buffer = data;
+    receive_buffer_length = length;
+    receive_socket = s;
+    //printf("Calling SSL_read\n");
+    //size_t bytes_read;
+    int read = SSL_read(http_socket->ssl, buf, BUF_SIZE/*, &bytes_read*/);
 
-    // did we produce any output?
-    int write_size = BIO_ctrl_pending(http_socket->wbio);
-    if (write_size) {
-           printf("write size: %d\n", write_size);
+    //printf("SSL_read consumed %d of %d\n", bytes_read, length);
 
-           BIO_read(http_socket->wbio, buf, BUF_SIZE);
+    //printf("Read unencrypted: %d\n", read);
 
-           // skriv skiten här!
-           us_socket_write(http_socket, buf, write_size);
+    // for some reason we did not consume all received data!
+    // ssl can receive data and not consume it!?
+    if (receive_buffer_length != 0) {
+        //ssl_read_spill = malloc();
+
+        //printf("Calling SSL_read again due to spill\n");
+        read = SSL_read(http_socket->ssl, buf, BUF_SIZE/*, &bytes_read*/);
+
+        if (receive_buffer_length != 0) {
+            printf("WOW JUST WOW FUCK OFF!\n");
+        }
+        // wow just wow
     }
+
+    // reset output buffer
+    //ssl_output_buffer = ssl_output_buffer_original;
+    //ssl_output_length = ssl_output_buffer_original_length;
+
 
     if (read == -1) {
         int err = SSL_get_error(http_socket->ssl, read);
@@ -127,45 +259,40 @@ void on_http_socket_data(struct us_socket *s, void *data, int length) {
         if (err == SSL_ERROR_WANT_WRITE) {
             printf("SSL_read want to write\n");
         } else if (err == SSL_ERROR_WANT_READ) {
-            printf("SSL_read want to read\n");
+            //printf("SSL_read want to read\n");
+            return;
         } else {
-            printf("Error: %d\n", err);
+            // this is unwanted, treat any of these errors as serious
+
+
+            if (err == SSL_ERROR_SSL) {
+                printf("SSL_ERROR_SSL\n");
+            } else if (err == SSL_ERROR_SYSCALL) {
+                printf("SSL_ERROR_SYSCALL\n");
+            } else {
+                printf("Error: %d\n", err);
+            }
+
         }
     } else {
-
-        http_socket->offset = 0;
 
         //printf("Read from openssl %d bytes\n", read);
         //printf("%.*s", read, buf);
 
-        //printf("We have %d bytes in out buffer\n", BIO_ctrl_pending(http_socket->wbio));
+
 
         // stream data to openssl
+        //printf("Calling SSL_write\n");
         int ssl_written = SSL_write(http_socket->ssl, largeHttpBuf, largeHttpBufSize);
-        //printf("wrote ssl: %d\n", ssl_written);
-
-        //printf("We have %d bytes in out buffer\n", BIO_ctrl_pending(http_socket->wbio));
-
-        void *pp;
-        int to_write = BIO_get_mem_data(http_socket->wbio, &pp);
-
-        //printf("We have %d bytes in out buffer\n", to_write);
-
-        //printf("Offset: %d\n", http_socket->offset);
-        http_socket->offset = us_socket_write(s, pp, to_write);
-
-        // now we pop this read from the bio
-        // we should not copy out!
-        // we need to create a custom BIO with zero-copy
-        // target openssl 1.1.0+
-        BIO_read(http_socket->wbio, discarder, http_socket->offset);
-        //BIO_seek(http_socket->wbio, http_socket->offset);
+        //printf("Wrote unencrypted: %d\n", ssl_written);
     }
 
    }
 
 // we can get both socket and its context so user data is not needed!
 void on_http_socket_accepted(struct us_socket *s) {
+    //printf("Got new connection\n");
+
     struct app_http_socket *http_socket = (struct app_http_socket *) s;
 
     // init ssl layer
@@ -174,8 +301,8 @@ void on_http_socket_accepted(struct us_socket *s) {
     http_socket->ssl = SSL_new(http_context->ssl_context);
 
     // create bios
-    http_socket->rbio = BIO_new(BIO_s_mem());
-    http_socket->wbio = BIO_new(BIO_s_mem());
+    http_socket->rbio = BIO_new(BIO_s_custom());
+    http_socket->wbio = BIO_new(BIO_s_custom());
 
     //
     SSL_set_accept_state(http_socket->ssl);
@@ -230,7 +357,9 @@ int passwordCallback(char *buf, int size, int rwflag, void *u) {
 
 int main() {
 
-    discarder = malloc(1024 * 1024 * 1024);
+    // any buffer large for write
+    ssl_output_buffer_original_length = 1024 * 1024 * 1024;
+    ssl_output_buffer_original = malloc(ssl_output_buffer_original_length);
 
     printf("%d\n", largeHttpBufSize);
 
@@ -253,6 +382,7 @@ int main() {
     // init SSL context
     struct app_http_context *http_context_ = (struct app_http_context *) http_context;
 
+    SSL_load_error_strings();
     SSL_library_init();
 
     // init ssl context
@@ -275,6 +405,16 @@ int main() {
     }
 
     printf("passed ssl contenxt init\n");
+
+
+    // create a bunch of sockets for memory usage tests
+    /*for (int i = 0; i < 100000; i++) {
+        // varje är ca 6kb?
+        SSL_new(http_context_->ssl_context);
+        //BIO_new(BIO_s_custom());
+        //BIO_new(BIO_s_custom());
+    }*/
+
 
     http_context->on_accepted = on_http_socket_accepted;
     http_context->on_data = on_http_socket_data;
