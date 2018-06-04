@@ -25,23 +25,29 @@ struct app_http_context {
 };
 
 // small response
-//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
-//int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
+// fast in ssl
+char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
+int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
 
+// fast in ssl
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5120\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5120 - 1;
 
+// fast in ssl
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 51200\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 51200 - 1;
 
+// fast in ssl
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512000\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 512000 - 1;
 
+// fast in ssl
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5242880\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5242880 - 1;
 
-char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
-int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
+// fast in ssl
+//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
+//int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
 
 //large response
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 104857600\r\n\r\n";

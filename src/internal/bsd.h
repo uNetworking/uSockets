@@ -22,6 +22,10 @@
 #define ONLY_IPV4 1
 #define REUSE_PORT 2
 
+static inline bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *) &enabled, sizeof(enabled));
+}
+
 static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, int protocol) {
     // returns INVALID_SOCKET on error
     int flags = 0;

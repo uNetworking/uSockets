@@ -32,6 +32,9 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                     s->context = listen_socket->s.context;
 
+                    // make sure to always set nodelay!
+                    bsd_socket_nodelay(client_fd, 1);
+
                     listen_socket->s.context->on_accepted(s);
                 } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
             }
