@@ -157,40 +157,13 @@ void on_wakeup(struct us_loop *loop) {
 void on_http_socket_writable(struct us_socket *s) {
     struct app_http_socket *http_socket = (struct app_http_socket *) s;
 
+    // if we have things to write in the first place!
+    receive_buffer_length = 0;
+    receive_socket = s;
 
-    /*if (backpressure) {
-
-        printf("Sending off some of the backpressure\n");
-
-
-
-    }*/
-
-    //printf("writable not implemented\n");
-
-    //printf("Calling SSL_write\n");
-    int ssl_written = SSL_write(http_socket->ssl, largeHttpBuf, largeHttpBufSize);
-    http_socket->offset = ssl_written;
-    //printf("Wrote unencrypted: %d\n", ssl_written);
-
-    /*void *pp;
-    int to_write = BIO_get_mem_data(http_socket->wbio, &pp);
-
-    //printf("We have %d bytes in out buffer\n", to_write);
-
-    //printf("Offset: %d\n", http_socket->offset);
-    int written = us_socket_write(s, pp, to_write);
-
-    // now we pop this read from the bio
-    // we should not copy out!
-    // we need to create a custom BIO with zero-copy
-    // target openssl 1.1.0+
-    BIO_read(http_socket->wbio, discarder, written);
-
-    http_socket->offset += written;*/
-
-    //printf("Offset: %d\n", http_socket->offset);
-    //http_socket->offset += us_socket_write(s, largeHttpBuf + http_socket->offset, largeHttpBufSize - http_socket->offset);
+    if (http_socket->offset == 0) {
+        http_socket->offset += SSL_write(http_socket->ssl, largeHttpBuf, largeHttpBufSize);
+    }
 }
 
 void on_http_socket_end(struct us_socket *s) {
@@ -217,30 +190,34 @@ void on_http_socket_data(struct us_socket *s, void *data, int length) {
     receive_socket = s;
     //printf("Calling SSL_read\n");
     //size_t bytes_read;
-    int read = SSL_read(http_socket->ssl, buf, BUF_SIZE/*, &bytes_read*/);
 
-    //printf("SSL_read consumed %d of %d\n", bytes_read, length);
+    // något är fel här, debugga skiten
+    // se vad för fel det är med SSL_read -> kan vara så att
+    // write failar och måste buffras upp?
 
-    //printf("Read unencrypted: %d\n", read);
+    // kör SSL_read i debug efter den failat att läsa allt och se var det klämmer!
 
-    // for some reason we did not consume all received data!
-    // ssl can receive data and not consume it!?
-    if (receive_buffer_length != 0) {
-        //ssl_read_spill = malloc();
+    int read = 0;
 
-        //printf("Calling SSL_read again due to spill\n");
-        read = SSL_read(http_socket->ssl, buf, BUF_SIZE/*, &bytes_read*/);
-
-        if (receive_buffer_length != 0) {
-            printf("WOW JUST WOW FUCK OFF!\n");
+    while (receive_buffer_length) {
+        int last_receive_length = receive_buffer_length;
+        int t = SSL_read(http_socket->ssl, buf + read, BUF_SIZE - read);
+        if (last_receive_length == receive_buffer_length) {
+            // what even happens here? spill? why!?
+            printf("Receive buffer left: %d our read is: %d\n", receive_buffer_length, read);
+            break;
+        } else {
+            printf("Strangeness: SSL_read did not read everything in the BIO\n");
         }
-        // wow just wow
+
+        if (t > 0) {
+            read += t;
+        }
     }
 
-    // reset output buffer
-    //ssl_output_buffer = ssl_output_buffer_original;
-    //ssl_output_length = ssl_output_buffer_original_length;
-
+    // reset receive buffer here!
+    receive_buffer_length = 0;
+    receive_buffer = 0;
 
     if (read == -1) {
         int err = SSL_get_error(http_socket->ssl, read);
