@@ -101,7 +101,7 @@ void us_context_connect(const char *host, int port, int options, int ext_size, v
 void us_socket_context_link(struct us_socket_context *context, struct us_socket *s);
 
 // per socket
-int us_socket_write(struct us_socket *s, const char *data, int length);
+int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more);
 void us_socket_timeout(struct us_socket *s, unsigned int seconds);
 
 void *us_socket_ext(struct us_socket *s);

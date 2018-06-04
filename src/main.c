@@ -107,7 +107,13 @@ struct us_socket *receive_socket;
 // only 6 kb of SSL state is needed and 16+16kb of temporary buffers!
 
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
-    return us_socket_write(receive_socket, data, length);
+
+    // important hack: if we have no cork or buffer and the first chunk is less than 1 SSL block of 16 kb then send direclty (we reached the end)
+    // else, use MSG_MORE or cork or any corking or even user space buffering
+
+    // msg_more is something we need here!
+
+    return us_socket_write(receive_socket, data, length, length > 16000);
 }
 
 // make sure to reset receive_buffer before ssl_write is called? no?
@@ -207,7 +213,7 @@ void on_http_socket_data(struct us_socket *s, void *data, int length) {
             printf("Receive buffer left: %d our read is: %d\n", receive_buffer_length, read);
             break;
         } else {
-            printf("Strangeness: SSL_read did not read everything in the BIO\n");
+            //printf("Strangeness: SSL_read did not read everything in the BIO\n");
         }
 
         if (t > 0) {

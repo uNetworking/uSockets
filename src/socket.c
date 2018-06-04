@@ -2,9 +2,16 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-int us_socket_write(struct us_socket *s, const char *data, int length) {
+int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
 
-    int written = bsd_send(us_poll_fd(s), data, length, 0);
+    /*if (msg_more) {
+        printf("MSG_MORE send of size: %d\n", length);
+    } else {
+        printf("Regular send of size: %d\n", length);
+    }*/
+
+    // Linux specific hack for SSL speedup: msg_more
+    int written = bsd_send(us_poll_fd(s), data, length, msg_more ? MSG_MORE : 0);
 
     if (written == -1) {
         return 0;
