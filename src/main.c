@@ -20,7 +20,6 @@ struct app_web_socket {
 };
 
 struct app_http_context {
-    struct us_socket_context context;
     struct SSL_CTX *ssl_context;
 };
 
@@ -288,7 +287,7 @@ void on_http_socket_accepted(struct us_socket *s) {
     struct app_http_socket *http_socket = us_socket_ext(s);//(struct app_http_socket *) s;
 
     // init ssl layer
-    struct app_http_context *http_context = (struct app_http_context *) us_socket_get_context(s);
+    struct app_http_context *http_context = us_socket_context_ext(us_socket_get_context(s));
 
     http_socket->ssl = SSL_new(http_context->ssl_context);
 
@@ -311,30 +310,6 @@ void on_http_socket_timeout(struct us_socket *s) {
     us_socket_timeout(s, 2);
 }
 
-// everything should be hidden like us_loop, only give pointers to user data
-
-// ssl layer
-
-
-// should this extend a regular socket context with a middle layer?
-/*struct us_ssl_socket_context {
-    struct SSL_CTX *ssl_context;
-};
-
-struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_size) {
-    struct us_ssl_socket_context *context = malloc(context_size);
-
-    // init the context
-    context->ssl_context = SSL_CTX_new(SSLv23_method());
-
-    return context;
-}
-
-// listen
-void us_ssl_socket_context_listen(struct us_ssl_socket_context *context) {
-
-}*/
-
 // password callback
 int passwordCallback(char *buf, int size, int rwflag, void *u) {
     printf("password cb\n");
@@ -348,28 +323,27 @@ int passwordCallback(char *buf, int size, int rwflag, void *u) {
 }
 
 int main() {
-
-    // any buffer large for write
-    //ssl_output_buffer_original_length = 1024 * 1024 * 1024;
-    //ssl_output_buffer_original = malloc(ssl_output_buffer_original_length);
-
     printf("%d\n", largeHttpBufSize);
-
     largeHttpBuf = malloc(largeHttpBufSize);
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
 
     // create the loop, and register a wakeup handler
     struct us_loop *loop = us_create_loop(on_wakeup, 0); // shound take pre and post callbacks also!
 
-
-    // ssl is its own context
-    //struct us_ssl_socket_context *ssl_context = us_create_ssl_socket_context(loop, sizeof(struct us_ssl_socket_context));
-
-    // create a context (behavior) for httpsockets
+    // create a context (behavior) for httpsockets (us_create_ssl_socket_context)
     struct us_socket_context *http_context = us_create_socket_context(loop, sizeof(struct app_http_context));
 
+    // ssl or regular
+    us_socket_context_on_open(http_context, on_http_socket_accepted);
+    us_socket_context_on_close(http_context, on_http_socket_end);
+    us_socket_context_on_data(http_context, on_http_socket_data);
+    // shared for both
+    us_socket_context_on_writable(http_context, on_http_socket_writable);
+    us_socket_context_on_timeout(http_context, on_http_socket_timeout);
+
+
     // init SSL context
-    struct app_http_context *http_context_ = (struct app_http_context *) http_context;
+    struct app_http_context *http_context_ = us_socket_context_ext(http_context);
 
     SSL_load_error_strings();
     SSL_library_init();
@@ -394,22 +368,6 @@ int main() {
     }
 
     printf("passed ssl contenxt init\n");
-
-
-    // create a bunch of sockets for memory usage tests
-    /*for (int i = 0; i < 100000; i++) {
-        // varje är ca 6kb?
-        SSL_new(http_context_->ssl_context);
-        //BIO_new(BIO_s_custom());
-        //BIO_new(BIO_s_custom());
-    }*/
-
-
-    http_context->on_accepted = on_http_socket_accepted;
-    http_context->on_data = on_http_socket_data;
-    http_context->on_writable = on_http_socket_writable;
-    http_context->on_end = on_http_socket_end;
-    http_context->on_socket_timeout = on_http_socket_timeout;
 
     // start accepting http sockets
     struct us_listen_socket *listen_socket = us_socket_context_listen(http_context, 0, 3000, 0, sizeof(struct app_http_socket));

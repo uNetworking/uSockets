@@ -76,3 +76,27 @@ void *us_loop_userdata(struct us_loop *loop) {
 void *us_socket_get_context(struct us_socket *s) {
     return s->context;
 }
+
+void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s)) {
+    context->on_accepted = on_open;
+}
+
+void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s)) {
+    context->on_end = on_close;
+}
+
+void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length)) {
+    context->on_data = on_data;
+}
+
+void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s)) {
+    context->on_writable = on_writable;
+}
+
+void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *)) {
+    context->on_socket_timeout = on_timeout;
+}
+
+void *us_socket_context_ext(struct us_socket_context *context) {
+    return context + 1;
+}

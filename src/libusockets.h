@@ -28,25 +28,6 @@ struct us_socket;
 /* represents a TCP-only listening socket */
 struct us_listen_socket;
 
-struct us_socket_context {
-    struct us_loop *loop;
-    //unsigned short timeout;
-    struct us_socket *head;
-    struct us_socket_context *next;
-
-    // on_open -> structure created, on_creation
-    // on_close -> structure destroyed? on_destruction
-    // on_data
-    // on_timeout
-
-    void (*on_accepted)(struct us_socket *);
-    void (*on_data)(struct us_socket *, void *data, int length);
-    void (*on_writable)(struct us_socket *);
-    void (*on_end)(struct us_socket *);
-    //void (*on_timeout)(struct us_socket_context *);
-    void (*on_socket_timeout)(struct us_socket *);
-};
-
 // void us_listen_socket_stop(..
 
 /* creates a new event loop, a shared 1-per-thread-and-only-1-per-thread resource */
@@ -60,7 +41,16 @@ void *us_loop_userdata(struct us_loop *loop);
 void us_loop_run(struct us_loop *loop);
 
 // per context
-struct us_socket_context *us_create_socket_context(struct us_loop *loop, int context_size);
+struct us_socket_context *us_create_socket_context(struct us_loop *loop, int context_ext_size);
+
+void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s));
+void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s));
+void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length));
+void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s));
+void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *s));
+
+void *us_socket_context_ext(struct us_socket_context *context);
+
 struct us_listen_socket *us_socket_context_listen(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size);
 void us_context_connect(const char *host, int port, int options, int ext_size, void (*cb)(struct us_socket *), void *user_data);
 void us_socket_context_link(struct us_socket_context *context, struct us_socket *s);

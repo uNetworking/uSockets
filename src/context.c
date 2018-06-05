@@ -3,8 +3,8 @@
 #include <stdlib.h>
 
 // put this in loop.c?
-struct us_socket_context *us_create_socket_context(struct us_loop *loop, int context_size) {
-    struct us_socket_context *context = malloc(context_size);
+struct us_socket_context *us_create_socket_context(struct us_loop *loop, int context_ext_size) {
+    struct us_socket_context *context = malloc(sizeof(struct us_socket_context) + context_ext_size);
 
     // us_socket_context_init(loop)
     context->loop = loop;
