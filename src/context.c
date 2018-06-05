@@ -18,7 +18,7 @@ struct us_socket_context *us_create_socket_context(struct us_loop *loop, int con
     return context;
 }
 
-struct us_listen_socket *us_socket_context_listen(struct us_socket_context *context, const char *host, int port, int options, int socket_size) {
+struct us_listen_socket *us_socket_context_listen(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
 
     LIBUS_SOCKET_DESCRIPTOR listen_socket_fd = bsd_create_listen_socket(host, port, options);
 
@@ -30,7 +30,7 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     us_poll_init(p, listen_socket_fd, POLL_TYPE_LISTEN_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_READABLE);
 
-    p->socket_size = socket_size;
+    p->socket_size = sizeof(struct us_socket) + socket_ext_size;
 
     // this is common, should be like us_socket_init(context);
     p->s.context = context;

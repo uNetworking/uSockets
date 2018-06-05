@@ -17,4 +17,10 @@ struct us_loop {
     void *recv_buf;
 };
 
+struct us_poll {
+    uv_poll_t uv_p;
+    LIBUS_SOCKET_DESCRIPTOR fd;
+    unsigned char poll_type;
+};
+
 #endif // LIBUV_H

@@ -10,6 +10,8 @@ int us_socket_write(struct us_socket *s, const char *data, int length, int msg_m
         printf("Regular send of size: %d\n", length);
     }*/
 
+    // MSG_NOSIGNAL for linux and freebsd
+
     // Linux specific hack for SSL speedup: msg_more
     int written = bsd_send(us_poll_fd(s), data, length, msg_more ? MSG_MORE : 0);
 

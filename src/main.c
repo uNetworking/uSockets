@@ -7,15 +7,15 @@
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 
+
+// all of these should instead be ext - http_ext, websocket_ext, http_context_ext, etc!
 struct app_http_socket {
-    struct us_socket s;
     SSL *ssl;
     BIO *rbio, *wbio;
     int offset;
 };
 
 struct app_web_socket {
-    struct us_socket s;
     int bunch_of_shit;
 };
 
@@ -167,7 +167,7 @@ void on_wakeup(struct us_loop *loop) {
 // keep polling for writable and assume the user will fill the buffer again
 // if not, THEN change the poll
 void on_http_socket_writable(struct us_socket *s) {
-    struct app_http_socket *http_socket = (struct app_http_socket *) s;
+    struct app_http_socket *http_socket = us_socket_ext(s);//(struct app_http_socket *) s;
 
     // if we have things to write in the first place!
     receive_buffer_length = 0;
@@ -190,7 +190,7 @@ void on_http_socket_data(struct us_socket *s, void *data, int length) {
     //printf("Got data\n\n");
 
     // start streaming the response
-    struct app_http_socket *http_socket = (struct app_http_socket *) s;
+    struct app_http_socket *http_socket = us_socket_ext(s);//(struct app_http_socket *) s;
 
     // kernel -> recv buffer -> SSL -> ssl recv buffer -> application
 
@@ -285,10 +285,10 @@ void on_http_socket_data(struct us_socket *s, void *data, int length) {
 void on_http_socket_accepted(struct us_socket *s) {
     //printf("Got new connection\n");
 
-    struct app_http_socket *http_socket = (struct app_http_socket *) s;
+    struct app_http_socket *http_socket = us_socket_ext(s);//(struct app_http_socket *) s;
 
     // init ssl layer
-    struct app_http_context *http_context = (struct app_http_context *) http_socket->s.context;
+    struct app_http_context *http_context = (struct app_http_context *) us_socket_get_context(s);
 
     http_socket->ssl = SSL_new(http_context->ssl_context);
 
@@ -358,15 +358,12 @@ int main() {
     largeHttpBuf = malloc(largeHttpBufSize);
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
 
-    printf("Sizeof us_socket: %ld\n", sizeof(struct us_socket));
-
     // create the loop, and register a wakeup handler
     struct us_loop *loop = us_create_loop(on_wakeup, 0); // shound take pre and post callbacks also!
 
 
     // ssl is its own context
     //struct us_ssl_socket_context *ssl_context = us_create_ssl_socket_context(loop, sizeof(struct us_ssl_socket_context));
-
 
     // create a context (behavior) for httpsockets
     struct us_socket_context *http_context = us_create_socket_context(loop, sizeof(struct app_http_context));

@@ -72,3 +72,7 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 void *us_loop_userdata(struct us_loop *loop) {
     return loop + 1;
 }
+
+void *us_socket_get_context(struct us_socket *s) {
+    return s->context;
+}

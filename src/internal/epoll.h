@@ -16,4 +16,11 @@ struct us_loop {
     void *recv_buf;
 };
 
+struct us_poll {
+    struct {
+        int fd : 28;
+        unsigned int poll_type : 4;
+    } state;
+};
+
 #endif // EPOLL_H

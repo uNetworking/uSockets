@@ -9,7 +9,8 @@ SOURCES += \
     backends/epoll.c \
     context.c \
     socket.c \
-    backends/libuv.c
+    backends/libuv.c \
+    ssl.c
 
 HEADERS += \
     libusockets.h \

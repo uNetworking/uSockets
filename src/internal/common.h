@@ -9,6 +9,12 @@
 
 #include "internal/bsd.h"
 
+enum {
+    POLL_TYPE_SOCKET,
+    POLL_TYPE_LISTEN_SOCKET,
+    POLL_TYPE_ASYNC
+};
+
 void us_dispatch_ready_poll(struct us_poll *p, int error, int events);
 void us_timer_sweep(struct us_loop *loop);
 
@@ -23,5 +29,18 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p);
 
 // per socket
 int us_socket_fd(struct us_socket *s);
+
+struct us_socket {
+    struct us_poll p;
+    struct us_socket_context *context;
+    struct us_socket *prev, *next;
+    unsigned short timeout;
+};
+
+struct us_listen_socket {
+    struct us_socket s;
+    int socket_size;
+    void *user_data;
+};
 
 #endif // COMMON_H
