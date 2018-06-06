@@ -49,15 +49,10 @@ struct us_socket_context {
     struct us_socket *head;
     struct us_socket_context *next;
 
-    // on_open -> structure created, on_creation
-    // on_close -> structure destroyed? on_destruction
-    // on_data
-    // on_timeout
-
-    void (*on_accepted)(struct us_socket *);
+    void (*on_open)(struct us_socket *);
     void (*on_data)(struct us_socket *, void *data, int length);
     void (*on_writable)(struct us_socket *);
-    void (*on_end)(struct us_socket *);
+    void (*on_close)(struct us_socket *);
     //void (*on_timeout)(struct us_socket_context *);
     void (*on_socket_timeout)(struct us_socket *);
 };

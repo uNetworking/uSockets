@@ -62,6 +62,27 @@ inline void *us_socket_ext(struct us_socket *s);
 int us_socket_type(struct us_socket *s);
 void *us_socket_get_context(struct us_socket *s);
 
+// these are SSL versions of whatever is needed to implement
+struct us_ssl_socket_context;
+struct us_ssl_socket;
+
+struct us_ssl_socket_context_options {
+    const char *key_file_name;
+    const char *cert_file_name;
+    const char *passphrase;
+};
+
+struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options);
+void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s));
+void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, void (*on_close)(struct us_ssl_socket *s));
+void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, void (*on_data)(struct us_ssl_socket *s, char *data, int length));
+void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, void (*on_writable)(struct us_ssl_socket *s));
+void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, void (*on_timeout)(struct us_ssl_socket *s));
+
+struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size);
+
+int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length);
+
 #ifdef __cplusplus
 }
 #endif

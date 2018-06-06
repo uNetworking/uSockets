@@ -35,7 +35,7 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     // make sure to always set nodelay!
                     bsd_socket_nodelay(client_fd, 1);
 
-                    listen_socket->s.context->on_accepted(s);
+                    listen_socket->s.context->on_open(s);
                 } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
             }
         }
@@ -55,7 +55,7 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                     // först måste vi hantera onEnd? nej?
 
-                    s->context->on_end(s);
+                    s->context->on_close(s);
 
                     // vi äger socketen och tar bort den här
                     us_poll_stop(s, s->context->loop);
@@ -78,11 +78,11 @@ void *us_socket_get_context(struct us_socket *s) {
 }
 
 void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s)) {
-    context->on_accepted = on_open;
+    context->on_open = on_open;
 }
 
 void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s)) {
-    context->on_end = on_close;
+    context->on_close = on_close;
 }
 
 void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length)) {

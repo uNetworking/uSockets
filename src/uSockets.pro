@@ -21,5 +21,5 @@ HEADERS += \
 
 #QMAKE_CFLAGS += -fsanitize=address# -DLIBUS_USE_LIBUV -Wno-unused-parameter
 #LIBS += -lasan -luv
-LIBS += -lasan -lssl -lcrypto
-#LIBS += -lssl -lcrypto
+#LIBS += -lasan -lssl -lcrypto
+LIBS += -lssl -lcrypto
