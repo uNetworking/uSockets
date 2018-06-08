@@ -26,6 +26,7 @@ struct us_poll {
 };
 
 struct us_timer {
+    struct us_poll *p;
     struct us_loop *loop;
     void (*cb)(struct us_timer *t);
 };

@@ -10,10 +10,8 @@
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 
-// note: us_ssl_socket_context is an alias for us_socket_context
-// the real "child" here is defined as us_socket_context_ext_ssl
-// and retrieved via us_socket_context_ext()
-struct us_socket_context_ext_ssl {
+struct us_ssl_socket_context {
+    struct us_socket_context sc;
     SSL_CTX *ssl_context;
 
     // här måste det vara!
@@ -23,7 +21,10 @@ struct us_socket_context_ext_ssl {
 };
 
 // same applies here, a child is never defined but only seen as an extension to the parent
-struct us_socket_ext_ssl {
+
+// och varför i helvete kan inte denna vara en jävla us_socket?
+struct us_ssl_socket {
+    struct us_socket s;
     SSL *ssl;
     BIO *rbio, *wbio;
 };
@@ -136,48 +137,39 @@ BIO_METHOD *BIO_s_custom() {
 ///////////////////////////////////////////
 
 int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length) {
-    struct us_socket_ext_ssl *ssl_s = /*(struct us_socket_ext_ssl *)*/ us_socket_ext((struct us_socket *) s);
-
     // if we have things to write in the first place!
     receive_buffer_length = 0;
     receive_socket = s;
 
-    return SSL_write(ssl_s->ssl, data, length);
+    return SSL_write(s->ssl, data, length);
 }
 
-void ssl_on_open(struct us_socket *s) {
-    struct us_socket_context *context = us_socket_get_context(s);
-    struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
-    struct us_socket_ext_ssl *ssl_s = us_socket_ext(s);
+void ssl_on_open(struct us_ssl_socket *s) {
+    struct us_ssl_socket_context *context = us_socket_get_context(s);
 
-    ssl_s->ssl = SSL_new(ssl_context->ssl_context);
-    SSL_set_accept_state(ssl_s->ssl);
+    s->ssl = SSL_new(context->ssl_context);
+    SSL_set_accept_state(s->ssl);
 
-    ssl_s->rbio = BIO_new(BIO_s_custom());
-    ssl_s->wbio = BIO_new(BIO_s_custom());
-    SSL_set_bio(ssl_s->ssl, ssl_s->rbio, ssl_s->wbio);
+    s->rbio = BIO_new(BIO_s_custom());
+    s->wbio = BIO_new(BIO_s_custom());
+    SSL_set_bio(s->ssl, s->rbio, s->wbio);
 
-    ssl_context->on_open((struct us_ssl_socket *) s);
+    context->on_open(s);
 }
 
-void ssl_on_close(struct us_socket *s) {
-    struct us_socket_context *context = us_socket_get_context(s);
-    struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
-    //struct us_socket_ext_ssl *ssl_s = us_socket_ext((struct us_socket *) s);
+void ssl_on_close(struct us_ssl_socket *s) {
+    struct us_ssl_socket_context *context = us_socket_get_context(s);
 
     // do ssl close stuff
 
-    ssl_context->on_close((struct us_ssl_socket *) s);
+    context->on_close(s);
 }
 
 #define BUF_SIZE 10240
 char buf[BUF_SIZE];
 
-void ssl_on_data(struct us_socket *s, void *data, int length) {
-
-    struct us_socket_context *context = us_socket_get_context(s);
-    struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
-    struct us_socket_ext_ssl *ssl_s = us_socket_ext(s);
+void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
+    struct us_ssl_socket_context *context = us_socket_get_context(s);
 
     // måste sättas per-context! eller iaf per tråd!
     receive_buffer = data;
@@ -189,7 +181,7 @@ void ssl_on_data(struct us_socket *s, void *data, int length) {
 
     while (receive_buffer_length) {
         int last_receive_length = receive_buffer_length;
-        err = SSL_read(ssl_s->ssl, buf + read, BUF_SIZE - read);
+        err = SSL_read(s->ssl, buf + read, BUF_SIZE - read);
         if (last_receive_length == receive_buffer_length) {
             // terminate the connection because something is seriously wrong here!
         }
@@ -200,7 +192,7 @@ void ssl_on_data(struct us_socket *s, void *data, int length) {
     }
 
     if (read == -1) {
-        int err = SSL_get_error(ssl_s->ssl, read);
+        int err = SSL_get_error(s->ssl, read);
 
         if (err == SSL_ERROR_WANT_WRITE) {
             printf("SSL_read want to write\n");
@@ -221,7 +213,7 @@ void ssl_on_data(struct us_socket *s, void *data, int length) {
 
         }
     } else {
-        ssl_context->on_data(s, buf, read);
+        context->on_data(s, buf, read);
     }
 }
 
@@ -230,27 +222,26 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
     // should not be needed in openssl 1.1.0+
     SSL_library_init();
 
-    struct us_socket_context *context = us_create_socket_context(loop, sizeof(struct us_socket_context_ext_ssl) + context_ext_size);
-    struct us_socket_context_ext_ssl *ext = us_socket_context_ext(context);
+    struct us_ssl_socket_context *context = us_create_socket_context(loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
 
     // this is a server?
-    ext->ssl_context = SSL_CTX_new(TLS_server_method());
+    context->ssl_context = SSL_CTX_new(TLS_server_method());
 
-    SSL_CTX_set_options(ext->ssl_context, SSL_OP_NO_SSLv3);
+    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
 
     if (options.passphrase) {
-        SSL_CTX_set_default_passwd_cb_userdata(ext->ssl_context, options.passphrase);
-        SSL_CTX_set_default_passwd_cb(ext->ssl_context, passphrase_cb);
+        SSL_CTX_set_default_passwd_cb_userdata(context->ssl_context, options.passphrase);
+        SSL_CTX_set_default_passwd_cb(context->ssl_context, passphrase_cb);
     }
 
     if (options.cert_file_name) {
-        if (SSL_CTX_use_certificate_chain_file(ext->ssl_context, options.cert_file_name) != 1) {
+        if (SSL_CTX_use_certificate_chain_file(context->ssl_context, options.cert_file_name) != 1) {
             return 0;
         }
     }
 
     if (options.key_file_name) {
-        if (SSL_CTX_use_PrivateKey_file(ext->ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_PrivateKey_file(context->ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
             return 0;
         }
     }
@@ -259,25 +250,22 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 }
 
 struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
-    return us_socket_context_listen(context, host, port, options, sizeof(struct us_socket_ext_ssl) + socket_ext_size);
+    return us_socket_context_listen(context, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
 }
 
 void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s)) {
-    struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
-    us_socket_context_on_open(context, ssl_on_open);
-    ssl_context->on_open = on_open;
+    us_socket_context_on_open(&context->sc, ssl_on_open);
+    context->on_open = on_open;
 }
 
 void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, void (*on_close)(struct us_ssl_socket *s)) {
-    struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
     us_socket_context_on_close(context, ssl_on_close);
-    ssl_context->on_close = on_close;
+    context->on_close = on_close;
 }
 
 void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, void (*on_data)(struct us_ssl_socket *s, char *data, int length)) {
-    struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
     us_socket_context_on_data(context, ssl_on_data);
-    ssl_context->on_data = on_data;
+    context->on_data = on_data;
 }
 
 void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, void (*on_writable)(struct us_ssl_socket *s)) {

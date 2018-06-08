@@ -26,21 +26,20 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
         return 0;
     }
 
-    /*struct us_listen_socket *p = us_loop_create_poll(context->loop, sizeof(struct us_listen_socket));
+    struct us_poll *p = us_create_poll(context->loop, 0, sizeof(struct us_listen_socket));
     us_poll_init(p, listen_socket_fd, POLL_TYPE_LISTEN_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_READABLE);
 
-    p->socket_size = sizeof(struct us_socket) + socket_ext_size;
+    struct us_listen_socket *ls = (struct us_listen_socket *) p;
+    // this is common, should be like us_internal_socket_init(context);
+    ls->s.context = context;
+    ls->s.timeout = 0;
+    ls->s.next = 0;
+    us_socket_context_link(context, &ls->s);
 
-    // this is common, should be like us_socket_init(context);
-    p->s.context = context;
-    p->s.timeout = 0;
-    p->s.next = 0;
+    ls->socket_ext_size = socket_ext_size;
 
-    us_socket_context_link(context, p);
-    return p;*/
-
-    return 0;
+    return ls;
 }
 
 void us_context_connect(const char *host, int port, int options, int ext_size, void (*cb)(struct us_socket *s), void *user_data) {
@@ -49,7 +48,6 @@ void us_context_connect(const char *host, int port, int options, int ext_size, v
 }
 
 void us_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
-
     // just add it to the context
 
     context->head = s;

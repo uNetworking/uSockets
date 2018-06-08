@@ -11,4 +11,4 @@ void us_socket_timeout(struct us_socket *s, unsigned int seconds);
 void *us_socket_ext(struct us_socket *s);
 
 /* Return the socket context of this socket */
-void *us_socket_get_context(struct us_socket *s);
+struct us_socket_context *us_socket_get_context(struct us_socket *s);

@@ -25,16 +25,18 @@ int us_poll_type(struct us_poll *p);
 int us_socket_fd(struct us_socket *s);
 unsigned int us_internal_accept_poll_event(struct us_poll *p);
 
+void sweep_timer_cb(struct us_timer *t);
+
 struct us_socket {
+    struct us_poll p;
     struct us_socket_context *context;
     struct us_socket *prev, *next;
     unsigned short timeout;
 };
 
-// user data wtf! use ext!!
 struct us_listen_socket {
-    int socket_size;
-    void *user_data;
+    struct us_socket s;
+    int socket_ext_size;
 };
 
 struct us_socket_context {
