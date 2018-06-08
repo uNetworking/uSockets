@@ -20,7 +20,7 @@ struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int user
 }
 
 void us_loop_run(struct us_loop *loop) {
-    us_timer_set(loop->sweep_timer, sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+    us_timer_set(loop->sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 
     while (loop->num_polls) {
         int num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
@@ -88,17 +88,19 @@ unsigned int us_internal_accept_poll_event(struct us_poll *p) {
 
 // timer
 struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size) {
-    struct us_poll *p = us_create_poll(loop, fallthrough, sizeof(struct us_timer) + ext_size);
-    us_poll_init(p, timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC), POLL_TYPE_TIMER);
+    struct us_poll *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
+    us_poll_init(p, timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC), POLL_TYPE_CALLBACK);
 
-    struct us_timer *t = (struct us_timer *) p;
-    t->loop = loop;
+    struct us_internal_callback *cb = (struct us_internal_callback *) p;
+    cb->loop = loop;
 
-    return t;
+    return (struct us_timer *) cb;
 }
 
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
-    t->cb = cb;
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+
+    internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
 
     struct itimerspec timer_spec = {
         {repeat_ms / 1000, repeat_ms % 1000000},
@@ -106,7 +108,7 @@ void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, in
     };
 
     timerfd_settime(us_poll_fd((struct us_poll *) t), 0, &timer_spec, NULL);
-    us_poll_start((struct us_poll *) t, t->loop, LIBUS_SOCKET_READABLE);
+    us_poll_start((struct us_poll *) t, internal_cb->loop, LIBUS_SOCKET_READABLE);
 }
 
 #endif

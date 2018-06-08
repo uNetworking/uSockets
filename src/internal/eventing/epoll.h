@@ -26,10 +26,4 @@ struct us_poll {
     } state;
 };
 
-struct us_timer {
-    struct us_poll *p;
-    struct us_loop *loop;
-    void (*cb)(struct us_timer *t);
-};
-
 #endif // EPOLL_H

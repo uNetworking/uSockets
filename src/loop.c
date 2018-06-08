@@ -12,16 +12,16 @@ void us_internal_timer_sweep(struct us_loop *loop) {
     }
 }
 
-void sweep_timer_cb(struct us_timer *t) {
-    us_internal_timer_sweep(t->loop);
+void sweep_timer_cb(struct us_internal_callback *cb) {
+    us_internal_timer_sweep(cb->loop);
 }
 
 void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     switch (us_internal_poll_type(p)) {
-    case POLL_TYPE_TIMER: {
+    case POLL_TYPE_CALLBACK: {
             us_internal_accept_poll_event(p);
-            struct us_timer *t = (struct us_timer *) p;
-            t->cb(t);
+            struct us_internal_callback *cb = (struct us_internal_callback *) p;
+            cb->cb(cb);
         }
         break;
     case POLL_TYPE_LISTEN_SOCKET: {

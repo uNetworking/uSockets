@@ -28,8 +28,6 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events);
 void us_internal_timer_sweep(struct us_loop *loop);
 unsigned int us_internal_accept_poll_event(struct us_poll *p);
 
-void sweep_timer_cb(struct us_timer *t);
-
 struct us_socket {
     struct us_poll p;
     struct us_socket_context *context;
@@ -55,5 +53,13 @@ struct us_socket_context {
     //void (*on_timeout)(struct us_socket_context *);
     void (*on_socket_timeout)(struct us_socket *);
 };
+
+struct us_internal_callback {
+    struct us_poll *p;
+    struct us_loop *loop;
+    void (*cb)(struct us_internal_callback *cb);
+};
+
+void sweep_timer_cb(struct us_internal_callback *cb);
 
 #endif // COMMON_H
