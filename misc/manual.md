@@ -1,58 +1,129 @@
-You begin by including `libusockets.h`, this is the only public header and exposes a set of functions. If missing from this manual just have a look in the header.
+# libusockets.h
+This is the only header you include. Following documentation has been extracted from this header. It may be outdated, go read the header directly for up-to-date documentation.
 
-### User data
-Every structure is created with some portion of user data memory. I call them extensions and they are retrieved like so:
+These interfaces are "alpha" and subject to change.
 
-`void *us_loop_ext(struct us_loop *)`
+# Loop
+```c
+/* Public interfaces for loops */
 
-You always specify the extension size when creating a new resource:
+/* Returns a new event loop with user data extension */
+struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int ext_size);
 
-`... us_create_loop(..., int ext_size)`
+/* Returns the loop user data extension */
+void *us_loop_ext(struct us_loop *loop);
 
-### us_loop
-This structure represents the event loop. It is a shared per-thread resource from which everything stems.
+/* Blocks the calling thread and drives the event loop until no more non-fallthrough polls are scheduled */
+void us_loop_run(struct us_loop *loop);
+```
 
-* us_loop_run blocks the calling thread until no more async operations are scheduled. This drives the entire server and is non-reentrant meaning you never call it more than once a time per thread.
+# Polls
+```c
+/* Public interfaces for polls */
 
-### us_socket_context
-This is the context in which a socket lives. It holds shared callbacks for all sockets which belong to this context and thus define the behavior of the sockets. If you're building a web server then HTTP sockets belong to your HTTP socket context and WebSockets belong to your WebSockets socket context.
+/* A fallthrough poll does not keep the loop running, it falls through */
+struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_size);
 
-* us_create_socket_context(...
-* us_socket_context_listen(...
+/* Associate this poll with a socket descriptor and poll type */
+void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type);
 
-Callbacks are set like so:
+/* Start, change and stop polling for events */
+void us_poll_start(struct us_poll *p, struct us_loop *loop, int events);
+void us_poll_change(struct us_poll *p, struct us_loop *loop, int events);
+void us_poll_stop(struct us_poll *p, struct us_loop *loop);
 
-#### us_socket_context_on_data(...
-A socket has data for you to read.
-#### us_socket_context_on_writable(...
-A socket can be written to again.
-#### us_socket_context_on_open(...
-A new socket has been allocated and opened
-#### us_socket_context_on_close(...
-A socket is closed and will be deleted
-#### us_socket_context_on_timeout(...
-A rough timer set on a socket has timed out. Only one timeout value can be set on any one socket a time.
+/* Returns the user data extension of this poll */
+void *us_poll_ext(struct us_poll *p);
 
-Set timers with `void us_socket_timeout(struct us_socket, int seconds);`
+/* Get associated socket descriptor from a poll */
+LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p);
+```
 
-### us_socket
-Here we have the socket. It belongs to a socket context and knows about it:
+# High cost timers
+```c
+/* Public interfaces for timers */
 
-* us_get_socket_context(struct us_socket *)
+/* Create a new high precision, low performance timer. May fail and return null */
+struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size);
 
-A socket always stems from a context and is always created from context listen or context connect.
+/* Arm a timer with a delay from now and eventually a repeat delay.
+ * Specify 0 as repeat delay to disable repeating. Specify both 0 to disarm. */
+void us_timer_set(struct us_timer *timer, void (*cb)(struct us_timer *t), int ms, int repeat_ms);
+```
 
-### Sending data
-You send data with a (simplified) BSD-like interface like so:
+# Sockets
+```c
+/* Public interfaces for sockets */
 
-* int us_socket_write(struct us_socket *s, const char *data, int length, int more)
+/* Write up to length bytes of data. Returns actual bytes written. Will call the on_writable callback of active socket context on failure to write everything off in one go.
+ * Set hint msg_more if you have more immediate data to write. */
+int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more);
 
-If all data could not be written you will automatically get a callback on_writable in your socket context and will only need to call the function again with the remaining data.
+/* Set a low precision, high performance timer on a socket. A socket can only have one single active timer at any given point in time. Will remove any such pre set timer */
+void us_socket_timeout(struct us_socket *s, unsigned int seconds);
 
-### SSL variants
+/* Return the user data extension of this socket */
+void *us_socket_ext(struct us_socket *s);
 
-Same applies to SSL-versions of sockets. They follow the same design but look like so:
+/* Return the socket context of this socket */
+void *us_socket_get_context(struct us_socket *s);
+```
 
-int us_ssl_socket_write(...
+# Socket contexts
 
-Socket contexts and sockets have the us_ssl_ prefix instead of only us_. Use those SSL-prefixed functions that exists and for missing functions you can use the shared ones like for instance us_socket_timeout.
+```c
+/* Public interfaces for contexts */
+
+/* A socket context holds shared callbacks and user data extension for associated sockets */
+struct us_socket_context *us_create_socket_context(struct us_loop *loop, int ext_size);
+
+/* Setters of various async callbacks */
+void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s));
+void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s));
+void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length));
+void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s));
+void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *s));
+
+/* Returns user data extension for this socket context */
+void *us_socket_context_ext(struct us_socket_context *context);
+
+/* Listen for connections. Acts as the main driving cog in a server. Will call set async callbacks. */
+struct us_listen_socket *us_socket_context_listen(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size);
+
+/* Begin an async socket connection. Will call set async callbacks */
+void us_context_connect(const char *host, int port, int options, int ext_size, void (*cb)(struct us_socket *), void *user_data);
+
+/* (Explicitly) associate a socket with this socket context. A socket can only belong to one single socket context at any one time */
+void us_socket_context_link(struct us_socket_context *context, struct us_socket *s);
+```
+
+# SSL
+```c
+/* Public interfaces for SSL sockets and contexts */
+
+/* An options structure where set options are non-null. Used to initialize an SSL socket context */
+struct us_ssl_socket_context_options {
+    const char *key_file_name;
+    const char *cert_file_name;
+    const char *passphrase;
+};
+
+/* See us_create_socket_context. SSL variant taking SSL options structure */
+struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options);
+
+/* See us_socket_context */
+void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s));
+void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, void (*on_close)(struct us_ssl_socket *s));
+void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, void (*on_data)(struct us_ssl_socket *s, char *data, int length));
+void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, void (*on_writable)(struct us_ssl_socket *s));
+void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, void (*on_timeout)(struct us_ssl_socket *s));
+
+/* See us_socket_context */
+struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size);
+
+/* See us_socket */
+int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length);
+
+/* See us_socket */
+void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds);
+```

@@ -15,17 +15,31 @@ void us_timer_sweep(struct us_loop *loop) {
 // internal only
 void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     switch (us_poll_type(p)) {
+    case POLL_TYPE_TIMER: {
+            us_internal_accept_poll_event(p);
+            struct us_timer *t = us_poll_ext(p);
+            t->cb(p);
+        }
+        break;
     case POLL_TYPE_LISTEN_SOCKET: {
+
+        // getting the listen socket from p should be us_poll_ext() = socket, then again us_socket_ext() = listen socket!
+
             struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
 
             LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p));
             if (client_fd == LIBUS_SOCKET_ERROR) {
                 // start timer here
+                // us_socket_timeout on the listen socket itself?
+
             } else {
 
                 // stop timer if any
 
                 do {
+                    // this creates the socket!
+                    /*us_loop_create_poll(loop, socket_size);
+
                     struct us_socket *s = malloc(listen_socket->socket_size);
                     us_poll_init(s, client_fd, POLL_TYPE_SOCKET);
                     us_poll_start(s, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
@@ -35,7 +49,7 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     // make sure to always set nodelay!
                     bsd_socket_nodelay(client_fd, 1);
 
-                    listen_socket->s.context->on_open(s);
+                    listen_socket->s.context->on_open(s);*/
                 } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
             }
         }
@@ -58,8 +72,8 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     s->context->on_close(s);
 
                     // vi äger socketen och tar bort den här
-                    us_poll_stop(s, s->context->loop);
-                    bsd_close_socket(us_poll_fd(s));
+                    us_poll_stop((struct us_poll *) s, s->context->loop);
+                    bsd_close_socket(us_poll_fd((struct us_poll *) s));
                     free(s);
                 }
             }

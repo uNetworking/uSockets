@@ -65,11 +65,15 @@ void on_http_socket_end(struct us_socket *s) {
     //printf("Disconnected!\n");
 }
 
+void on_https_socket_end(struct us_ssl_socket *s) {
+    //printf("Disconnected!\n");
+}
+
 void on_http_socket_accepted(struct us_socket *s) {
     printf("HTTP socket accepted!\n");
 }
 
-void on_http_socket_data(struct us_ssl_socket *s, char *data, int length) {
+void on_http_socket_data(struct us_socket *s, char *data, int length) {
     us_socket_write(s, largeHttpBuf, largeHttpBufSize, 0);
 }
 
@@ -88,8 +92,31 @@ void on_http_socket_timeout(struct us_socket *s) {
     us_socket_timeout(s, 2);
 }
 
+void on_https_socket_timeout(struct us_ssl_socket *s) {
+    printf("Dangit we timed out!\n");
+
+    // start timer again
+    us_ssl_socket_timeout(s, 2);
+}
+
+void timer_cb(struct us_timer *t) {
+    printf("Timer cb\n");
+}
+
 // arg1 ska vara storleken på responsen, kör ett script över alla storlekar
 int main() {
+
+    // first do some timer stuff (compile with USE_LIBUV too!)
+    struct us_loop *timer_loop = us_create_loop(on_wakeup, 0);
+
+    struct us_timer *timer = us_create_timer(timer_loop, 0, 0);
+
+    us_timer_set(timer, timer_cb, 1000, 5000);
+
+    us_loop_run(timer_loop);
+    printf("Falling through!\n");
+    return 0;
+
     // allocate some garbage data to send
     printf("%d\n", largeHttpBufSize);
     largeHttpBuf = malloc(largeHttpBufSize);
@@ -108,10 +135,10 @@ int main() {
     struct us_ssl_socket_context *http_context = us_create_ssl_socket_context(loop, sizeof(struct http_context_ext), options);
 
     us_ssl_socket_context_on_open(http_context, on_https_socket_accepted);
-    us_ssl_socket_context_on_close(http_context, on_http_socket_end);
+    us_ssl_socket_context_on_close(http_context, on_https_socket_end);
     us_ssl_socket_context_on_data(http_context, on_https_socket_data);
     us_ssl_socket_context_on_writable(http_context, on_https_socket_writable);
-    us_ssl_socket_context_on_timeout(http_context, on_http_socket_timeout);
+    us_ssl_socket_context_on_timeout(http_context, on_https_socket_timeout);
 
     struct us_listen_socket *listen_socket = us_ssl_socket_context_listen(http_context, 0, 3000, 0, sizeof(struct http_socket_ext));
 #else

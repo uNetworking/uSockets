@@ -26,7 +26,7 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
         return 0;
     }
 
-    struct us_listen_socket *p = us_loop_create_poll(context->loop, sizeof(struct us_listen_socket));
+    /*struct us_listen_socket *p = us_loop_create_poll(context->loop, sizeof(struct us_listen_socket));
     us_poll_init(p, listen_socket_fd, POLL_TYPE_LISTEN_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_READABLE);
 
@@ -38,7 +38,9 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     p->s.next = 0;
 
     us_socket_context_link(context, p);
-    return p;
+    return p;*/
+
+    return 0;
 }
 
 void us_context_connect(const char *host, int port, int options, int ext_size, void (*cb)(struct us_socket *s), void *user_data) {

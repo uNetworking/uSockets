@@ -6,6 +6,9 @@
 // holds everything you need from the bsd/winsock interfaces, only included by internal libusockets.h
 // here everything about the syscalls are inline-wrapped and included
 
+// why does accept4 require this?
+#define __USE_GNU
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
@@ -16,13 +19,13 @@
 #include <stdio.h>
 #include <errno.h>
 
-#define LIBUS_SOCKET_DESCRIPTOR int
+#define LIBUS_SOCKET_DESCRIPTOR int // wrong!
 #define LIBUS_SOCKET_ERROR -1
 
-#define ONLY_IPV4 1
+#define ONLY_IPV4 1 // stupid option that should never be used! support both by default!
 #define REUSE_PORT 2
 
-static inline bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
+static inline void bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *) &enabled, sizeof(enabled));
 }
 
@@ -73,7 +76,7 @@ static inline int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, in
     return recv(fd, buf, length, flags);
 }
 
-static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, int flags) {
+static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int flags) {
     return send(fd, buf, length, flags);
 }
 

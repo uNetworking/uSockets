@@ -14,11 +14,11 @@
 // the real "child" here is defined as us_socket_context_ext_ssl
 // and retrieved via us_socket_context_ext()
 struct us_socket_context_ext_ssl {
-    struct SSL_CTX *ssl_context;
+    SSL_CTX *ssl_context;
 
     // här måste det vara!
     void (*on_open)(struct us_ssl_socket *);
-    void (*on_data)(struct us_ssl_socket *, void *data, int length);
+    void (*on_data)(struct us_ssl_socket *, char *data, int length);
     void (*on_close)(struct us_ssl_socket *);
 };
 
@@ -136,7 +136,7 @@ BIO_METHOD *BIO_s_custom() {
 ///////////////////////////////////////////
 
 int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length) {
-    struct us_socket_ext_ssl *ssl_s = us_socket_ext(s);
+    struct us_socket_ext_ssl *ssl_s = /*(struct us_socket_ext_ssl *)*/ us_socket_ext((struct us_socket *) s);
 
     // if we have things to write in the first place!
     receive_buffer_length = 0;
@@ -157,17 +157,17 @@ void ssl_on_open(struct us_socket *s) {
     ssl_s->wbio = BIO_new(BIO_s_custom());
     SSL_set_bio(ssl_s->ssl, ssl_s->rbio, ssl_s->wbio);
 
-    ssl_context->on_open(s);
+    ssl_context->on_open((struct us_ssl_socket *) s);
 }
 
 void ssl_on_close(struct us_socket *s) {
     struct us_socket_context *context = us_socket_get_context(s);
     struct us_socket_context_ext_ssl *ssl_context = us_socket_context_ext(context);
-    struct us_socket_ext_ssl *ssl_s = us_socket_ext(s);
+    //struct us_socket_ext_ssl *ssl_s = us_socket_ext((struct us_socket *) s);
 
     // do ssl close stuff
 
-    ssl_context->on_close(s);
+    ssl_context->on_close((struct us_ssl_socket *) s);
 }
 
 #define BUF_SIZE 10240
@@ -234,7 +234,7 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
     struct us_socket_context_ext_ssl *ext = us_socket_context_ext(context);
 
     // this is a server?
-    ext->ssl_context = SSL_CTX_new(SSLv23_server_method());
+    ext->ssl_context = SSL_CTX_new(TLS_server_method());
 
     SSL_CTX_set_options(ext->ssl_context, SSL_OP_NO_SSLv3);
 
@@ -281,9 +281,13 @@ void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, void (
 }
 
 void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, void (*on_writable)(struct us_ssl_socket *s)) {
-    us_socket_context_on_writable(context, on_writable);
+    us_socket_context_on_writable((struct us_socket_context *) context, on_writable);
 }
 
 void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, void (*on_timeout)(struct us_ssl_socket *s)) {
-    us_socket_context_on_timeout(context, on_timeout);
+    us_socket_context_on_timeout((struct us_socket_context *) context, (void (*)(struct us_socket *)) on_timeout);
+}
+
+void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds) {
+    us_socket_timeout((struct us_socket *) s, seconds);
 }
