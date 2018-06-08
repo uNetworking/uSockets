@@ -3,28 +3,18 @@
 #include <stdlib.h>
 
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
-    /*if (msg_more) {
-        printf("MSG_MORE send of size: %d\n", length);
-    } else {
-        printf("Regular send of size: %d\n", length);
-    }*/
 
-    // MSG_NOSIGNAL for linux and freebsd
-
-    // Linux specific hack for SSL speedup: msg_more
     int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more ? MSG_MORE : 0);
 
-    if (written == -1) {
-        return 0;
-        printf("WRITE FAILED!\n");
+    if (written != length) {
+        s->context->loop->last_write_failed = 1;
+
+        // if not already polling for writable (check poll type!)
+        us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
     }
 
-    // automatically poll for writable here
-    if (written != length) {
-        // only do this if at the first segment!
-        //if (length == 104857646) {
-            us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
-        //}
+    if (written < 0) {
+        return 0;
     }
 
     return written;
@@ -32,6 +22,10 @@ int us_socket_write(struct us_socket *s, const char *data, int length, int msg_m
 
 void *us_socket_ext(struct us_socket *s) {
     return s + 1;
+}
+
+struct us_socket_context *us_socket_get_context(struct us_socket *s) {
+    return s->context;
 }
 
 // note: if in a sweep, this can break the iteration if not properly done

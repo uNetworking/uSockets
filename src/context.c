@@ -53,3 +53,27 @@ void us_socket_context_link(struct us_socket_context *context, struct us_socket 
     context->head = s;
     s->next = 0;
 }
+
+void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s)) {
+    context->on_open = on_open;
+}
+
+void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s)) {
+    context->on_close = on_close;
+}
+
+void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length)) {
+    context->on_data = on_data;
+}
+
+void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s)) {
+    context->on_writable = on_writable;
+}
+
+void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *)) {
+    context->on_socket_timeout = on_timeout;
+}
+
+void *us_socket_context_ext(struct us_socket_context *context) {
+    return context + 1;
+}

@@ -14,6 +14,7 @@ struct us_loop {
     struct epoll_event ready_events[1024];
 
     // todo: common items should lie in common struct! eventing/common.h
+    int last_write_failed;
     struct us_socket_context *head;
     void *recv_buf;
 };

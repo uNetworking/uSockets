@@ -5,12 +5,12 @@ CONFIG -= qt
 
 SOURCES += \
         main.c \
-    libusockets.c \
     eventing/epoll.c \
     context.c \
     socket.c \
     eventing/libuv.c \
-    ssl.c
+    ssl.c \
+    loop.c
 
 HEADERS += \
     libusockets.h \

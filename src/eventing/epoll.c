@@ -26,7 +26,7 @@ void us_loop_run(struct us_loop *loop) {
         int num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
         for (int i = 0; i < num_fd_ready; i++) {
             struct us_poll *poll = (struct us_poll *) loop->ready_events[i].data.ptr;
-            us_dispatch_ready_poll(poll, loop->ready_events[i].events & EPOLLERR, loop->ready_events[i].events);
+            us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & EPOLLERR, loop->ready_events[i].events);
         }
     }
 }
@@ -37,6 +37,10 @@ struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_si
         loop->num_polls++;
     }
     return malloc(sizeof(struct us_poll) + ext_size);
+}
+
+void us_poll_free(struct us_poll *p) {
+    free(p);
 }
 
 void *us_poll_ext(struct us_poll *p) {
@@ -66,7 +70,7 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
     return p->state.fd;
 }
 
-int us_poll_type(struct us_poll *p) {
+int us_internal_poll_type(struct us_poll *p) {
     return p->state.poll_type;
 }
 

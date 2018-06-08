@@ -99,6 +99,10 @@ void on_https_socket_timeout(struct us_ssl_socket *s) {
     us_ssl_socket_timeout(s, 2);
 }
 
+void timer_cb(struct us_timer *t) {
+    printf("Tick!\n");
+}
+
 // arg1 ska vara storleken på responsen, kör ett script över alla storlekar
 int main() {
     // allocate some garbage data to send
@@ -108,6 +112,10 @@ int main() {
 
     // create a loop
     struct us_loop *loop = us_create_loop(on_wakeup, 0); // shound take pre and post callbacks also!
+
+    // start a timer
+    struct us_timer *t = us_create_timer(loop, 0, 0);
+    us_timer_set(t, timer_cb, 1000, 1000);
 
     // create either an SSL socket context or a regular socket context
 #ifdef USE_SSL

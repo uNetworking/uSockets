@@ -11,6 +11,9 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events);
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events);
 void us_poll_stop(struct us_poll *p, struct us_loop *loop);
 
+/* After stopping a poll you must manually free the memory */
+void us_poll_free(struct us_poll *p);
+
 /* Returns the user data extension of this poll */
 void *us_poll_ext(struct us_poll *p);
 

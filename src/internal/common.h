@@ -12,17 +12,20 @@
 #include "internal/networking/bsd.h"
 
 enum {
-    POLL_TYPE_SOCKET,
-    POLL_TYPE_LISTEN_SOCKET,
-    POLL_TYPE_ASYNC,
-    POLL_TYPE_TIMER
+    /* Two first bits */
+    POLL_TYPE_SOCKET = 0,
+    POLL_TYPE_LISTEN_SOCKET = 1,
+    POLL_TYPE_CALLBACK = 2,
+
+    /* Two last bits */
+    POLL_TYPE_SOCKET_POLLING_OUT = 4,
+    POLL_TYPE_SOCKET_POLLING_IN = 8
 };
 
-// internal
-void us_dispatch_ready_poll(struct us_poll *p, int error, int events);
-void us_timer_sweep(struct us_loop *loop);
-int us_poll_type(struct us_poll *p);
-int us_socket_fd(struct us_socket *s);
+int us_internal_poll_type(struct us_poll *p);
+
+void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events);
+void us_internal_timer_sweep(struct us_loop *loop);
 unsigned int us_internal_accept_poll_event(struct us_poll *p);
 
 void sweep_timer_cb(struct us_timer *t);

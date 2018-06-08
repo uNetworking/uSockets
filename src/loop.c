@@ -2,26 +2,22 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-void us_timer_sweep(struct us_loop *loop) {
-    /*for (struct us_socket_context *context = loop->head; context; context = context->next) {
-
-        //struct us_socket_impl *s = us_internal_socket_impl(context->head);
-
+void us_internal_timer_sweep(struct us_loop *loop) {
+    for (struct us_socket_context *context = loop->head; context; context = context->next) {
         for (struct us_socket *s = context->head; s; s = s->next) {
             if (--(s->timeout) == 0) {
                 context->on_socket_timeout(s);
             }
         }
-    }*/
+    }
 }
 
 void sweep_timer_cb(struct us_timer *t) {
-    us_timer_sweep(t->loop);
+    us_internal_timer_sweep(t->loop);
 }
 
-// internal only
-void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
-    switch (us_poll_type(p)) {
+void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
+    switch (us_internal_poll_type(p)) {
     case POLL_TYPE_TIMER: {
             us_internal_accept_poll_event(p);
             struct us_timer *t = (struct us_timer *) p;
@@ -29,24 +25,22 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
         }
         break;
     case POLL_TYPE_LISTEN_SOCKET: {
-
-        // getting the listen socket from p should be us_poll_ext() = socket, then again us_socket_ext() = listen socket!
-
             struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
 
             LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p));
             if (client_fd == LIBUS_SOCKET_ERROR) {
                 // start timer here
-                // us_socket_timeout on the listen socket itself?
 
             } else {
 
                 // stop timer if any
 
                 do {
-                    struct us_socket *s = us_create_poll(us_socket_get_context(listen_socket)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
-                    us_poll_init(s, client_fd, POLL_TYPE_SOCKET);
-                    us_poll_start(s, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
+                    struct us_poll *p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
+                    us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
+                    us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
+
+                    struct us_socket *s = (struct us_socket *) p;
 
                     s->context = listen_socket->s.context;
 
@@ -62,7 +56,11 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             struct us_socket *s = (struct us_socket *) p;
 
             if (events & LIBUS_SOCKET_WRITABLE) {
+                s->context->loop->last_write_failed = 0;
                 s->context->on_writable(s);
+                if (!s->context->loop->last_write_failed) {
+                    us_poll_change(p, us_socket_get_context(s)->loop, LIBUS_SOCKET_READABLE);
+                }
             }
 
             if (events & LIBUS_SOCKET_READABLE) {
@@ -75,10 +73,9 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                     s->context->on_close(s);
 
-                    // vi äger socketen och tar bort den här
                     us_poll_stop(p, s->context->loop);
                     bsd_close_socket(us_poll_fd(p));
-                    free(p);
+                    us_poll_free(p);
                 }
             }
         }
@@ -86,36 +83,6 @@ void us_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     }
 }
 
-// loop.c?
 void *us_loop_ext(struct us_loop *loop) {
     return loop + 1;
-}
-
-// socket.c
-struct us_socket_context *us_socket_get_context(struct us_socket *s) {
-    return s->context;
-}
-
-void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s)) {
-    context->on_open = on_open;
-}
-
-void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s)) {
-    context->on_close = on_close;
-}
-
-void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length)) {
-    context->on_data = on_data;
-}
-
-void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s)) {
-    context->on_writable = on_writable;
-}
-
-void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *)) {
-    context->on_socket_timeout = on_timeout;
-}
-
-void *us_socket_context_ext(struct us_socket_context *context) {
-    return context + 1;
 }
