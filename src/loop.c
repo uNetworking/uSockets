@@ -12,7 +12,7 @@ void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct u
     loop->data.wakeup_async = us_internal_create_async(loop, 1, 0);
 
     // we need a shim callback that takes the internal_async and then calls the user level callback with the loop!
-    us_internal_async_set(loop->data.wakeup_async, wakeup_cb);
+    us_internal_async_set(loop->data.wakeup_async, (void (*)(struct us_internal_async *)) wakeup_cb);
 }
 
 void us_internal_timer_sweep(struct us_loop *loop) {
@@ -34,7 +34,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     case POLL_TYPE_CALLBACK: {
             us_internal_accept_poll_event(p);
             struct us_internal_callback *cb = (struct us_internal_callback *) p;
-            cb->cb(cb->cb_expects_the_loop ? cb->loop : &cb->p);
+            cb->cb(cb->cb_expects_the_loop ? (struct us_internal_callback *) cb->loop : (struct us_internal_callback *) &cb->p);
         }
         break;
     case POLL_TYPE_LISTEN_SOCKET: {
