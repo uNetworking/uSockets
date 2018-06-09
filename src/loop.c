@@ -2,8 +2,14 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
+void us_internal_loop_data_init(struct us_loop *loop) {
+    loop->data.sweep_timer = us_create_timer(loop, 1, 0);
+    loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);
+    loop->data.head = 0;
+}
+
 void us_internal_timer_sweep(struct us_loop *loop) {
-    for (struct us_socket_context *context = loop->head; context; context = context->next) {
+    for (struct us_socket_context *context = loop->data.head; context; context = context->next) {
         for (struct us_socket *s = context->head; s; s = s->next) {
             if (--(s->timeout) == 0) {
                 context->on_socket_timeout(s);
@@ -56,17 +62,17 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             struct us_socket *s = (struct us_socket *) p;
 
             if (events & LIBUS_SOCKET_WRITABLE) {
-                s->context->loop->last_write_failed = 0;
+                s->context->loop->data.last_write_failed = 0;
                 s->context->on_writable(s);
-                if (!s->context->loop->last_write_failed) {
+                if (!s->context->loop->data.last_write_failed) {
                     us_poll_change(p, us_socket_get_context(s)->loop, LIBUS_SOCKET_READABLE);
                 }
             }
 
             if (events & LIBUS_SOCKET_READABLE) {
-                int length = bsd_recv(us_poll_fd(p), s->context->loop->recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
+                int length = bsd_recv(us_poll_fd(p), s->context->loop->data.recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
-                    s->context->on_data((struct us_socket *) p, s->context->loop->recv_buf, length);
+                    s->context->on_data((struct us_socket *) p, s->context->loop->data.recv_buf, length);
                 } else if (!length || (length == LIBUS_SOCKET_ERROR && !bsd_would_block())) {
 
                     // först måste vi hantera onEnd? nej?

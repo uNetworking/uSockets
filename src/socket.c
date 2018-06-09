@@ -2,12 +2,16 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
+void us_internal_init_socket(struct us_socket *s) {
+
+}
+
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
 
     int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more ? MSG_MORE : 0);
 
     if (written != length) {
-        s->context->loop->last_write_failed = 1;
+        s->context->loop->data.last_write_failed = 1;
 
         // if not already polling for writable (check poll type!)
         us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);

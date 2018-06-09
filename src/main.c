@@ -45,11 +45,6 @@ struct http_context_ext {
 
 };
 
-// us_wakeup_loop() triggers
-void on_wakeup(struct us_loop *loop) {
-
-}
-
 void on_https_socket_writable(struct us_ssl_socket *s) {
     // update offset!
     us_ssl_socket_write(s, largeHttpBuf, largeHttpBufSize);
@@ -101,6 +96,12 @@ void on_https_socket_timeout(struct us_ssl_socket *s) {
 
 void timer_cb(struct us_timer *t) {
     printf("Tick!\n");
+
+    //us_wakeup_loop(us_timer_loop(t));
+}
+
+void on_wakeup(struct us_loop *loop) {
+    printf("Tock!\n");
 }
 
 // arg1 ska vara storleken på responsen, kör ett script över alla storlekar

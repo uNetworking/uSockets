@@ -23,12 +23,13 @@ HEADERS += \
     interfaces/poll.h \
     interfaces/context.h \
     interfaces/loop.h \
-    interfaces/ssl.h
+    interfaces/ssl.h \
+    internal/loop.h
 
 #QMAKE_CFLAGS_DEBUG += -Wno-unused-parameter
 #QMAKE_CFLAGS += -Wno-unused-parameter
 #QMAKE_CXXFLAGS += -Wno-unused-parameter
-QMAKE_CFLAGS += -fsanitize=address# -DLIBUS_USE_LIBUV
+QMAKE_CFLAGS += -fsanitize=address -DLIBUS_USE_LIBUV
 #LIBS += -lasan -luv
-LIBS += -lasan -lssl -lcrypto
+LIBS += -lasan -lssl -lcrypto -luv
 #LIBS += -lssl -lcrypto

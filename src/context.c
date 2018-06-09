@@ -13,7 +13,7 @@ struct us_socket_context *us_create_socket_context(struct us_loop *loop, int con
 
     // link it to loop
     // us_loop_link(context)
-    loop->head = context;
+    loop->data.head = context;
 
     return context;
 }
@@ -31,6 +31,9 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     us_poll_start(p, context->loop, LIBUS_SOCKET_READABLE);
 
     struct us_listen_socket *ls = (struct us_listen_socket *) p;
+
+    //us_internal_init_socket(&ls->s, context);
+
     // this is common, should be like us_internal_socket_init(context);
     ls->s.context = context;
     ls->s.timeout = 0;

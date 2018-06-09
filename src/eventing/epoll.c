@@ -10,17 +10,12 @@ struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int user
     loop->num_polls = 0;
     loop->epfd = epoll_create1(EPOLL_CLOEXEC);
 
-    loop->sweep_timer = us_create_timer(loop, 1, 0);
-
-    // common init
-    loop->recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);
-    loop->head = 0;
-
+    us_internal_loop_data_init(loop);
     return loop;
 }
 
 void us_loop_run(struct us_loop *loop) {
-    us_timer_set(loop->sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 
     while (loop->num_polls) {
         int num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
@@ -29,6 +24,10 @@ void us_loop_run(struct us_loop *loop) {
             us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & EPOLLERR, loop->ready_events[i].events);
         }
     }
+}
+
+void us_wakeup_loop(struct us_loop *loop) {
+    //loop->async
 }
 
 // poll
@@ -109,6 +108,12 @@ void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, in
 
     timerfd_settime(us_poll_fd((struct us_poll *) t), 0, &timer_spec, NULL);
     us_poll_start((struct us_poll *) t, internal_cb->loop, LIBUS_SOCKET_READABLE);
+}
+
+struct us_loop *us_timer_loop(struct us_timer *t) {
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+
+    return internal_cb->loop;
 }
 
 #endif
