@@ -59,6 +59,7 @@ struct us_socket_context {
 struct us_internal_callback {
     struct us_poll *p;
     struct us_loop *loop;
+    int cb_expects_the_loop;
     void (*cb)(struct us_internal_callback *cb);
 };
 

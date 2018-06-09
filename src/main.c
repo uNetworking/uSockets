@@ -97,11 +97,20 @@ void on_https_socket_timeout(struct us_ssl_socket *s) {
 void timer_cb(struct us_timer *t) {
     printf("Tick!\n");
 
-    //us_wakeup_loop(us_timer_loop(t));
+    us_wakeup_loop(us_timer_loop(t));
 }
 
 void on_wakeup(struct us_loop *loop) {
-    printf("Tock!\n");
+    char *message = us_loop_ext(loop);
+    printf("%s\n", message);
+}
+
+void on_pre(struct us_loop *loop) {
+    printf("Pre!\n");
+}
+
+void on_post(struct us_loop *loop) {
+    printf("Post!\n");
 }
 
 // arg1 ska vara storleken på responsen, kör ett script över alla storlekar
@@ -112,7 +121,9 @@ int main() {
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
 
     // create a loop
-    struct us_loop *loop = us_create_loop(on_wakeup, 0); // shound take pre and post callbacks also!
+    char *message = "Tock!";
+    struct us_loop *loop = us_create_loop(on_wakeup, on_pre, on_post, strlen(message) + 1);
+    memcpy(us_loop_ext(loop), message, strlen(message) + 1);
 
     // start a timer
     struct us_timer *t = us_create_timer(loop, 0, 0);

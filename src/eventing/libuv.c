@@ -58,11 +58,13 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
 }
 
 // loop
-struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int userdata_size) {
+struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
     struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + userdata_size);
 
     // default or not?
     loop->uv_loop = uv_loop_new();
+
+    // loop->us_async = uv_async_new();
 
     // default timer and async
     /*uv_timer_init(loop->uv_loop, &loop->uv_timer);
@@ -70,6 +72,13 @@ struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), int user
     loop->uv_timer.data = loop;*/
 
     us_internal_loop_data_init(loop);
+
+    // asyncs behöver inte vara exponerade - kan använda us_internal_callback ist!
+
+    // set callbacks for wakeup, pre, post
+    // us_async_start(loop->wakeup_async, wakeup_cb);
+    // us_async_wakeup()
+    // us_async_stop
 
     return loop;
 }
