@@ -13,10 +13,6 @@ struct us_loop {
     // common data
     struct us_loop_data data;
 
-    // semi-common data
-    void (*pre_cb)(struct us_loop *);
-    void (*post_cb)(struct us_loop *);
-
     // epoll extensions
     int num_polls;
     int epfd;

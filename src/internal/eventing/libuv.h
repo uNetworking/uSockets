@@ -12,9 +12,8 @@ struct us_loop {
 
     uv_loop_t *uv_loop;
 
-    // unrefed
-    uv_timer_t uv_timer;
-    uv_async_t uv_async;
+    uv_prepare_t uv_pre;
+    uv_check_t uv_check;
 };
 
 struct us_poll {

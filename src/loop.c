@@ -2,17 +2,23 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-// takes on_wakeup only! pre/post is different and per-system
-void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop)) {
+void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop)) {
     loop->data.sweep_timer = us_create_timer(loop, 1, 0);
     loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);
     loop->data.head = 0;
+
+    loop->data.pre_cb = pre_cb;
+    loop->data.post_cb = post_cb;
 
     // create the async here too!
     loop->data.wakeup_async = us_internal_create_async(loop, 1, 0);
 
     // we need a shim callback that takes the internal_async and then calls the user level callback with the loop!
     us_internal_async_set(loop->data.wakeup_async, (void (*)(struct us_internal_async *)) wakeup_cb);
+}
+
+void us_wakeup_loop(struct us_loop *loop) {
+    us_internal_async_wakeup(loop->data.wakeup_async);
 }
 
 void us_internal_timer_sweep(struct us_loop *loop) {

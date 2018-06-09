@@ -9,15 +9,30 @@ static void poll_cb(uv_poll_t *p, int status, int events) {
     us_internal_dispatch_ready_poll(p, status < 0, events);
 }
 
+static void prepare_cb(uv_prepare_t *p) {
+    struct us_loop *loop = p->data;
+    loop->data.pre_cb(loop);
+}
+
+/* Note: libuv timers execute AFTER the post callback */
+static void check_cb(uv_check_t *p) {
+    struct us_loop *loop = p->data;
+    loop->data.post_cb(loop);
+}
+
 static void close_cb(uv_handle_t *h) {
 
 }
 
 static void timer_cb(uv_timer_t *t) {
+    struct us_internal_callback *cb = t->data;
+    cb->cb(cb);
+}
 
-    struct us_loop *loop = t->data;
-
-    us_timer_sweep(loop);
+static void async_cb(uv_async_t *a) {
+    struct us_internal_callback *cb = a->data;
+    // internal asyncs give their loop, not themselves
+    cb->cb(cb->loop);
 }
 
 // poll
@@ -64,22 +79,15 @@ struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*p
     // default or not?
     loop->uv_loop = uv_loop_new();
 
-    // loop->us_async = uv_async_new();
+    uv_prepare_init(loop->uv_loop, &loop->uv_pre);
+    uv_prepare_start(&loop->uv_pre, prepare_cb);
+    loop->uv_pre.data = loop;
 
-    // default timer and async
-    /*uv_timer_init(loop->uv_loop, &loop->uv_timer);
-    uv_timer_start(&loop->uv_timer, timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
-    loop->uv_timer.data = loop;*/
+    uv_check_init(loop->uv_loop, &loop->uv_check);
+    uv_check_start(&loop->uv_check, check_cb);
+    loop->uv_check.data = loop;
 
-    us_internal_loop_data_init(loop);
-
-    // asyncs behöver inte vara exponerade - kan använda us_internal_callback ist!
-
-    // set callbacks for wakeup, pre, post
-    // us_async_start(loop->wakeup_async, wakeup_cb);
-    // us_async_wakeup()
-    // us_async_stop
-
+    us_internal_loop_data_init(loop, wakeup_cb, pre_cb, post_cb);
     return loop;
 }
 
@@ -93,17 +101,60 @@ struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_si
 
 // timer
 struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size) {
+    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_timer_t) + ext_size);
 
+    cb->loop = loop;
+    cb->cb_expects_the_loop = 0;
+
+    uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
+    uv_timer_init(loop->uv_loop, uv_timer);
+    uv_timer->data = cb;
+
+    return (struct us_timer *) cb;
 }
 
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
+    internal_cb->cb = cb;
+
+    uv_timer_t *uv_timer = (uv_timer_t *) (internal_cb + 1);
+    if (!ms) {
+        uv_timer_stop(uv_timer);
+    } else {
+        uv_timer_start(uv_timer, timer_cb, ms, repeat_ms);
+    }
 }
 
 struct us_loop *us_timer_loop(struct us_timer *t) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
     return internal_cb->loop;
+}
+
+// async (internal only)
+struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, int ext_size) {
+    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_async_t) + ext_size);
+
+    cb->loop = loop;
+    return (struct us_internal_async *) cb;
+}
+
+void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) a;
+
+    internal_cb->cb = cb;
+
+    uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
+    uv_async_init(internal_cb->loop->uv_loop, uv_async, async_cb);
+    uv_async->data = internal_cb;
+}
+
+void us_internal_async_wakeup(struct us_internal_async *a) {
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) a;
+
+    uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
+    uv_async_send(uv_async);
 }
 
 #endif

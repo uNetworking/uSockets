@@ -10,10 +10,7 @@ struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*p
     loop->num_polls = 0;
     loop->epfd = epoll_create1(EPOLL_CLOEXEC);
 
-    loop->pre_cb = pre_cb;
-    loop->post_cb = post_cb;
-
-    us_internal_loop_data_init(loop, wakeup_cb);
+    us_internal_loop_data_init(loop, wakeup_cb, pre_cb, post_cb);
     return loop;
 }
 
@@ -21,18 +18,14 @@ void us_loop_run(struct us_loop *loop) {
     us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 
     while (loop->num_polls) {
-        loop->pre_cb(loop);
+        loop->data.pre_cb(loop);
         int num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
         for (int i = 0; i < num_fd_ready; i++) {
             struct us_poll *poll = (struct us_poll *) loop->ready_events[i].data.ptr;
             us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & EPOLLERR, loop->ready_events[i].events);
         }
-        loop->post_cb(loop);
+        loop->data.post_cb(loop);
     }
-}
-
-void us_wakeup_loop(struct us_loop *loop) {
-    us_internal_async_wakeup(loop->data.wakeup_async);
 }
 
 // poll
