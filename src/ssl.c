@@ -213,7 +213,9 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
 
         }
     } else {
-        context->on_data(s, buf, read);
+        if (read > 0) {
+            context->on_data(s, buf, read);
+        }
     }
 }
 

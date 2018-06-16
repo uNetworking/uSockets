@@ -35,7 +35,7 @@ int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 104857600\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 104857600 - 1;
 
-char *largeHttpBuf;
+char *largeHttpBuf, *corkBuffer;
 
 struct http_socket_ext {
     int offset;
@@ -68,8 +68,55 @@ void on_http_socket_accepted(struct us_socket *s) {
     printf("HTTP socket accepted!\n");
 }
 
+struct Header {
+    char *key, *value;
+    unsigned int keyLength, valueLength;
+};
+
+// UNSAFETY NOTE: assumes *end == '\r' (might unref end pointer)
+char *getHeaders(char *buffer, char *end, struct Header *headers, size_t maxHeaders) {
+    for (unsigned int i = 0; i < maxHeaders; i++) {
+        for (headers->key = buffer; (*buffer != ':') & (*buffer > 32); *(buffer++) |= 32);
+        if (*buffer == '\r') {
+            if ((buffer != end) & (buffer[1] == '\n') & (i > 0)) {
+                headers->key = 0;
+                return buffer + 2;
+            } else {
+                return 0;
+            }
+        } else {
+            headers->keyLength = (unsigned int) (buffer - headers->key);
+            for (buffer++; (*buffer == ':' || *buffer < 33) && *buffer != '\r'; buffer++);
+            headers->value = buffer;
+            buffer = (char *) memchr(buffer, '\r', end - buffer); //for (; *buffer != '\r'; buffer++);
+            if (buffer /*!= end*/ && buffer[1] == '\n') {
+                headers->valueLength = (unsigned int) (buffer - headers->value);
+                buffer += 2;
+                headers++;
+            } else {
+                return 0;
+            }
+        }
+    }
+    return 0;
+}
+
 void on_http_socket_data(struct us_socket *s, char *data, int length) {
-    us_socket_write(s, largeHttpBuf, largeHttpBufSize, 0);
+    data[length] = '\r';
+    #define MAX_HEADERS 100
+
+    struct Header headers[MAX_HEADERS];
+    if (getHeaders(data, data + length, headers, MAX_HEADERS)) {
+
+        // fill response
+        memcpy(corkBuffer, largeBuf, sizeof(largeBuf) - 1);
+        memcpy(corkBuffer + sizeof(largeBuf) - 1, largeHttpBuf, largeHttpBufSize - sizeof(largeBuf) + 1);
+
+        // send
+        us_socket_write(s, corkBuffer, largeHttpBufSize, 0);
+    } else {
+        printf("Got chunked HTTP headers\n");
+    }
 }
 
 void on_https_socket_accepted(struct us_ssl_socket *s) {
@@ -77,7 +124,23 @@ void on_https_socket_accepted(struct us_ssl_socket *s) {
 }
 
 void on_https_socket_data(struct us_ssl_socket *s, char *data, int length) {
-    us_ssl_socket_write(s, largeHttpBuf, largeHttpBufSize);
+    data[length] = '\r';
+    #define MAX_HEADERS 100
+
+    struct Header headers[MAX_HEADERS];
+    if (getHeaders(data, data + length, headers, MAX_HEADERS)) {
+
+        // fill response
+        memcpy(corkBuffer, largeBuf, sizeof(largeBuf) - 1);
+        memcpy(corkBuffer + sizeof(largeBuf) - 1, largeHttpBuf, largeHttpBufSize - sizeof(largeBuf) + 1);
+
+        // send
+        us_ssl_socket_write(s, corkBuffer, largeHttpBufSize);
+    } else {
+        printf("Got chunked HTTPS headers\n");
+
+        printf("Length: %d\n", length);
+    }
 }
 
 void on_http_socket_timeout(struct us_socket *s) {
@@ -106,11 +169,11 @@ void on_wakeup(struct us_loop *loop) {
 }
 
 void on_pre(struct us_loop *loop) {
-    printf("Pre!\n");
+    //printf("Pre!\n");
 }
 
 void on_post(struct us_loop *loop) {
-    printf("Post!\n");
+    //printf("Post!\n");
 }
 
 // arg1 ska vara storleken på responsen, kör ett script över alla storlekar
@@ -118,6 +181,7 @@ int main() {
     // allocate some garbage data to send
     printf("%d\n", largeHttpBufSize);
     largeHttpBuf = malloc(largeHttpBufSize);
+    corkBuffer = malloc(largeHttpBufSize);
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
 
     // create a loop
@@ -127,7 +191,7 @@ int main() {
 
     // start a timer
     struct us_timer *t = us_create_timer(loop, 0, 0);
-    us_timer_set(t, timer_cb, 1000, 1000);
+    //us_timer_set(t, timer_cb, 1000, 1000);
 
     // create either an SSL socket context or a regular socket context
 #ifdef USE_SSL
