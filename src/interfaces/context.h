@@ -21,3 +21,9 @@ void us_context_connect(const char *host, int port, int options, int ext_size, v
 
 /* (Explicitly) associate a socket with this socket context. A socket can only belong to one single socket context at any one time */
 void us_socket_context_link(struct us_socket_context *context, struct us_socket *s);
+
+
+// you need a way to "move" a socket from one context of other kind (http -> websocket)
+// you need to make sure the shared SSL_context is up-referenced so that removing the old context does not mess up the new
+// or, simply say that a socket always belongs to where it was created but can be transformed into other contexts
+struct us_socket *us_socket_context_transform_socket(struct us_socket_context *context, struct us_socket *s);

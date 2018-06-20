@@ -25,3 +25,9 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length);
 
 /* See us_socket */
 void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds);
+
+/* */
+void *us_ssl_socket_context_ext(struct us_ssl_socket_context *s);
+
+/* */
+struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s);

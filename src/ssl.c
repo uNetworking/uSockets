@@ -12,6 +12,10 @@
 
 struct us_ssl_socket_context {
     struct us_socket_context sc;
+
+    // this thing can be shared with other socket contexts via socket transfer!
+    // maybe instead of holding once you hold many, a vector or set
+    // when a socket that belongs to another socket context transfers to a new socket context
     SSL_CTX *ssl_context;
 
     // här måste det vara!
@@ -135,6 +139,14 @@ BIO_METHOD *BIO_s_custom() {
 
 
 ///////////////////////////////////////////
+
+void *us_ssl_socket_context_ext(struct us_ssl_socket_context *context) {
+    return context + 1;
+}
+
+struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s) {
+    return (struct us_ssl_socket_context *) s->s.context;
+}
 
 int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length) {
     // if we have things to write in the first place!
