@@ -80,3 +80,7 @@ void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_t
 void *us_socket_context_ext(struct us_socket_context *context) {
     return context + 1;
 }
+
+struct us_loop *us_socket_context_loop(struct us_socket_context *context) {
+    return context->loop;
+}
