@@ -31,3 +31,6 @@ void *us_ssl_socket_context_ext(struct us_ssl_socket_context *s);
 
 /* */
 struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s);
+
+/* Return the user data extension of this socket */
+void *us_ssl_socket_ext(struct us_ssl_socket *s);

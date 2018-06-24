@@ -293,3 +293,7 @@ void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, voi
 void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds) {
     us_socket_timeout((struct us_socket *) s, seconds);
 }
+
+void *us_ssl_socket_ext(struct us_ssl_socket *s) {
+    return s + 1;
+}
