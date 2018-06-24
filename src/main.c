@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct app_http_socket {
     int offset;
@@ -12,8 +13,8 @@ struct app_http_context {
 };
 
 // small response
-//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
-//int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
+char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n";
+int largeHttpBufSize = sizeof(largeBuf) + 512 - 1;
 
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5120\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5120 - 1;
@@ -27,8 +28,8 @@ struct app_http_context {
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 5242880\r\n\r\n";
 //int largeHttpBufSize = sizeof(largeBuf) + 5242880 - 1;
 
-char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
-int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
+//char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 52428800\r\n\r\n";
+//int largeHttpBufSize = sizeof(largeBuf) + 52428800 - 1;
 
 //large response
 //char largeBuf[] = "HTTP/1.1 200 OK\r\nContent-Length: 104857600\r\n\r\n";
@@ -51,7 +52,7 @@ void on_http_socket_end(struct us_socket *s) {
     printf("Disconnected!\n");
 }
 
-void on_http_socket_data(struct us_socket *s, void *data, int length) {
+void on_http_socket_data(struct us_socket *s, char *data, int length) {
     struct app_http_socket *http_socket = (struct app_http_socket *) us_socket_ext(s);
 
     http_socket->offset = us_socket_write(s, largeHttpBuf, largeHttpBufSize, 0);
@@ -73,12 +74,8 @@ int main() {
     printf("%d\n", largeHttpBufSize);
 
     largeHttpBuf = malloc(largeHttpBufSize);
+    memset(largeHttpBuf, 0, largeHttpBufSize);
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
-
-    // this section reproduces the strange major drop in throughput (8gb/sec -> 5gb/sec)
-    char *tmp = malloc(largeHttpBufSize);
-    memcpy(tmp, largeHttpBuf, largeHttpBufSize);
-    largeHttpBuf = tmp;
 
     // create the loop, and register a wakeup handler
     struct us_loop *loop = us_create_loop(on_wakeup, on_wakeup, on_wakeup, 0); // shound take pre and post callbacks also!
