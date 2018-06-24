@@ -75,6 +75,11 @@ int main() {
     largeHttpBuf = malloc(largeHttpBufSize);
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
 
+    // this section reproduces the strange major drop in throughput (8gb/sec -> 5gb/sec)
+    char *tmp = malloc(largeHttpBufSize);
+    memcpy(tmp, largeHttpBuf, largeHttpBufSize);
+    largeHttpBuf = tmp;
+
     // create the loop, and register a wakeup handler
     struct us_loop *loop = us_create_loop(on_wakeup, on_wakeup, on_wakeup, 0); // shound take pre and post callbacks also!
 
