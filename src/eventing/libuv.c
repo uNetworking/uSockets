@@ -72,12 +72,12 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
     return fd;
 }
 
-// loop
+// loop shoul take boolean defaultHint
 struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
     struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + userdata_size);
 
     // default or not?
-    loop->uv_loop = uv_loop_new();
+    loop->uv_loop = uv_default_loop();//uv_loop_new();
 
     uv_prepare_init(loop->uv_loop, &loop->uv_pre);
     uv_prepare_start(&loop->uv_pre, prepare_cb);
@@ -96,7 +96,7 @@ void us_loop_run(struct us_loop *loop) {
 }
 
 struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_size) {
-    return malloc(ext_size);
+    return malloc(sizeof(struct us_poll) + ext_size);
 }
 
 // timer
