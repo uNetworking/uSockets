@@ -77,7 +77,8 @@ static inline int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, in
 }
 
 static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int flags) {
-    return send(fd, buf, length, flags);
+    // for Linux we do not want signals
+    return send(fd, buf, length, flags | MSG_NOSIGNAL);
 }
 
 static inline int bsd_would_block() {

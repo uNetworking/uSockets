@@ -50,11 +50,31 @@ void us_context_connect(const char *host, int port, int options, int ext_size, v
     cb(0);
 }
 
-void us_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
-    // just add it to the context
+// make internal?
+void us_socket_context_unlink(struct us_socket_context *context, struct us_socket *s) {
+    if (s->prev == s->next) {
+        context->head = 0;
+    } else {
+        if (s->prev) {
+            s->prev->next = s->next;
+        } else {
+            context->head = s->next;
+        }
+        if (s->next) {
+            s->next->prev = s->prev;
+        }
+    }
+}
 
+// this one should probably be made internal!
+// unlinking should only happen at the very last moment, risky to call this
+void us_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
+    s->next = context->head;
+    s->prev = 0;
+    if (context->head) {
+        context->head->prev = s;
+    }
     context->head = s;
-    s->next = 0;
 }
 
 void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s)) {

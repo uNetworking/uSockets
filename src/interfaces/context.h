@@ -23,6 +23,9 @@ void us_context_connect(const char *host, int port, int options, int ext_size, v
 void us_socket_context_link(struct us_socket_context *context, struct us_socket *s);
 
 /* */
+void us_socket_context_unlink(struct us_socket_context *context, struct us_socket *s);
+
+/* */
 struct us_loop *us_socket_context_loop(struct us_socket_context *context);
 
 // you need a way to "move" a socket from one context of other kind (http -> websocket)

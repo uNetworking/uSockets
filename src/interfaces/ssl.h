@@ -21,7 +21,7 @@ void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, voi
 struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size);
 
 /* See us_socket */
-int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length);
+int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, int msg_more);
 
 /* See us_socket */
 void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds);

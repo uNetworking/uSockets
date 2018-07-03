@@ -90,6 +90,7 @@ long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
 char *receive_buffer;
 int receive_buffer_length;
 struct us_socket *receive_socket;
+int more_hint = 0;
 
 // note: we can share the same BIO pair among all SSL of the same thread!
 // only 6 kb of SSL state is needed and 16+16kb of temporary buffers!
@@ -101,7 +102,11 @@ int BIO_s_custom_write(BIO *bio, const char *data, int length) {
 
     // msg_more is something we need here!
 
-    return us_socket_write(receive_socket, data, length, length > 16000);
+    //printf("length: %d\n", length);
+
+    //printf("length: %d\n", length);
+
+    return us_socket_write(receive_socket, data, length, /*length > 16000*/more_hint);
 }
 
 // make sure to reset receive_buffer before ssl_write is called? no?
@@ -148,10 +153,12 @@ struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s)
     return (struct us_ssl_socket_context *) s->s.context;
 }
 
-int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length) {
+int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, int hint_more) {
     // if we have things to write in the first place!
     receive_buffer_length = 0;
     receive_socket = &s->s;
+
+    more_hint = hint_more;
 
     return SSL_write(s->ssl, data, length);
 }

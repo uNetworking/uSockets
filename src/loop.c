@@ -22,6 +22,7 @@ void us_wakeup_loop(struct us_loop *loop) {
 }
 
 void us_internal_timer_sweep(struct us_loop *loop) {
+    printf("sweeping timers now\n");
     for (struct us_socket_context *context = loop->data.head; context; context = context->next) {
         for (struct us_socket *s = context->head; s; s = s->next) {
             if (--(s->timeout) == 0) {
@@ -66,6 +67,9 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     // make sure to always set nodelay!
                     bsd_socket_nodelay(client_fd, 1);
 
+                    // make sure to link this socket into its context!
+                    us_socket_context_link(listen_socket->s.context, s);
+
                     listen_socket->s.context->on_open(s);
                 } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
             }
@@ -89,6 +93,9 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 } else if (!length || (length == LIBUS_SOCKET_ERROR && !bsd_would_block())) {
 
                     // först måste vi hantera onEnd? nej?
+
+                    //unlink
+                    us_socket_context_unlink(s->context, s);
 
                     s->context->on_close(s);
 
