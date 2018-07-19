@@ -5,6 +5,7 @@
 void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop)) {
     loop->data.sweep_timer = us_create_timer(loop, 1, 0);
     loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);
+    loop->data.ssl_data = 0;
     loop->data.head = 0;
 
     loop->data.pre_cb = pre_cb;

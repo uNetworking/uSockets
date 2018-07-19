@@ -15,6 +15,7 @@ struct us_loop_data {
     int last_write_failed;
     struct us_socket_context *head;
     void *recv_buf;
+    void *ssl_data;
     void (*pre_cb)(struct us_loop *);
     void (*post_cb)(struct us_loop *);
 };
