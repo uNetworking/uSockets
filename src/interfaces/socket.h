@@ -12,3 +12,6 @@ void *us_socket_ext(struct us_socket *s);
 
 /* Return the socket context of this socket */
 struct us_socket_context *us_socket_get_context(struct us_socket *s);
+
+/* Withdraw any msg_more status and flush any pending data */
+void us_socket_flush(struct us_socket *s);

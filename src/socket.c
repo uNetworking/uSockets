@@ -40,3 +40,7 @@ void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
         s->timeout = 0;
     }
 }
+
+void us_socket_flush(struct us_socket *s) {
+    bsd_socket_flush(us_poll_fd((struct us_poll *) s));
+}
