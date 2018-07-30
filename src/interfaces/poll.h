@@ -11,6 +11,9 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events);
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events);
 void us_poll_stop(struct us_poll *p, struct us_loop *loop);
 
+/* Return what events we are polling for */
+int us_poll_events(struct us_poll *p);
+
 /* After stopping a poll you must manually free the memory */
 void us_poll_free(struct us_poll *p);
 

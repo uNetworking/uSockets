@@ -76,6 +76,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             }
         }
         break;
+    case POLL_TYPE_SOCKET_SHUT_DOWN:
     case POLL_TYPE_SOCKET: {
             struct us_socket *s = (struct us_socket *) p;
 
@@ -84,6 +85,11 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 s->context->on_writable(s);
                 if (!s->context->loop->data.last_write_failed) {
                     us_poll_change(p, us_socket_get_context(s)->loop, LIBUS_SOCKET_READABLE);
+
+                    // it is safe (for us) to call shutdown twice, if last failed due to polling for writable
+                    if (us_socket_is_shutting_down(s)) {
+                        us_socket_shutdown(s);
+                    }
                 }
             }
 

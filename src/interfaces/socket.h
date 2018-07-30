@@ -15,3 +15,12 @@ struct us_socket_context *us_socket_get_context(struct us_socket *s);
 
 /* Withdraw any msg_more status and flush any pending data */
 void us_socket_flush(struct us_socket *s);
+
+/* Initiate a shutdown. Actual shutdown will be postponed until any pending write finishes */
+void us_socket_shutdown(struct us_socket *s);
+
+/* Returns whether the socket has been shut down or not */
+int us_socket_is_shutting_down(struct us_socket *s);
+
+/* Immediately closes the socket */
+void us_socket_close(struct us_socket *s);

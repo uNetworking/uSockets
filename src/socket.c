@@ -7,21 +7,14 @@ void us_internal_init_socket(struct us_socket *s) {
 }
 
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
-
     int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more ? MSG_MORE : 0);
 
     if (written != length) {
         s->context->loop->data.last_write_failed = 1;
-
-        // if not already polling for writable (check poll type!)
         us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
     }
 
-    if (written < 0) {
-        return 0;
-    }
-
-    return written;
+    return written < 0 ? 0 : written;
 }
 
 void *us_socket_ext(struct us_socket *s) {
@@ -43,4 +36,24 @@ void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
 
 void us_socket_flush(struct us_socket *s) {
     bsd_socket_flush(us_poll_fd((struct us_poll *) s));
+}
+
+void us_socket_close(struct us_socket *s) {
+    bsd_close_socket(us_poll_fd((struct us_poll *) s));
+
+    // todo: some kind of signalling of closed socket here
+    // such as context = nullptr
+
+    // us_socket_is_closed()
+}
+
+int us_socket_is_shutting_down(struct us_socket *s) {
+    return us_internal_poll_type(&s->p) == POLL_TYPE_SOCKET_SHUT_DOWN;
+}
+
+void us_socket_shutdown(struct us_socket *s) {
+    us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
+    if (!(us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE)) {
+        bsd_shutdown_socket(us_poll_fd((struct us_poll *) s));
+    }
 }

@@ -14,15 +14,17 @@
 enum {
     /* Two first bits */
     POLL_TYPE_SOCKET = 0,
-    POLL_TYPE_LISTEN_SOCKET = 1,
-    POLL_TYPE_CALLBACK = 2,
+    POLL_TYPE_SOCKET_SHUT_DOWN = 1,
+    POLL_TYPE_LISTEN_SOCKET = 2,
+    POLL_TYPE_CALLBACK = 3,
 
     /* Two last bits */
-    POLL_TYPE_SOCKET_POLLING_OUT = 4,
-    POLL_TYPE_SOCKET_POLLING_IN = 8
+    POLL_TYPE_POLLING_OUT = 4,
+    POLL_TYPE_POLLING_IN = 8
 };
 
 int us_internal_poll_type(struct us_poll *p);
+void us_internal_poll_set_type(struct us_poll *p, int poll_type);
 void us_internal_init_loop(struct us_loop *loop);
 void us_internal_init_socket(struct us_socket *s);
 

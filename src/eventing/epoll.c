@@ -49,7 +49,13 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
     p->state.poll_type = poll_type;
 }
 
+int us_poll_events(struct us_poll *p) {
+    return (p->state.poll_type & POLL_TYPE_POLLING_IN) * LIBUS_SOCKET_READABLE + (p->state.poll_type & POLL_TYPE_POLLING_OUT) * LIBUS_SOCKET_WRITABLE;
+}
+
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
+    p->state.poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+
     struct epoll_event event;
     event.events = events;
     event.data.ptr = p;
@@ -57,18 +63,28 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
 }
 
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
-    struct epoll_event event;
-    event.events = events;
-    event.data.ptr = p;
-    epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
+    if (us_poll_events(p) != events) {
+
+        p->state.poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+
+        struct epoll_event event;
+        event.events = events;
+        event.data.ptr = p;
+        epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
+    }
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
     return p->state.fd;
 }
 
+/* Returns any of listen socket, socket, shut down socket or callback */
 int us_internal_poll_type(struct us_poll *p) {
-    return p->state.poll_type;
+    return p->state.poll_type & 3;
+}
+
+void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
+    p->state.poll_type = poll_type | (p->state.poll_type & 12);
 }
 
 void us_poll_stop(struct us_poll *p, struct us_loop *loop) {

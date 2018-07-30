@@ -57,6 +57,10 @@ static inline void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
     close(fd);
 }
 
+static inline void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
+    shutdown(fd, SHUT_WR);
+}
+
 // called by dispatch_ready_poll
 static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
     LIBUS_SOCKET_DESCRIPTOR acceptedFd;
