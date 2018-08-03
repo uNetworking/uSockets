@@ -1,5 +1,7 @@
 /* Public interfaces for SSL sockets and contexts */
 
+#ifndef LIBUS_NO_SSL
+
 /* An options structure where set options are non-null. Used to initialize an SSL socket context */
 struct us_ssl_socket_context_options {
     const char *key_file_name;
@@ -34,3 +36,5 @@ struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s)
 
 /* Return the user data extension of this socket */
 void *us_ssl_socket_ext(struct us_ssl_socket *s);
+
+#endif

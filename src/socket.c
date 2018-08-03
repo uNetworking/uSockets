@@ -60,6 +60,9 @@ int us_socket_is_shut_down(struct us_socket *s) {
 }
 
 void us_socket_shutdown(struct us_socket *s) {
+    // todo: should we emit on_close if calling shutdown on an already half-closed socket?
+    // we need more states in that case, we need to track RECEIVED_FIN
+    // so far, the app has to track this and call close as needed
     if (!us_socket_is_shut_down(s)) {
         us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
         us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);

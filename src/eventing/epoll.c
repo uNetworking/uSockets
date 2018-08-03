@@ -5,7 +5,7 @@
 #ifdef LIBUS_USE_EPOLL
 
 // loop
-struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int ext_size) {
+struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int ext_size) {
     struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + ext_size);
     loop->num_polls = 0;
     loop->epfd = epoll_create1(EPOLL_CLOEXEC);

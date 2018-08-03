@@ -84,7 +84,7 @@ int main() {
     memcpy(largeHttpBuf, largeBuf, sizeof(largeBuf) - 1);
 
     // create the loop, and register a wakeup handler
-    struct us_loop *loop = us_create_loop(on_wakeup, on_wakeup, on_wakeup, 0); // shound take pre and post callbacks also!
+    struct us_loop *loop = us_create_loop(1, on_wakeup, on_wakeup, on_wakeup, 0);
 
     // create a context (behavior) for httpsockets
     struct us_socket_context *http_context = us_create_socket_context(loop, sizeof(struct app_http_context));

@@ -1,7 +1,7 @@
 /* Public interfaces for loops */
 
 /* Returns a new event loop with user data extension */
-struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int ext_size);
+struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int ext_size);
 
 /* Returns the loop user data extension */
 void *us_loop_ext(struct us_loop *loop);

@@ -32,7 +32,7 @@ static void timer_cb(uv_timer_t *t) {
 static void async_cb(uv_async_t *a) {
     struct us_internal_callback *cb = a->data;
     // internal asyncs give their loop, not themselves
-    cb->cb(cb->loop);
+    cb->cb((struct us_internal_callback *) cb->loop);
 }
 
 // poll
@@ -42,20 +42,30 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
 }
 
 void us_poll_free(struct us_poll *p) {
-    uv_close(&p->uv_p, close_cb);
+    uv_close((uv_handle_t *) &p->uv_p, close_cb);
 }
 
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
+    p->poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+
     uv_poll_init(loop->uv_loop, &p->uv_p, p->fd);
     uv_poll_start(&p->uv_p, events, poll_cb);
 }
 
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
-    uv_poll_start(&p->uv_p, events, poll_cb);
+    if (us_poll_events(p) != events) {
+        p->poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+
+        uv_poll_start(&p->uv_p, events, poll_cb);
+    }
 }
 
 void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
     uv_poll_stop(&p->uv_p);
+}
+
+int us_poll_events(struct us_poll *p) {
+    return (p->poll_type & POLL_TYPE_POLLING_IN) * LIBUS_SOCKET_READABLE + (p->poll_type & POLL_TYPE_POLLING_OUT) * LIBUS_SOCKET_WRITABLE;
 }
 
 unsigned int us_internal_accept_poll_event(struct us_poll *p) {
@@ -63,7 +73,11 @@ unsigned int us_internal_accept_poll_event(struct us_poll *p) {
 }
 
 int us_internal_poll_type(struct us_poll *p) {
-    return p->poll_type;
+    return p->poll_type & 3;
+}
+
+void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
+    p->poll_type = poll_type | (p->poll_type & 12);
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
@@ -72,12 +86,10 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
     return fd;
 }
 
-// loop shoul take boolean defaultHint
-struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
+struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
     struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + userdata_size);
 
-    // default or not?
-    loop->uv_loop = uv_default_loop();//uv_loop_new();
+    loop->uv_loop = default_hint ? uv_default_loop() : uv_loop_new();
 
     uv_prepare_init(loop->uv_loop, &loop->uv_pre);
     uv_prepare_start(&loop->uv_pre, prepare_cb);
@@ -92,6 +104,8 @@ struct us_loop *us_create_loop(void (*wakeup_cb)(struct us_loop *loop), void (*p
 }
 
 void us_loop_run(struct us_loop *loop) {
+    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
 
@@ -116,7 +130,7 @@ struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
-    internal_cb->cb = cb;
+    internal_cb->cb = (void(*)(struct us_internal_callback *)) cb;
 
     uv_timer_t *uv_timer = (uv_timer_t *) (internal_cb + 1);
     if (!ms) {
@@ -143,7 +157,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fal
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) a;
 
-    internal_cb->cb = cb;
+    internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
 
     uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
     uv_async_init(internal_cb->loop->uv_loop, uv_async, async_cb);

@@ -1,3 +1,5 @@
+#ifndef LIBUS_NO_SSL
+
 #include "libusockets.h"
 #include "internal/common.h"
 
@@ -269,3 +271,5 @@ void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds) {
 void *us_ssl_socket_ext(struct us_ssl_socket *s) {
     return s + 1;
 }
+
+#endif

@@ -29,7 +29,7 @@ HEADERS += \
 #QMAKE_CFLAGS_DEBUG += -Wno-unused-parameter
 #QMAKE_CFLAGS += -Wno-unused-parameter
 #QMAKE_CXXFLAGS += -Wno-unused-parameter
-QMAKE_CFLAGS += -fsanitize=address #-DLIBUS_USE_LIBUV
+QMAKE_CFLAGS += -fsanitize=address -DLIBUS_NO_SSL -DLIBUS_USE_LIBUV
 #LIBS += -lasan -luv
-LIBS += -lasan -lssl -lcrypto -luv
+LIBS += -lasan -luv -lssl -lcrypto #-luv
 #LIBS += -lssl -lcrypto
