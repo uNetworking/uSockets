@@ -130,6 +130,14 @@ void ssl_on_close(struct us_ssl_socket *s) {
     context->on_close(s);
 }
 
+void ssl_on_end(struct us_ssl_socket *s) {
+    struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
+
+    // whatever state we are in, a TCP FIN is always an answered shutdown
+    printf("ssl_on_end aka someone sent us a TCP FIN??\n");
+    us_ssl_socket_close(s);
+}
+
 void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
@@ -141,24 +149,53 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     loop_ssl_data->ssl_read_input_offset = 0;
     loop_ssl_data->ssl_socket = &s->s;
 
+    if (us_ssl_socket_is_shut_down(s)) {
+        printf("Got data when in shutdown?\n");
+
+        if (SSL_shutdown(s->ssl) == 1) {
+            // two phase shutdown is complete here
+            printf("Two step SSL shutdown complete\n");
+
+            us_ssl_socket_close(s);
+        }
+
+        // no further processing of data when in shutdown state
+        return;
+    }
+
     int read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output, LIBUS_RECV_BUFFER_LENGTH);
     if (loop_ssl_data->ssl_read_input_length) {
         // serious error we cannot recover from
-        printf("WHAT!\n");
-        exit(-1);
+        us_ssl_socket_close(s);
+        return;
     } else {
         if (read > 0) {
+
+            // note: if we got a shutdown we cannot send anything, so we need to handle shutdown earlier than this
+
             context->on_data(s, loop_ssl_data->ssl_read_output, read);
         } else if (read == 0) {
             // hmmmmmm?
+            // ignore any sending of 0 length, wtf
         } else {
             int err = SSL_get_error(s->ssl, read);
-
-            if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+            //if (err == SSL_ERROR_ZERO_RETURN) {
+                // is this path even needed?
+                //goto received_shutdown;
+            /*} else */if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
                 // terminate connection here
-                printf("terminate now!\n");
+                us_ssl_socket_close(s);
+                return;
             }
         }
+    }
+
+    // check this then?
+    if (SSL_get_shutdown(s->ssl) & SSL_RECEIVED_SHUTDOWN) {
+        received_shutdown:
+        printf("SSL_RECEIVED_SHUTDOWN\n");
+
+        //us_
     }
 }
 
@@ -236,6 +273,10 @@ void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, voi
     us_socket_context_on_timeout((struct us_socket_context *) context, (void (*)(struct us_socket *)) on_timeout);
 }
 
+void us_ssl_socket_context_on_end(struct us_ssl_socket_context *context, void (*on_end)(struct us_ssl_socket *)) {
+    us_socket_context_on_end((struct us_socket_context *) context, (void (*)(struct us_socket *)) ssl_on_end);
+}
+
 void *us_ssl_socket_context_ext(struct us_ssl_socket_context *context) {
     return context + 1;
 }
@@ -246,6 +287,10 @@ struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s)
 }
 
 int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, int msg_more) {
+    if (us_ssl_socket_is_shut_down(s)) {
+        return 0;
+    }
+
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
@@ -270,6 +315,31 @@ void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds) {
 
 void *us_ssl_socket_ext(struct us_ssl_socket *s) {
     return s + 1;
+}
+
+int us_ssl_socket_is_shut_down(struct us_ssl_socket *s) {
+    return SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
+}
+
+void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
+    // basically SSL_shutdown
+    if (!us_ssl_socket_is_shut_down(s)) {
+
+        printf("Calling us_ssl_socket_shutdown\n");
+
+        // sets SSL_SENT_SHUTDOWN no matter what
+
+        // this may read and write, make sure to set everything BIO before!
+        SSL_shutdown(s->ssl);
+    }
+}
+
+void us_ssl_socket_close(struct us_ssl_socket *s) {
+    // todo: release all resources here
+    SSL_free(s->ssl);
+
+    // this emits the ssl_on_close, which emits our event
+    us_socket_close((struct us_socket *) s);
 }
 
 #endif
