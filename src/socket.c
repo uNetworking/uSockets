@@ -27,7 +27,7 @@ struct us_socket_context *us_socket_get_context(struct us_socket *s) {
 
 void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
     if (seconds) {
-        unsigned short timeout_sweeps = seconds / LIBUS_TIMEOUT_GRANULARITY;
+        unsigned short timeout_sweeps = 0.5f + float(seconds) / float(LIBUS_TIMEOUT_GRANULARITY);
         s->timeout = timeout_sweeps ? timeout_sweeps : 1;
     } else {
         s->timeout = 0;
@@ -39,12 +39,12 @@ void us_socket_flush(struct us_socket *s) {
 }
 
 void us_socket_close(struct us_socket *s) {
+    us_socket_context_unlink(s->context, s);
+    us_poll_stop((struct us_poll *) s, s->context->loop);
     bsd_close_socket(us_poll_fd((struct us_poll *) s));
 
-    // todo: some kind of signalling of closed socket here
-    // such as context = nullptr
-
-    // us_socket_is_closed()
+    s->context->on_close(s);
+    // todo: us_socket_is_closed()
 }
 
 int us_socket_is_shutting_down(struct us_socket *s) {
