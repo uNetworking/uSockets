@@ -25,6 +25,16 @@
 #define ONLY_IPV4 1 // stupid option that should never be used! support both by default!
 #define REUSE_PORT 2
 
+static inline LIBUS_SOCKET_DESCRIPTOR apple_no_sigpipe(LIBUS_SOCKET_DESCRIPTOR fd) {
+#ifdef __APPLE__
+    if (fd != LIBUS_SOCKET_ERROR) {
+        int no_sigpipe = 1;
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(int));
+    }
+#endif
+    return fd;
+}
+
 static inline void bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *) &enabled, sizeof(enabled));
 }
@@ -43,14 +53,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, in
 
     LIBUS_SOCKET_DESCRIPTOR created_fd = socket(domain, type | flags, protocol);
 
-#ifdef __APPLE__
-    if (createdFd != INVALID_SOCKET) {
-        int no_sigpipe = 1;
-        setsockopt(created_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(int));
-    }
-#endif
-
-    return created_fd;
+    return apple_no_sigpipe(created_fd);
 }
 
 static inline void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
@@ -63,22 +66,16 @@ static inline void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 
 // called by dispatch_ready_poll
 static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
-    LIBUS_SOCKET_DESCRIPTOR acceptedFd;
+    LIBUS_SOCKET_DESCRIPTOR accepted_fd;
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
     // Linux, FreeBSD
-    acceptedFd = accept4(fd, 0, 0, SOCK_CLOEXEC | SOCK_NONBLOCK);
+    accepted_fd = accept4(fd, 0, 0, SOCK_CLOEXEC | SOCK_NONBLOCK);
 #else
     // Windows, OS X
-    acceptedFd = accept(fd, 0, 0);
+    accepted_fd = accept(fd, 0, 0);
 #endif
 
-#ifdef __APPLE__
-    if (acceptedFd != INVALID_SOCKET) {
-        int noSigpipe = 1;
-        setsockopt(acceptedFd, SOL_SOCKET, SO_NOSIGPIPE, &noSigpipe, sizeof(int));
-    }
-#endif
-    return acceptedFd;
+    return apple_no_sigpipe(accepted_fd);
 }
 
 static inline int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, int flags) {
