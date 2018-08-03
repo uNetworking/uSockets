@@ -7,6 +7,10 @@ void us_internal_init_socket(struct us_socket *s) {
 }
 
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
+    if (us_socket_is_shut_down(s)) {
+        return 0;
+    }
+
     int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more ? MSG_MORE : 0);
 
     if (written != length) {
@@ -35,7 +39,9 @@ void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
 }
 
 void us_socket_flush(struct us_socket *s) {
-    bsd_socket_flush(us_poll_fd((struct us_poll *) s));
+    if (!us_socket_is_shut_down(s)) {
+        bsd_socket_flush(us_poll_fd((struct us_poll *) s));
+    }
 }
 
 void us_socket_close(struct us_socket *s) {
@@ -56,6 +62,7 @@ int us_socket_is_shut_down(struct us_socket *s) {
 void us_socket_shutdown(struct us_socket *s) {
     if (!us_socket_is_shut_down(s)) {
         us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
+        us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
         bsd_shutdown_socket(us_poll_fd((struct us_poll *) s));
     }
 }
