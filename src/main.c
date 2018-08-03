@@ -48,8 +48,14 @@ void on_http_socket_writable(struct us_socket *s) {
     http_socket->offset += us_socket_write(s, largeHttpBuf + http_socket->offset, largeHttpBufSize - http_socket->offset, 0);
 }
 
-void on_http_socket_end(struct us_socket *s) {
+void on_http_socket_closed(struct us_socket *s) {
     printf("Disconnected!\n");
+}
+
+void on_http_socket_end(struct us_socket *s) {
+    printf("Remote half-closed!\n");
+    us_socket_shutdown(s);
+    us_socket_close(s);
 }
 
 void on_http_socket_data(struct us_socket *s, char *data, int length) {
@@ -86,8 +92,9 @@ int main() {
     us_socket_context_on_open(http_context, on_http_socket_accepted);
     us_socket_context_on_data(http_context, on_http_socket_data);
     us_socket_context_on_writable(http_context, on_http_socket_writable);
-    us_socket_context_on_close(http_context, on_http_socket_end);
+    us_socket_context_on_close(http_context, on_http_socket_closed);
     us_socket_context_on_timeout(http_context, on_http_socket_timeout);
+    us_socket_context_on_end(http_context, on_http_socket_end);
 
     // start accepting http sockets
     struct us_listen_socket *listen_socket = us_socket_context_listen(http_context, 0, 3000, 0, sizeof(struct app_http_socket));

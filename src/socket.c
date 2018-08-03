@@ -27,7 +27,7 @@ struct us_socket_context *us_socket_get_context(struct us_socket *s) {
 
 void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
     if (seconds) {
-        unsigned short timeout_sweeps = 0.5f + float(seconds) / float(LIBUS_TIMEOUT_GRANULARITY);
+        unsigned short timeout_sweeps = 0.5f + ((float) seconds) / ((float) LIBUS_TIMEOUT_GRANULARITY);
         s->timeout = timeout_sweeps ? timeout_sweeps : 1;
     } else {
         s->timeout = 0;
@@ -44,16 +44,22 @@ void us_socket_close(struct us_socket *s) {
     bsd_close_socket(us_poll_fd((struct us_poll *) s));
 
     s->context->on_close(s);
-    // todo: us_socket_is_closed()
+
+    // we signal closed socket by setting its context to null
+    s->context = 0;
 }
 
-int us_socket_is_shutting_down(struct us_socket *s) {
+int us_socket_is_shut_down(struct us_socket *s) {
     return us_internal_poll_type(&s->p) == POLL_TYPE_SOCKET_SHUT_DOWN;
 }
 
 void us_socket_shutdown(struct us_socket *s) {
-    us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
-    if (!(us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE)) {
+    if (!us_socket_is_shut_down(s)) {
+        us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
         bsd_shutdown_socket(us_poll_fd((struct us_poll *) s));
     }
+}
+
+int us_internal_socket_is_closed(struct us_socket *s) {
+    return s->context != 0;
 }

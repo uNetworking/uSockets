@@ -84,12 +84,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 s->context->loop->data.last_write_failed = 0;
                 s->context->on_writable(s);
                 if (!s->context->loop->data.last_write_failed) {
-                    us_poll_change(p, us_socket_get_context(s)->loop, LIBUS_SOCKET_READABLE);
-
-                    // it is safe (for us) to call shutdown twice, if last failed due to polling for writable
-                    if (us_socket_is_shutting_down(s)) {
-                        us_socket_shutdown(s);
-                    }
+                    us_poll_change(p, us_socket_get_context(s)->loop, us_poll_events(p) & LIBUS_SOCKET_READABLE);
                 }
             }
 
@@ -97,19 +92,21 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 int length = bsd_recv(us_poll_fd(p), s->context->loop->data.recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
                     s->context->on_data((struct us_socket *) p, s->context->loop->data.recv_buf, length);
-                } else if (!length || (length == LIBUS_SOCKET_ERROR && !bsd_would_block())) {
-
-                    // först måste vi hantera onEnd? nej?
-
-                    //unlink
-                    us_socket_context_unlink(s->context, s);
-
-                    s->context->on_close(s);
-
-                    us_poll_stop(p, s->context->loop);
-                    bsd_close_socket(us_poll_fd(p));
-                    us_poll_free(p);
+                } else if (!length) {
+                    // is_shut_down is better name now that we do not wait for writing finished
+                    if (us_socket_is_shut_down(s)) {
+                        us_socket_close(s);
+                    } else {
+                        us_poll_change(p, us_socket_get_context(s)->loop, us_poll_events(p) & LIBUS_SOCKET_WRITABLE);
+                        // for HTTP and other similar high-level protocols a close is needed
+                        s->context->on_end(s);
+                    }
+                } else if (length == LIBUS_SOCKET_ERROR && !bsd_would_block()) {
+                    us_socket_close(s);
                 }
+
+                // here we need is_closed and free or queue up the poll for removal in next loop iteration
+                // context == null should be perfect signal for is_closed
             }
         }
         break;

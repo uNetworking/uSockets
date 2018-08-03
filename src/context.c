@@ -97,6 +97,10 @@ void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_t
     context->on_socket_timeout = on_timeout;
 }
 
+void us_socket_context_on_end(struct us_socket_context *context, void (*on_end)(struct us_socket *)) {
+    context->on_end = on_end;
+}
+
 void *us_socket_context_ext(struct us_socket_context *context) {
     return context + 1;
 }

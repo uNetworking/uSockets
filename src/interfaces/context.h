@@ -10,6 +10,9 @@ void us_socket_context_on_data(struct us_socket_context *context, void (*on_data
 void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s));
 void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *s));
 
+/* Emitted when a socket has been half-closed */
+void us_socket_context_on_end(struct us_socket_context *context, void (*on_end)(struct us_socket *s));
+
 /* Returns user data extension for this socket context */
 void *us_socket_context_ext(struct us_socket_context *context);
 
