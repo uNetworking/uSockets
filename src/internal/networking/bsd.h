@@ -25,6 +25,16 @@
 #define ONLY_IPV4 1 // stupid option that should never be used! support both by default!
 #define REUSE_PORT 2
 
+#ifndef INVALID_SOCKET // not a windoze box
+#define INVALID_SOCKET -1
+#define TCP_CORK -1
+#endif
+
+#ifndef MSG_MORE // macOS, see https://nwat.xyz/blog/2014/01/16/porting-msg_more-and-msg_nosigpipe-to-osx/
+# define MSG_MORE 0
+#define MSG_NOSIGNAL 0
+#endif
+
 static inline void bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *) &enabled, sizeof(enabled));
 }
@@ -44,7 +54,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, in
     LIBUS_SOCKET_DESCRIPTOR created_fd = socket(domain, type | flags, protocol);
 
 #ifdef __APPLE__
-    if (createdFd != INVALID_SOCKET) {
+    if (created_fd != INVALID_SOCKET) {
         int no_sigpipe = 1;
         setsockopt(created_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(int));
     }

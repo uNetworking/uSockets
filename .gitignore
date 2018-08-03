@@ -1,0 +1,11 @@
+# vim
+*.swo
+*.swp
+*~
+
+# Mac OS X
+.DS_Store
+
+# qt
+build-*/
+src/uSockets.pro.user
