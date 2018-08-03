@@ -37,7 +37,6 @@ struct us_ssl_socket_context {
 struct us_ssl_socket {
     struct us_socket s;
     SSL *ssl;
-    BIO *rbio, *wbio;
 };
 
 int passphrase_cb(char *buf, int size, int rwflag, void *u) {
@@ -110,14 +109,22 @@ void ssl_on_open(struct us_ssl_socket *s) {
     s->ssl = SSL_new(context->ssl_context);
     SSL_set_accept_state(s->ssl);
 
-    // attach the loop_ssl_data to this BIO!
-    s->rbio = BIO_new(us_internal_create_biom());
-    s->wbio = BIO_new(us_internal_create_biom());
+    // todo: move all BIO boilerplate to bio.c
 
-    BIO_set_data(s->rbio, loop_ssl_data);
-    BIO_set_data(s->wbio, loop_ssl_data);
+    // let's share these (per loop, or per ssl context)
+    static BIO *shared_rbio = 0;
+    static BIO *shared_wbio = 0;
+    if (!shared_rbio) {
+        shared_rbio = BIO_new(us_internal_create_biom());
+        shared_wbio = BIO_new(us_internal_create_biom());
+        BIO_set_data(shared_rbio, loop_ssl_data);
+        BIO_set_data(shared_wbio, loop_ssl_data);
+    }
 
-    SSL_set_bio(s->ssl, s->rbio, s->wbio);
+    BIO_up_ref(shared_rbio);
+    BIO_up_ref(shared_wbio);
+
+    SSL_set_bio(s->ssl, shared_rbio, shared_wbio);
 
     context->on_open(s);
 }
@@ -125,7 +132,7 @@ void ssl_on_open(struct us_ssl_socket *s) {
 void ssl_on_close(struct us_ssl_socket *s) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
-    // do ssl close stuff (free BIOs and the like)
+    SSL_free(s->ssl);
 
     context->on_close(s);
 }
@@ -327,9 +334,9 @@ void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
         struct us_loop *loop = us_socket_context_loop(&context->sc);
         struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
-        // is this enough?
         loop_ssl_data->ssl_read_input_length = 0;
         loop_ssl_data->ssl_socket = &s->s;
+        loop_ssl_data->msg_more = 0;
 
         // sets SSL_SENT_SHUTDOWN no matter what
         SSL_shutdown(s->ssl);
@@ -337,10 +344,6 @@ void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
 }
 
 void us_ssl_socket_close(struct us_ssl_socket *s) {
-    // todo: release all resources here
-    SSL_free(s->ssl);
-
-    // this emits the ssl_on_close, which emits our event
     us_socket_close((struct us_socket *) s);
 }
 
