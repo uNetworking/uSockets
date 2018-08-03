@@ -30,6 +30,9 @@ HEADERS += \
 #QMAKE_CFLAGS += -Wno-unused-parameter
 #QMAKE_CXXFLAGS += -Wno-unused-parameter
 QMAKE_CFLAGS += -fsanitize=address -DLIBUS_NO_SSL -DLIBUS_USE_LIBUV
+QMAKE_LFLAGS+="-fsanitize=address"
+INCLUDEPATH += "/usr/local/include"
 #LIBS += -lasan -luv
-LIBS += -lasan -luv -lssl -lcrypto #-luv
+#LIBS += -lasan -luv -lssl -lcrypto #-luv
 #LIBS += -lssl -lcrypto
+LIBS += -L/usr/local/lib -luv #-L/usr/local/opt/openssl/lib -lssl -lcrypto
