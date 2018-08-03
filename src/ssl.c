@@ -322,14 +322,16 @@ int us_ssl_socket_is_shut_down(struct us_ssl_socket *s) {
 }
 
 void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
-    // basically SSL_shutdown
     if (!us_ssl_socket_is_shut_down(s)) {
+        struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
+        struct us_loop *loop = us_socket_context_loop(&context->sc);
+        struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
-        printf("Calling us_ssl_socket_shutdown\n");
+        // is this enough?
+        loop_ssl_data->ssl_read_input_length = 0;
+        loop_ssl_data->ssl_socket = &s->s;
 
         // sets SSL_SENT_SHUTDOWN no matter what
-
-        // this may read and write, make sure to set everything BIO before!
         SSL_shutdown(s->ssl);
     }
 }

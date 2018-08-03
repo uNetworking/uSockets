@@ -71,5 +71,5 @@ void us_socket_shutdown(struct us_socket *s) {
 }
 
 int us_internal_socket_is_closed(struct us_socket *s) {
-    return s->context != 0;
+    return s->context == 0;
 }
