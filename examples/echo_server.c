@@ -2,6 +2,8 @@
 
 #include <libusockets.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* Our socket extension */
 struct echo_socket {

@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "internal/networking/bsd.h"
+
 // what is this header really about? networking?
 
 #ifdef LIBUS_USE_EPOLL
@@ -8,8 +10,6 @@
 #else
 #include "internal/eventing/libuv.h"
 #endif
-
-#include "internal/networking/bsd.h"
 
 enum {
     /* Two first bits */
