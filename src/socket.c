@@ -11,7 +11,7 @@ int us_socket_write(struct us_socket *s, const char *data, int length, int msg_m
         return 0;
     }
 
-    int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more ? MSG_MORE : 0);
+    int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more);
 
     if (written != length) {
         s->context->loop->data.last_write_failed = 1;

@@ -7,11 +7,13 @@
 #define LIBUS_TIMEOUT_GRANULARITY 4
 
 /* Define what a socket descriptor is based on platform */
-#ifdef __WIN32
-#include <windows.h>
+#ifdef _WIN32
+#include <WinSock2.h>
 #define LIBUS_SOCKET_DESCRIPTOR SOCKET
+#define WIN32_EXPORT __declspec(dllexport)
 #else
 #define LIBUS_SOCKET_DESCRIPTOR int
+#define WIN32_EXPORT
 #endif
 
 #ifdef __cplusplus
@@ -45,8 +47,11 @@ struct us_ssl_socket;
 
 /* Decide what eventing system to use */
 #if !defined(LIBUS_USE_EPOLL) && !defined(LIBUS_USE_LIBUV)
-// todo: if not on linux, swap to libuv by default
+#ifdef _WIN32
+#define LIBUS_USE_LIBUV
+#else
 #define LIBUS_USE_EPOLL
+#endif
 #endif
 
 #endif // LIBUSOCKETS_H

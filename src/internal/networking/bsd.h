@@ -6,9 +6,14 @@
 // holds everything you need from the bsd/winsock interfaces, only included by internal libusockets.h
 // here everything about the syscalls are inline-wrapped and included
 
-// why does accept4 require this?
+#ifdef _WIN32
+#define NOMINMAX
+#include <WinSock2.h>
+#include <Ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#define SETSOCKOPT_PTR_TYPE const char *
+#else
 #define __USE_GNU
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
@@ -18,8 +23,9 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
+#define SETSOCKOPT_PTR_TYPE int *
+#endif
 
-#define LIBUS_SOCKET_DESCRIPTOR int // wrong!
 #define LIBUS_SOCKET_ERROR -1
 
 #define ONLY_IPV4 1 // stupid option that should never be used! support both by default!
@@ -40,8 +46,11 @@ static inline void bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
 }
 
 static inline void bsd_socket_flush(LIBUS_SOCKET_DESCRIPTOR fd) {
+	// Linux TCP_CORK has the same underlying corking mechanism as with MSG_MORE
+#ifdef TCP_CORK
     int enabled = 0;
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &enabled, sizeof(int));
+#endif
 }
 
 static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, int protocol) {
@@ -57,11 +66,19 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, in
 }
 
 static inline void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
+#ifdef _WIN32
+	closesocket(fd);
+#else
     close(fd);
+#endif
 }
 
 static inline void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
-    shutdown(fd, SHUT_WR);
+#ifdef _WIN32
+    shutdown(fd, SD_SEND);
+#else
+	shutdown(fd, SHUT_WR);
+#endif
 }
 
 // called by dispatch_ready_poll
@@ -82,9 +99,26 @@ static inline int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, in
     return recv(fd, buf, length, flags);
 }
 
-static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int flags) {
+static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int msg_more) {
+
+	// MSG_MORE (Linux), MSG_PARTIAL (Windows), TCP_NOPUSH (BSD)
+
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
+#ifdef MSG_MORE
+
     // for Linux we do not want signals
-    return send(fd, buf, length, flags | MSG_NOSIGNAL);
+    return send(fd, buf, length, (msg_more * MSG_MORE) | MSG_NOSIGNAL);
+
+#else
+
+	// use TCP_NOPUSH
+
+	return send(fd, buf, length, MSG_NOSIGNAL);
+
+#endif
 }
 
 static inline int bsd_would_block() {
@@ -143,7 +177,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
 #endif
 
     int enabled = 1;
-    setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled));
+    setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
 
     if (bind(listenFd, listenAddr->ai_addr, listenAddr->ai_addrlen) || listen(listenFd, 512)) {
         bsd_close_socket(listenFd);

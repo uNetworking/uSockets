@@ -6,7 +6,7 @@
 
 // poll dispatch
 static void poll_cb(uv_poll_t *p, int status, int events) {
-    us_internal_dispatch_ready_poll(p, status < 0, events);
+    us_internal_dispatch_ready_poll((struct us_poll *) p, status < 0, events);
 }
 
 static void prepare_cb(uv_prepare_t *p) {
@@ -84,7 +84,7 @@ void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
     uv_os_fd_t fd;
     uv_fileno((uv_handle_t *) &p->uv_p, &fd);
-    return fd;
+    return (LIBUS_SOCKET_DESCRIPTOR) fd;
 }
 
 struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
