@@ -18,6 +18,7 @@ struct us_loop_data {
     void *ssl_data;
     void (*pre_cb)(struct us_loop *);
     void (*post_cb)(struct us_loop *);
+    struct us_socket *closed_head;
 };
 
 void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop));

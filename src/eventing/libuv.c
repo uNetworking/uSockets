@@ -17,6 +17,7 @@ static void prepare_cb(uv_prepare_t *p) {
 /* Note: libuv timers execute AFTER the post callback */
 static void check_cb(uv_check_t *p) {
     struct us_loop *loop = p->data;
+    us_internal_free_closed_sockets(loop);
     loop->data.post_cb(loop);
 }
 

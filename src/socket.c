@@ -51,6 +51,10 @@ void us_socket_close(struct us_socket *s) {
 
     s->context->on_close(s);
 
+    // link this socket to the close-list and let it be deleted after this iteration
+    s->next = s->context->loop->data.closed_head;
+    s->context->loop->data.closed_head = s;
+
     // we signal closed socket by setting its context to null
     s->context = 0;
 }

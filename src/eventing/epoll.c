@@ -24,6 +24,7 @@ void us_loop_run(struct us_loop *loop) {
             struct us_poll *poll = (struct us_poll *) loop->ready_events[i].data.ptr;
             us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & EPOLLERR, loop->ready_events[i].events);
         }
+        us_internal_free_closed_sockets(loop);
         loop->data.post_cb(loop);
     }
 }

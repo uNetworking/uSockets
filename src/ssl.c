@@ -230,6 +230,7 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
     // options
     SSL_CTX_set_read_ahead(context->ssl_context, 1);
     SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
     SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
 
     // these are going to be extended

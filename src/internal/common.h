@@ -30,6 +30,7 @@ void us_internal_init_socket(struct us_socket *s);
 
 void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events);
 void us_internal_timer_sweep(struct us_loop *loop);
+void us_internal_free_closed_sockets(struct us_loop *loop);
 unsigned int us_internal_accept_poll_event(struct us_poll *p);
 
 int us_internal_socket_is_closed(struct us_socket *);
