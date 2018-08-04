@@ -12,6 +12,7 @@
 #include <Ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 #define SETSOCKOPT_PTR_TYPE const char *
+#define LIBUS_SOCKET_ERROR INVALID_SOCKET
 #else
 #define __USE_GNU
 #include <sys/types.h>
@@ -24,12 +25,10 @@
 #include <stdio.h>
 #include <errno.h>
 #define SETSOCKOPT_PTR_TYPE int *
+#define LIBUS_SOCKET_ERROR -1
 #endif
 
-#define LIBUS_SOCKET_ERROR -1
-
-#define ONLY_IPV4 1 // stupid option that should never be used! support both by default!
-#define REUSE_PORT 2
+#define REUSE_PORT 2 // LIBUS_LISTEN_OPTION_LINUX_REUSE_PORT
 
 static inline LIBUS_SOCKET_DESCRIPTOR apple_no_sigpipe(LIBUS_SOCKET_DESCRIPTOR fd) {
 #ifdef __APPLE__
@@ -142,18 +141,16 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     char port_string[16];
     sprintf(port_string, "%d", port);
 
-    if (getaddrinfo(host, /*std::to_string(port).c_str()*/ port_string, &hints, &result)) {
-        return 0;
+    if (getaddrinfo(host, port_string, &hints, &result)) {
+        return LIBUS_SOCKET_ERROR;
     }
 
     LIBUS_SOCKET_DESCRIPTOR listenFd = LIBUS_SOCKET_ERROR;
     struct addrinfo *listenAddr;
-    if ((options & ONLY_IPV4) == 0) {
-        for (struct addrinfo *a = result; a && listenFd == LIBUS_SOCKET_ERROR; a = a->ai_next) {
-            if (a->ai_family == AF_INET6) {
-                listenFd = bsd_create_socket(a->ai_family, a->ai_socktype, a->ai_protocol);
-                listenAddr = a;
-            }
+    for (struct addrinfo *a = result; a && listenFd == LIBUS_SOCKET_ERROR; a = a->ai_next) {
+        if (a->ai_family == AF_INET6) {
+            listenFd = bsd_create_socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+            listenAddr = a;
         }
     }
 
@@ -166,7 +163,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
 
     if (listenFd == LIBUS_SOCKET_ERROR) {
         freeaddrinfo(result);
-        return 0;
+        return LIBUS_SOCKET_ERROR;
     }
 
 #if defined(__linux) && defined(SO_REUSEPORT)
@@ -179,10 +176,15 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     int enabled = 1;
     setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
 
+#ifdef IPV6_V6ONLY
+	int disabled = 0;
+	setsockopt(listenFd, SOL_SOCKET, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
+#endif
+
     if (bind(listenFd, listenAddr->ai_addr, listenAddr->ai_addrlen) || listen(listenFd, 512)) {
         bsd_close_socket(listenFd);
         freeaddrinfo(result);
-        return 0;
+        return LIBUS_SOCKET_ERROR;
     }
 
     return listenFd;

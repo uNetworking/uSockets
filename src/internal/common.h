@@ -25,7 +25,6 @@ enum {
 
 int us_internal_poll_type(struct us_poll *p);
 void us_internal_poll_set_type(struct us_poll *p, int poll_type);
-void us_internal_init_loop(struct us_loop *loop);
 void us_internal_init_socket(struct us_socket *s);
 
 void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events);
