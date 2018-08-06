@@ -19,8 +19,8 @@ WIN32_EXPORT void *us_socket_context_ext(struct us_socket_context *context);
 /* Listen for connections. Acts as the main driving cog in a server. Will call set async callbacks. */
 WIN32_EXPORT struct us_listen_socket *us_socket_context_listen(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size);
 
-/* Begin an async socket connection. Will call set async callbacks */
-WIN32_EXPORT void us_context_connect(const char *host, int port, int options, int ext_size, void (*cb)(struct us_socket *), void *user_data);
+/* Land in on_open or on_close or return null or return socket */
+WIN32_EXPORT struct us_socket *us_socket_context_connect(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size);
 
 /* (Explicitly) associate a socket with this socket context. A socket can only belong to one single socket context at any one time */
 WIN32_EXPORT void us_socket_context_link(struct us_socket_context *context, struct us_socket *s);

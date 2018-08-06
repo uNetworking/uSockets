@@ -59,34 +59,50 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             cb->cb(cb->cb_expects_the_loop ? (struct us_internal_callback *) cb->loop : (struct us_internal_callback *) &cb->p);
         }
         break;
-    case POLL_TYPE_LISTEN_SOCKET: {
-            struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
+    case POLL_TYPE_SEMI_SOCKET: {
+            // is this a listen socket or connect socket?
+            if (/*us_poll_events(p)*/ events == LIBUS_SOCKET_WRITABLE) {
+                struct us_socket *s = (struct us_socket *) p;
 
-            LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p));
-            if (client_fd == LIBUS_SOCKET_ERROR) {
-                // start timer here
+                us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
 
+                // make sure to always set nodelay!
+                bsd_socket_nodelay(us_poll_fd(p), 1);
+
+                // change type to socket here
+                us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
+
+                s->context->on_open(s);
             } else {
+                struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
 
-                // stop timer if any
+                LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p));
+                if (client_fd == LIBUS_SOCKET_ERROR) {
+                    // start timer here
 
-                do {
-                    struct us_poll *p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
-                    us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
-                    us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
+                } else {
 
-                    struct us_socket *s = (struct us_socket *) p;
+                    // stop timer if any
 
-                    s->context = listen_socket->s.context;
+                    do {
+                        struct us_poll *p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
+                        us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
+                        us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
 
-                    // make sure to always set nodelay!
-                    bsd_socket_nodelay(client_fd, 1);
+                        struct us_socket *s = (struct us_socket *) p;
 
-                    // make sure to link this socket into its context!
-                    us_socket_context_link(listen_socket->s.context, s);
+                        // this is shared!
+                        s->context = listen_socket->s.context;
 
-                    listen_socket->s.context->on_open(s);
-                } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
+                        // make sure to always set nodelay!
+                        bsd_socket_nodelay(client_fd, 1);
+
+                        // make sure to link this socket into its context!
+                        us_socket_context_link(listen_socket->s.context, s);
+
+                        listen_socket->s.context->on_open(s);
+                    } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
+                }
             }
         }
         break;

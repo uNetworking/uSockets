@@ -15,7 +15,7 @@ enum {
     /* Two first bits */
     POLL_TYPE_SOCKET = 0,
     POLL_TYPE_SOCKET_SHUT_DOWN = 1,
-    POLL_TYPE_LISTEN_SOCKET = 2,
+    POLL_TYPE_SEMI_SOCKET = 2,
     POLL_TYPE_CALLBACK = 3,
 
     /* Two last bits */

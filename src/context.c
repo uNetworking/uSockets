@@ -27,7 +27,7 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     }
 
     struct us_poll *p = us_create_poll(context->loop, 0, sizeof(struct us_listen_socket));
-    us_poll_init(p, listen_socket_fd, POLL_TYPE_LISTEN_SOCKET);
+    us_poll_init(p, listen_socket_fd, POLL_TYPE_SEMI_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_READABLE);
 
     struct us_listen_socket *ls = (struct us_listen_socket *) p;
@@ -45,9 +45,26 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     return ls;
 }
 
-void us_context_connect(const char *host, int port, int options, int ext_size, void (*cb)(struct us_socket *s), void *user_data) {
+struct us_socket *us_socket_context_connect(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
+    LIBUS_SOCKET_DESCRIPTOR connect_socket_fd = bsd_create_connect_socket(host, port, options);
 
-    cb(0);
+    if (connect_socket_fd == LIBUS_SOCKET_ERROR) {
+        return 0;
+    }
+
+    // connect sockets are also listen sockets but with writable ready
+    struct us_poll *p = us_create_poll(context->loop, 0, sizeof(struct us_socket) + socket_ext_size);
+    us_poll_init(p, connect_socket_fd, POLL_TYPE_SEMI_SOCKET);
+    us_poll_start(p, context->loop, LIBUS_SOCKET_WRITABLE);
+
+    struct us_socket *connect_socket = (struct us_socket *) p;
+
+    connect_socket->context = context;
+
+    // make sure to link this socket into its context!
+    us_socket_context_link(context, connect_socket);
+
+    return connect_socket;
 }
 
 // make internal?
@@ -69,6 +86,7 @@ void us_socket_context_unlink(struct us_socket_context *context, struct us_socke
 // this one should probably be made internal!
 // unlinking should only happen at the very last moment, risky to call this
 void us_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
+    s->timeout = 0; // this was needed?
     s->next = context->head;
     s->prev = 0;
     if (context->head) {

@@ -45,7 +45,7 @@ static inline void bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
 }
 
 static inline void bsd_socket_flush(LIBUS_SOCKET_DESCRIPTOR fd) {
-	// Linux TCP_CORK has the same underlying corking mechanism as with MSG_MORE
+    // Linux TCP_CORK has the same underlying corking mechanism as with MSG_MORE
 #ifdef TCP_CORK
     int enabled = 0;
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &enabled, sizeof(int));
@@ -66,7 +66,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, in
 
 static inline void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 #ifdef _WIN32
-	closesocket(fd);
+    closesocket(fd);
 #else
     close(fd);
 #endif
@@ -76,7 +76,7 @@ static inline void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 #ifdef _WIN32
     shutdown(fd, SD_SEND);
 #else
-	shutdown(fd, SHUT_WR);
+    shutdown(fd, SHUT_WR);
 #endif
 }
 
@@ -100,7 +100,7 @@ static inline int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, in
 
 static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int msg_more) {
 
-	// MSG_MORE (Linux), MSG_PARTIAL (Windows), TCP_NOPUSH (BSD)
+    // MSG_MORE (Linux), MSG_PARTIAL (Windows), TCP_NOPUSH (BSD)
 
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
@@ -113,9 +113,9 @@ static inline int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int leng
 
 #else
 
-	// use TCP_NOPUSH
+    // use TCP_NOPUSH
 
-	return send(fd, buf, length, MSG_NOSIGNAL);
+    return send(fd, buf, length, MSG_NOSIGNAL);
 
 #endif
 }
@@ -188,6 +188,31 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     }
 
     return listenFd;
+}
+
+static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, int options) {
+    struct addrinfo hints, *result;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    char port_string[16];
+    sprintf(port_string, "%d", port);
+
+    if (getaddrinfo(host, port_string, &hints, &result) != 0) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if (fd == LIBUS_SOCKET_ERROR) {
+        freeaddrinfo(result);
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    connect(fd, result->ai_addr, result->ai_addrlen);
+    freeaddrinfo(result);
+
+    return fd;
 }
 
 #endif // BSD_H
