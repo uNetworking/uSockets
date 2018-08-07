@@ -9,6 +9,7 @@
 
 int opened_connections, closed_connections, operations_done;
 struct us_socket_context *http_context;
+struct us_listen_socket *listen_socket;
 
 void perform_random_operation(struct us_socket *s) {
     switch (rand() % 3) {
@@ -63,6 +64,7 @@ void on_http_socket_close(struct us_socket *s) {
     if (closed_connections == 10000) {
         // here we shut down the listen_socket and let it fall through
         printf("Done, shutting down now\n");
+        us_listen_socket_close(listen_socket);
     } else {
         perform_random_operation(s);
     }
@@ -107,13 +109,9 @@ int main() {
     us_socket_context_on_timeout(http_context, on_http_socket_timeout);
     us_socket_context_on_end(http_context, on_http_socket_end);
 
-    struct us_listen_socket *listen_socket = us_socket_context_listen(http_context, 0, 3000, 0, sizeof(struct http_socket));
-
+    listen_socket = us_socket_context_listen(http_context, 0, 3000, 0, sizeof(struct http_socket));
 
     us_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
-
-
-    // add us_listen_socket_close(listen_socket); for fallthrough testing
 
     if (listen_socket) {
         printf("Running hammer test\n");
@@ -121,4 +119,7 @@ int main() {
     } else {
         printf("Failed to listen!\n");
     }
+
+    us_loop_free(loop);
+    printf("OK\n");
 }
