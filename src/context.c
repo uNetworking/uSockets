@@ -18,6 +18,10 @@ struct us_socket_context *us_create_socket_context(struct us_loop *loop, int con
     return context;
 }
 
+void us_socket_context_free(struct us_socket_context *context) {
+    free(context);
+}
+
 struct us_listen_socket *us_socket_context_listen(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
 
     LIBUS_SOCKET_DESCRIPTOR listen_socket_fd = bsd_create_listen_socket(host, port, options);

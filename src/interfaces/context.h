@@ -3,6 +3,9 @@
 /* A socket context holds shared callbacks and user data extension for associated sockets */
 WIN32_EXPORT struct us_socket_context *us_create_socket_context(struct us_loop *loop, int ext_size);
 
+/* */
+WIN32_EXPORT void us_socket_context_free(struct us_socket_context *context);
+
 /* Setters of various async callbacks */
 WIN32_EXPORT void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s));
 WIN32_EXPORT void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s));

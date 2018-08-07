@@ -11,14 +11,17 @@ int opened_connections, closed_connections, operations_done;
 struct us_socket_context *http_context;
 struct us_listen_socket *listen_socket;
 
+void *long_buffer;
+int long_length = 5 * 1024 * 1024 * 1024;
+
 void perform_random_operation(struct us_socket *s) {
-    switch (rand() % 3) {
+    switch (rand() % 4) {
         case 0: {
             us_socket_close(s);
         }
         break;
         case 1: {
-            us_socket_write(s, "hej!", 4, 0);
+            us_socket_write(s, "short", 5, 0);
         }
         break;
         case 2: {
@@ -26,11 +29,10 @@ void perform_random_operation(struct us_socket *s) {
         }
         break;
         case 3: {
-            us_socket_timeout(s, 1);
+            us_socket_write(s, long_buffer, long_length, 0);
         }
         break;
     }
-    //printf("Operations done in total: %d\n", ++operations_done);
 }
 
 struct http_socket {
@@ -95,8 +97,10 @@ void on_http_socket_timeout(struct us_socket *s) {
     perform_random_operation(s);
 }
 
+// todo: a separate thread which hammers the wakeup which tries to mess up as much as possible
 int main() {
     srand(time(0));
+    long_buffer = malloc(long_length);
 
     struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
 
@@ -120,9 +124,8 @@ int main() {
         printf("Failed to listen!\n");
     }
 
-    /* this would be us_socket_context_free */
-    free(http_context);
-
+    us_socket_context_free(http_context);
     us_loop_free(loop);
+    free(long_buffer);
     printf("OK\n");
 }
