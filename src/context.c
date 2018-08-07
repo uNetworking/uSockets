@@ -45,6 +45,16 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     return ls;
 }
 
+void us_listen_socket_close(struct us_listen_socket *ls) {
+    printf("Stopping listening now\n");
+
+    us_poll_stop((struct us_poll *) &ls->s, ls->s.context->loop);
+    bsd_close_socket(us_poll_fd((struct us_poll *) &ls->s));
+
+    /* let's just free it here */
+    us_poll_free((struct us_poll *) &ls->s);
+}
+
 struct us_socket *us_socket_context_connect(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
     LIBUS_SOCKET_DESCRIPTOR connect_socket_fd = bsd_create_connect_socket(host, port, options);
 

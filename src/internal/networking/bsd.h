@@ -187,6 +187,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
         return LIBUS_SOCKET_ERROR;
     }
 
+    freeaddrinfo(result);
     return listenFd;
 }
 

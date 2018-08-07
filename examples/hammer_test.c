@@ -120,6 +120,9 @@ int main() {
         printf("Failed to listen!\n");
     }
 
+    /* this would be us_socket_context_free */
+    free(http_context);
+
     us_loop_free(loop);
     printf("OK\n");
 }

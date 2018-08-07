@@ -43,11 +43,14 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
 }
 
 void us_poll_free(struct us_poll *p) {
-    uv_close((uv_handle_t *) &p->uv_p, close_cb);
+    printf("Hello\n");
+
+    //uv_close((uv_handle_t *) &p->uv_p, close_cb);
+    free(p);
 }
 
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
-    p->poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+    p->poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     uv_poll_init_socket(loop->uv_loop, &p->uv_p, p->fd);
     uv_poll_start(&p->uv_p, events, poll_cb);
@@ -55,7 +58,7 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
 
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
     if (us_poll_events(p) != events) {
-        p->poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+        p->poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
         uv_poll_start(&p->uv_p, events, poll_cb);
     }
@@ -66,7 +69,7 @@ void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
 }
 
 int us_poll_events(struct us_poll *p) {
-    return (p->poll_type & POLL_TYPE_POLLING_IN) * LIBUS_SOCKET_READABLE + (p->poll_type & POLL_TYPE_POLLING_OUT) * LIBUS_SOCKET_WRITABLE;
+    return ((p->poll_type & POLL_TYPE_POLLING_IN) ? LIBUS_SOCKET_READABLE : 0) | ((p->poll_type & POLL_TYPE_POLLING_OUT) ? LIBUS_SOCKET_WRITABLE : 0);
 }
 
 unsigned int us_internal_accept_poll_event(struct us_poll *p) {
@@ -94,9 +97,11 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
 
     uv_prepare_init(loop->uv_loop, &loop->uv_pre);
     uv_prepare_start(&loop->uv_pre, prepare_cb);
+    uv_unref(&loop->uv_pre);
     loop->uv_pre.data = loop;
 
     uv_check_init(loop->uv_loop, &loop->uv_check);
+    uv_unref(&loop->uv_check);
     uv_check_start(&loop->uv_check, check_cb);
     loop->uv_check.data = loop;
 
@@ -105,7 +110,7 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
 }
 
 void us_loop_run(struct us_loop *loop) {
-    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+    //us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
@@ -162,6 +167,7 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
 
     uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
     uv_async_init(internal_cb->loop->uv_loop, uv_async, async_cb);
+    uv_unref(uv_async);
     uv_async->data = internal_cb;
 }
 

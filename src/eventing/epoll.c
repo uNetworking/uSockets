@@ -14,6 +14,21 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
     return loop;
 }
 
+void us_loop_free(struct us_loop *loop) {
+    printf("Freeing the loop now\n");
+
+    printf("%ld\n", loop->data.wakeup_async);
+
+    free(loop->data.recv_buf);
+
+    // why is this not picked up as a leak?
+    free(loop->data.wakeup_async);
+
+    free(loop->data.sweep_timer);
+
+    free(loop);
+}
+
 void us_loop_run(struct us_loop *loop) {
     us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 
@@ -55,6 +70,8 @@ int us_poll_events(struct us_poll *p) {
 }
 
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
+    // todo: increase num_polls here but we do not know about fallthrough here?
+
     p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     struct epoll_event event;
@@ -89,6 +106,10 @@ void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
 }
 
 void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
+    // todo: either move this to us_poll_free or make the couterpart in us_poll_start
+    loop->num_polls--;
+    printf("Polls now: %d\n", loop->num_polls);
+
     struct epoll_event event;
     epoll_ctl(loop->epfd, EPOLL_CTL_DEL, p->state.fd, &event);
 }

@@ -3,6 +3,9 @@
 /* Returns a new event loop with user data extension */
 WIN32_EXPORT struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int ext_size);
 
+/* */
+WIN32_EXPORT void us_loop_free(struct us_loop *loop);
+
 /* Returns the loop user data extension */
 WIN32_EXPORT void *us_loop_ext(struct us_loop *loop);
 
