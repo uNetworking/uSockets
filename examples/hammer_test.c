@@ -7,6 +7,9 @@
 #include <string.h>
 #include <time.h>
 
+int opened_connections, closed_connections, operations_done;
+struct us_socket_context *http_context;
+
 void perform_random_operation(struct us_socket *s) {
     switch (rand() % 3) {
         case 0: {
@@ -18,13 +21,16 @@ void perform_random_operation(struct us_socket *s) {
         }
         break;
         case 2: {
-            us_socket_write(s, "hå", 2, 0);
+            us_socket_shutdown(s);
+        }
+        break;
+        case 3: {
+            us_socket_timeout(s, 1);
         }
         break;
     }
+    //printf("Operations done in total: %d\n", ++operations_done);
 }
-
-struct us_socket *client;
 
 struct http_socket {
 
@@ -39,7 +45,7 @@ void on_wakeup(struct us_loop *loop) {
 }
 
 void on_pre(struct us_loop *loop) {
-
+    //printf("PRE\n");
 }
 
 void on_post(struct us_loop *loop) {
@@ -51,29 +57,40 @@ void on_http_socket_writable(struct us_socket *s) {
 }
 
 void on_http_socket_close(struct us_socket *s) {
-    perform_random_operation(s);
+    closed_connections++;
+    printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
+
+    if (closed_connections == 10000) {
+        // here we shut down the listen_socket and let it fall through
+        printf("Done, shutting down now\n");
+    } else {
+        perform_random_operation(s);
+    }
 }
 
 void on_http_socket_end(struct us_socket *s) {
+    // we need to close on shutdown
+    us_socket_close(s);
     perform_random_operation(s);
 }
 
 void on_http_socket_data(struct us_socket *s, char *data, int length) {
-    if (s == client) {
-        printf("Client got data: %.*s\n", length, data);
-    } else {
-        printf("Server got data: %.*s\n", length, data);
+    perform_random_operation(s);
+}
+
+void on_http_socket_open(struct us_socket *s) {
+    opened_connections++;
+    printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
+
+    if (opened_connections % 2 == 0 && opened_connections < 10000) {
+        us_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
     }
 
     perform_random_operation(s);
 }
 
-void on_http_socket_open(struct us_socket *s) {
-    perform_random_operation(s);
-}
-
 void on_http_socket_timeout(struct us_socket *s) {
-
+    perform_random_operation(s);
 }
 
 int main() {
@@ -81,7 +98,7 @@ int main() {
 
     struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
 
-    struct us_socket_context *http_context = us_create_socket_context(loop, sizeof(struct http_context));
+    http_context = us_create_socket_context(loop, sizeof(struct http_context));
 
     us_socket_context_on_open(http_context, on_http_socket_open);
     us_socket_context_on_data(http_context, on_http_socket_data);
@@ -92,8 +109,9 @@ int main() {
 
     struct us_listen_socket *listen_socket = us_socket_context_listen(http_context, 0, 3000, 0, sizeof(struct http_socket));
 
-    // establish a couple of connections
-    client = us_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
+
+    us_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
+
 
     // add us_listen_socket_close(listen_socket); for fallthrough testing
 
