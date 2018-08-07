@@ -24,7 +24,7 @@ void us_wakeup_loop(struct us_loop *loop) {
 }
 
 void us_internal_timer_sweep(struct us_loop *loop) {
-    printf("sweeping timers now\n");
+    //printf("sweeping timers now\n");
     for (struct us_socket_context *context = loop->data.head; context; context = context->next) {
         for (struct us_socket *s = context->head; s; s = s->next) {
             if (--(s->timeout) == 0) {
@@ -39,7 +39,7 @@ void us_internal_free_closed_sockets(struct us_loop *loop) {
     if (loop->data.closed_head) {
         for (struct us_socket *s = loop->data.closed_head; s; ) {
             struct us_socket *next = s->next;
-            printf("Freeing a closed poll now\n");
+            //printf("Freeing a closed poll now\n");
             us_poll_free((struct us_poll *) s);
             s = next;
         }
@@ -52,6 +52,8 @@ void sweep_timer_cb(struct us_internal_callback *cb) {
 }
 
 void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
+    //printf("us_internal_dispatch_ready_poll, poll: %ld, error: %d\n", p, error);
+
     switch (us_internal_poll_type(p)) {
     case POLL_TYPE_CALLBACK: {
             us_internal_accept_poll_event(p);
@@ -61,7 +63,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
         break;
     case POLL_TYPE_SEMI_SOCKET: {
             // is this a listen socket or connect socket?
-            if (/*us_poll_events(p)*/ events == LIBUS_SOCKET_WRITABLE) {
+            if (us_poll_events(p) == LIBUS_SOCKET_WRITABLE) {
                 struct us_socket *s = (struct us_socket *) p;
 
                 us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
@@ -110,10 +112,24 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     case POLL_TYPE_SOCKET: {
             struct us_socket *s = (struct us_socket *) p;
 
+            // epollerr epollhup
+            if (error) {
+                us_socket_close(s);
+                return;
+            }
+
             if (events & LIBUS_SOCKET_WRITABLE) {
+                printf("The socket is writable\n");
                 s->context->loop->data.last_write_failed = 0;
+
                 s->context->on_writable(s);
-                if (!s->context->loop->data.last_write_failed) {
+
+                if (us_internal_socket_is_closed(s)) {
+                    return;
+                }
+
+                // if we shut down then do this for sure!
+                if (!s->context->loop->data.last_write_failed || us_socket_is_shut_down(s)) {
                     us_poll_change(p, us_socket_get_context(s)->loop, us_poll_events(p) & LIBUS_SOCKET_READABLE);
                 }
             }

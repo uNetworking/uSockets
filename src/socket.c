@@ -3,11 +3,11 @@
 #include <stdlib.h>
 
 void us_internal_init_socket(struct us_socket *s) {
-
+    // shared nodelay here?
 }
 
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
-    if (us_socket_is_shut_down(s)) {
+    if (us_internal_socket_is_closed(s) || us_socket_is_shut_down(s)) {
         return 0;
     }
 
@@ -45,18 +45,22 @@ void us_socket_flush(struct us_socket *s) {
 }
 
 void us_socket_close(struct us_socket *s) {
-    us_socket_context_unlink(s->context, s);
-    us_poll_stop((struct us_poll *) s, s->context->loop);
-    bsd_close_socket(us_poll_fd((struct us_poll *) s));
+    if (!us_internal_socket_is_closed(s)) {
+        us_socket_context_unlink(s->context, s);
+        us_poll_stop((struct us_poll *) s, s->context->loop);
+        bsd_close_socket(us_poll_fd((struct us_poll *) s));
 
-    s->context->on_close(s);
+        // link this socket to the close-list and let it be deleted after this iteration
+        s->next = s->context->loop->data.closed_head;
+        s->context->loop->data.closed_head = s;
 
-    // link this socket to the close-list and let it be deleted after this iteration
-    s->next = s->context->loop->data.closed_head;
-    s->context->loop->data.closed_head = s;
+        struct us_socket_context *last_context = s->context;
 
-    // we signal closed socket by setting its context to null
-    s->context = 0;
+        // we signal closed socket by setting its context to null
+        s->context = 0;
+
+        /*s->context*/last_context->on_close(s);
+    }
 }
 
 int us_socket_is_shut_down(struct us_socket *s) {
@@ -67,7 +71,7 @@ void us_socket_shutdown(struct us_socket *s) {
     // todo: should we emit on_close if calling shutdown on an already half-closed socket?
     // we need more states in that case, we need to track RECEIVED_FIN
     // so far, the app has to track this and call close as needed
-    if (!us_socket_is_shut_down(s)) {
+    if (!us_internal_socket_is_closed(s) && !us_socket_is_shut_down(s)) {
         us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
         us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
         bsd_shutdown_socket(us_poll_fd((struct us_poll *) s));

@@ -22,7 +22,7 @@ void us_loop_run(struct us_loop *loop) {
         int num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
         for (int i = 0; i < num_fd_ready; i++) {
             struct us_poll *poll = (struct us_poll *) loop->ready_events[i].data.ptr;
-            us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & EPOLLERR, loop->ready_events[i].events);
+            us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & (EPOLLERR | EPOLLHUP), loop->ready_events[i].events);
         }
         us_internal_free_closed_sockets(loop);
         loop->data.post_cb(loop);
@@ -51,11 +51,11 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
 }
 
 int us_poll_events(struct us_poll *p) {
-    return (p->state.poll_type & POLL_TYPE_POLLING_IN) * LIBUS_SOCKET_READABLE + (p->state.poll_type & POLL_TYPE_POLLING_OUT) * LIBUS_SOCKET_WRITABLE;
+    return ((p->state.poll_type & POLL_TYPE_POLLING_IN) ? LIBUS_SOCKET_READABLE : 0) | ((p->state.poll_type & POLL_TYPE_POLLING_OUT) ? LIBUS_SOCKET_WRITABLE : 0);
 }
 
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
-    p->state.poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+    p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     struct epoll_event event;
     event.events = events;
@@ -66,7 +66,7 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
     if (us_poll_events(p) != events) {
 
-        p->state.poll_type = us_internal_poll_type(p) | (events & LIBUS_SOCKET_READABLE) * POLL_TYPE_POLLING_IN + (events & LIBUS_SOCKET_WRITABLE) * POLL_TYPE_POLLING_OUT;
+        p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
         struct epoll_event event;
         event.events = events;
