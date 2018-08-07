@@ -3,8 +3,6 @@
 
 #include "internal/networking/bsd.h"
 
-// what is this header really about? networking?
-
 #ifdef LIBUS_USE_EPOLL
 #include "internal/eventing/epoll.h"
 #else

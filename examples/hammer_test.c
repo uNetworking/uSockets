@@ -12,7 +12,7 @@ struct us_socket_context *http_context;
 struct us_listen_socket *listen_socket;
 
 void *long_buffer;
-int long_length = 5 * 1024 * 1024 * 1024;
+int long_length = 5 * 1024 * 1024;
 
 void perform_random_operation(struct us_socket *s) {
     switch (rand() % 4) {
@@ -44,7 +44,7 @@ struct http_context {
 };
 
 void on_wakeup(struct us_loop *loop) {
-
+    // test these also
 }
 
 void on_pre(struct us_loop *loop) {
@@ -64,8 +64,6 @@ void on_http_socket_close(struct us_socket *s) {
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
     if (closed_connections == 10000) {
-        // here we shut down the listen_socket and let it fall through
-        printf("Done, shutting down now\n");
         us_listen_socket_close(listen_socket);
     } else {
         perform_random_operation(s);
@@ -100,7 +98,7 @@ void on_http_socket_timeout(struct us_socket *s) {
 // todo: a separate thread which hammers the wakeup which tries to mess up as much as possible
 int main() {
     srand(time(0));
-    long_buffer = malloc(long_length);
+    long_buffer = calloc(long_length, 1);
 
     struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
 
@@ -121,11 +119,11 @@ int main() {
         printf("Running hammer test\n");
         us_loop_run(loop);
     } else {
-        printf("Failed to listen!\n");
+        printf("Cannot listen to port 3000!\n");
     }
 
     us_socket_context_free(http_context);
     us_loop_free(loop);
     free(long_buffer);
-    printf("OK\n");
+    printf("Done, shutting down now\n");
 }

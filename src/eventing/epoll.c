@@ -15,17 +15,8 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
 }
 
 void us_loop_free(struct us_loop *loop) {
-    printf("Freeing the loop now\n");
-
-    printf("%ld\n", loop->data.wakeup_async);
-
-    free(loop->data.recv_buf);
-
-    // why is this not picked up as a leak?
-    free(loop->data.wakeup_async);
-
-    free(loop->data.sweep_timer);
-
+    us_internal_loop_data_free(loop);
+    close(loop->epfd);
     free(loop);
 }
 
@@ -52,7 +43,8 @@ struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_si
     return malloc(sizeof(struct us_poll) + ext_size);
 }
 
-void us_poll_free(struct us_poll *p) {
+void us_poll_free(struct us_poll *p, struct us_loop *loop) {
+    loop->num_polls--;
     free(p);
 }
 
@@ -70,8 +62,6 @@ int us_poll_events(struct us_poll *p) {
 }
 
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
-    // todo: increase num_polls here but we do not know about fallthrough here?
-
     p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     struct epoll_event event;
@@ -106,10 +96,6 @@ void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
 }
 
 void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
-    // todo: either move this to us_poll_free or make the couterpart in us_poll_start
-    loop->num_polls--;
-    printf("Polls now: %d\n", loop->num_polls);
-
     struct epoll_event event;
     epoll_ctl(loop->epfd, EPOLL_CTL_DEL, p->state.fd, &event);
 }
@@ -131,6 +117,16 @@ struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_
     cb->cb_expects_the_loop = 0;
 
     return (struct us_timer *) cb;
+}
+
+void us_timer_close(struct us_timer *timer) {
+    struct us_internal_callback *cb = (struct us_internal_callback *) timer;
+
+    us_poll_stop(&cb->p, cb->loop);
+    close(us_poll_fd(&cb->p));
+
+    /* (regular) sockets are the only polls which are not freed immediately */
+    us_poll_free(timer, cb->loop);
 }
 
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
@@ -163,6 +159,17 @@ struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fal
     cb->cb_expects_the_loop = 1;
 
     return (struct us_internal_async *) cb;
+}
+
+// identical code as for timer, make it shared for "callback types"
+void us_internal_async_close(struct us_internal_async *a) {
+    struct us_internal_callback *cb = (struct us_internal_callback *) a;
+
+    us_poll_stop(&cb->p, cb->loop);
+    close(us_poll_fd(&cb->p));
+
+    /* (regular) sockets are the only polls which are not freed immediately */
+    us_poll_free(a, cb->loop);
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {

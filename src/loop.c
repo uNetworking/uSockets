@@ -19,6 +19,13 @@ void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct u
     us_internal_async_set(loop->data.wakeup_async, (void (*)(struct us_internal_async *)) wakeup_cb);
 }
 
+void us_internal_loop_data_free(struct us_loop *loop) {
+    free(loop->data.recv_buf);
+
+    us_timer_close(loop->data.sweep_timer);
+    us_internal_async_close(loop->data.wakeup_async);
+}
+
 void us_wakeup_loop(struct us_loop *loop) {
     us_internal_async_wakeup(loop->data.wakeup_async);
 }
@@ -40,7 +47,7 @@ void us_internal_free_closed_sockets(struct us_loop *loop) {
         for (struct us_socket *s = loop->data.closed_head; s; ) {
             struct us_socket *next = s->next;
             //printf("Freeing a closed poll now\n");
-            us_poll_free((struct us_poll *) s);
+            us_poll_free((struct us_poll *) s, loop);
             s = next;
         }
         loop->data.closed_head = 0;
@@ -119,7 +126,6 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             }
 
             if (events & LIBUS_SOCKET_WRITABLE) {
-                printf("The socket is writable\n");
                 s->context->loop->data.last_write_failed = 0;
 
                 s->context->on_writable(s);
