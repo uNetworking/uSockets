@@ -42,9 +42,7 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
     p->fd = fd;
 }
 
-void us_poll_free(struct us_poll *p) {
-    printf("Hello\n");
-
+void us_poll_free(struct us_poll *p, struct us_loop *loop) {
     //uv_close((uv_handle_t *) &p->uv_p, close_cb);
     free(p);
 }
@@ -109,8 +107,24 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
     return loop;
 }
 
+// based on if this was default loop or not
+void us_loop_free(struct us_loop *loop) {
+    uv_prepare_stop(&loop->uv_pre);
+    uv_close((uv_handle_t *) &loop->uv_pre, close_cb);
+
+    uv_check_stop(&loop->uv_check);
+    uv_close((uv_handle_t *) &loop->uv_check, close_cb);
+
+    us_internal_loop_data_free(loop);
+
+    if (loop->uv_loop != uv_default_loop()) {
+        uv_loop_close(loop->uv_loop); //?
+        uv_loop_delete(loop->uv_loop);
+    }
+}
+
 void us_loop_run(struct us_loop *loop) {
-    //us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
@@ -130,7 +144,19 @@ struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_
     uv_timer_init(loop->uv_loop, uv_timer);
     uv_timer->data = cb;
 
+    if (fallthrough) {
+        uv_unref((uv_handle_t *) uv_timer);
+    }
+
     return (struct us_timer *) cb;
+}
+
+void us_timer_close(struct us_timer *t) {
+    struct us_internal_callback *cb = (struct us_internal_callback *) t;
+
+    uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
+    uv_timer_stop(uv_timer);
+    uv_close((uv_handle_t *) uv_timer, close_cb);
 }
 
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
@@ -158,6 +184,13 @@ struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fal
 
     cb->loop = loop;
     return (struct us_internal_async *) cb;
+}
+
+void us_internal_async_close(struct us_internal_async *a) {
+    struct us_internal_callback *cb = (struct us_internal_callback *) a;
+
+    uv_async_t *uv_async = (uv_async_t *) (cb + 1);
+    uv_close((uv_handle_t *) uv_async, close_cb);
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {

@@ -48,7 +48,7 @@ void on_wakeup(struct us_loop *loop) {
 }
 
 void on_pre(struct us_loop *loop) {
-    //printf("PRE\n");
+    printf("PRE\n");
 }
 
 void on_post(struct us_loop *loop) {

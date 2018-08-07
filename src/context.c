@@ -50,6 +50,8 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
 }
 
 void us_listen_socket_close(struct us_listen_socket *ls) {
+    us_socket_context_unlink(ls->s.context, &ls->s);
+
     us_poll_stop((struct us_poll *) &ls->s, ls->s.context->loop);
     bsd_close_socket(us_poll_fd((struct us_poll *) &ls->s));
 

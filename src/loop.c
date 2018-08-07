@@ -31,7 +31,7 @@ void us_wakeup_loop(struct us_loop *loop) {
 }
 
 void us_internal_timer_sweep(struct us_loop *loop) {
-    //printf("sweeping timers now\n");
+    printf("sweeping timers now\n");
     for (struct us_socket_context *context = loop->data.head; context; context = context->next) {
         for (struct us_socket *s = context->head; s; s = s->next) {
             if (--(s->timeout) == 0) {
