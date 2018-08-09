@@ -12,8 +12,8 @@ struct us_loop {
 
     uv_loop_t *uv_loop;
 
-    uv_prepare_t uv_pre;
-    uv_check_t uv_check;
+    uv_prepare_t *uv_pre;
+    uv_check_t *uv_check;
 };
 
 struct us_poll {

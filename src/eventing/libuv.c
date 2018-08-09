@@ -21,8 +21,8 @@ static void check_cb(uv_check_t *p) {
     loop->data.post_cb(loop);
 }
 
-static void close_cb(uv_handle_t *h) {
-
+static void close_cb_free(uv_handle_t *h) {
+    free(h->data);
 }
 
 static void timer_cb(uv_timer_t *t) {
@@ -43,8 +43,11 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
 }
 
 void us_poll_free(struct us_poll *p, struct us_loop *loop) {
-    //uv_close((uv_handle_t *) &p->uv_p, close_cb);
-    free(p);
+    if (uv_is_closing(&p->uv_p)) {
+        p->uv_p.data = p;
+    } else {
+        free(p);
+    }
 }
 
 void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
@@ -64,6 +67,10 @@ void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
 
 void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
     uv_poll_stop(&p->uv_p);
+
+    // close but not free is needed here
+    p->uv_p.data = 0;
+    uv_close((uv_handle_t *) &p->uv_p, close_cb_free); // needed here
 }
 
 int us_poll_events(struct us_poll *p) {
@@ -83,9 +90,11 @@ void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
-    uv_os_fd_t fd;
+    /*uv_os_fd_t fd = LIBUS_SOCKET_ERROR;
     uv_fileno((uv_handle_t *) &p->uv_p, &fd);
-    return (LIBUS_SOCKET_DESCRIPTOR) fd;
+    return (LIBUS_SOCKET_DESCRIPTOR) fd;*/
+
+    return p->fd;
 }
 
 struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
@@ -93,15 +102,17 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
 
     loop->uv_loop = default_hint ? uv_default_loop() : uv_loop_new();
 
-    uv_prepare_init(loop->uv_loop, &loop->uv_pre);
-    uv_prepare_start(&loop->uv_pre, prepare_cb);
-    uv_unref(&loop->uv_pre);
-    loop->uv_pre.data = loop;
+    loop->uv_pre = malloc(sizeof(uv_prepare_t));
+    uv_prepare_init(loop->uv_loop, loop->uv_pre);
+    uv_prepare_start(loop->uv_pre, prepare_cb);
+    uv_unref(loop->uv_pre);
+    loop->uv_pre->data = loop;
 
-    uv_check_init(loop->uv_loop, &loop->uv_check);
-    uv_unref(&loop->uv_check);
-    uv_check_start(&loop->uv_check, check_cb);
-    loop->uv_check.data = loop;
+    loop->uv_check = malloc(sizeof(uv_check_t));
+    uv_check_init(loop->uv_loop, loop->uv_check);
+    uv_unref(loop->uv_check);
+    uv_check_start(loop->uv_check, check_cb);
+    loop->uv_check->data = loop;
 
     us_internal_loop_data_init(loop, wakeup_cb, pre_cb, post_cb);
     return loop;
@@ -109,18 +120,24 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
 
 // based on if this was default loop or not
 void us_loop_free(struct us_loop *loop) {
-    uv_prepare_stop(&loop->uv_pre);
-    uv_close((uv_handle_t *) &loop->uv_pre, close_cb);
+    uv_prepare_stop(loop->uv_pre);
+    loop->uv_pre->data = loop->uv_pre;
+    uv_close((uv_handle_t *) loop->uv_pre, close_cb_free);
 
-    uv_check_stop(&loop->uv_check);
-    uv_close((uv_handle_t *) &loop->uv_check, close_cb);
+    uv_check_stop(loop->uv_check);
+    loop->uv_check->data = loop->uv_check;
+    uv_close((uv_handle_t *) loop->uv_check, close_cb_free);
 
     us_internal_loop_data_free(loop);
 
-    if (loop->uv_loop != uv_default_loop()) {
-        uv_loop_close(loop->uv_loop); //?
-        uv_loop_delete(loop->uv_loop);
-    }
+    // we need to run the loop one last time to exectute all uv_close cbs
+    // only if not default loop
+    uv_run(loop->uv_loop, UV_RUN_NOWAIT);
+
+    uv_loop_delete(loop->uv_loop);
+
+    // this frees pre/post before their close callback is called!
+    free(loop);
 }
 
 void us_loop_run(struct us_loop *loop) {
@@ -156,7 +173,9 @@ void us_timer_close(struct us_timer *t) {
 
     uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
     uv_timer_stop(uv_timer);
-    uv_close((uv_handle_t *) uv_timer, close_cb);
+
+    uv_timer->data = cb;
+    uv_close((uv_handle_t *) uv_timer, close_cb_free);
 }
 
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
@@ -190,7 +209,9 @@ void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback *cb = (struct us_internal_callback *) a;
 
     uv_async_t *uv_async = (uv_async_t *) (cb + 1);
-    uv_close((uv_handle_t *) uv_async, close_cb);
+
+    uv_async->data = cb;
+    uv_close((uv_handle_t *) uv_async, close_cb_free);
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
