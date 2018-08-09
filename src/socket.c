@@ -54,12 +54,10 @@ void us_socket_close(struct us_socket *s) {
         s->next = s->context->loop->data.closed_head;
         s->context->loop->data.closed_head = s;
 
-        struct us_socket_context *last_context = s->context;
+        // signal closed socket by having prev = next
+        s->prev = s->next;
 
-        // we signal closed socket by setting its context to null
-        s->context = 0;
-
-        /*s->context*/last_context->on_close(s);
+        s->context->on_close(s);
     }
 }
 
@@ -79,5 +77,5 @@ void us_socket_shutdown(struct us_socket *s) {
 }
 
 int us_internal_socket_is_closed(struct us_socket *s) {
-    return s->context == 0;
+    return s->prev == s->next;
 }
