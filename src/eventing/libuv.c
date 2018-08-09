@@ -43,7 +43,7 @@ void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) 
 }
 
 void us_poll_free(struct us_poll *p, struct us_loop *loop) {
-    if (uv_is_closing(&p->uv_p)) {
+    if (uv_is_closing((uv_handle_t *) &p->uv_p)) {
         p->uv_p.data = p;
     } else {
         free(p);
@@ -105,12 +105,12 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
     loop->uv_pre = malloc(sizeof(uv_prepare_t));
     uv_prepare_init(loop->uv_loop, loop->uv_pre);
     uv_prepare_start(loop->uv_pre, prepare_cb);
-    uv_unref(loop->uv_pre);
+    uv_unref((uv_handle_t *) loop->uv_pre);
     loop->uv_pre->data = loop;
 
     loop->uv_check = malloc(sizeof(uv_check_t));
     uv_check_init(loop->uv_loop, loop->uv_check);
-    uv_unref(loop->uv_check);
+    uv_unref((uv_handle_t *) loop->uv_check);
     uv_check_start(loop->uv_check, check_cb);
     loop->uv_check->data = loop;
 
@@ -221,7 +221,7 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
 
     uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
     uv_async_init(internal_cb->loop->uv_loop, uv_async, async_cb);
-    uv_unref(uv_async);
+    uv_unref((uv_handle_t *) uv_async);
     uv_async->data = internal_cb;
 }
 

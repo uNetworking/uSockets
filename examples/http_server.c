@@ -90,7 +90,7 @@ int main() {
 	
 	struct http_context *http_context_ext = (struct http_context *) us_socket_context_ext(http_context);
 	http_context_ext->response = (char *) malloc(128 + sizeof(body) - 1);
-	http_context_ext->length = snprintf(http_context_ext->response, 128 + sizeof(body) - 1, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s", sizeof(body) - 1, body);
+	http_context_ext->length = snprintf(http_context_ext->response, 128 + sizeof(body) - 1, "HTTP/1.1 200 OK\r\nContent-Length: %ld\r\n\r\n%s", sizeof(body) - 1, body);
 
 	/* Set up event handlers */
 	us_socket_context_on_open(http_context, on_http_socket_open);

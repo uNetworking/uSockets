@@ -103,7 +103,7 @@ void us_poll_stop(struct us_poll *p, struct us_loop *loop) {
 unsigned int us_internal_accept_poll_event(struct us_poll *p) {
     int fd = us_poll_fd(p);
     uint64_t buf;
-    read(fd, &buf, 8);
+    int read_length = read(fd, &buf, 8);
     return buf;
 }
 
@@ -126,7 +126,7 @@ void us_timer_close(struct us_timer *timer) {
     close(us_poll_fd(&cb->p));
 
     /* (regular) sockets are the only polls which are not freed immediately */
-    us_poll_free(timer, cb->loop);
+    us_poll_free((struct us_poll *) timer, cb->loop);
 }
 
 void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
@@ -169,7 +169,7 @@ void us_internal_async_close(struct us_internal_async *a) {
     close(us_poll_fd(&cb->p));
 
     /* (regular) sockets are the only polls which are not freed immediately */
-    us_poll_free(a, cb->loop);
+    us_poll_free((struct us_poll *) a, cb->loop);
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
@@ -182,7 +182,7 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
     uint64_t one = 1;
-    write(us_poll_fd((struct us_poll *) a), &one, 8);
+    int written = write(us_poll_fd((struct us_poll *) a), &one, 8);
 }
 
 #endif

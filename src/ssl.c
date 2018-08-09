@@ -199,7 +199,6 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
 
     // check this then?
     if (SSL_get_shutdown(s->ssl) & SSL_RECEIVED_SHUTDOWN) {
-        received_shutdown:
         printf("SSL_RECEIVED_SHUTDOWN\n");
 
         //us_

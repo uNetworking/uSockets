@@ -29,7 +29,7 @@ void perform_random_operation(struct us_socket *s) {
         }
         break;
         case 3: {
-            us_socket_write(s, long_buffer, long_length, 0);
+            us_socket_write(s, (char *) long_buffer, long_length, 0);
         }
         break;
     }
