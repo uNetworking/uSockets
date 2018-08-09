@@ -253,8 +253,16 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
     return context;
 }
 
+void us_ssl_socket_context_free(struct us_ssl_socket_context *context) {
+    // todo: yes
+}
+
 struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
     return us_socket_context_listen(&context->sc, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
+}
+
+struct us_ssl_socket *us_ssl_socket_context_connect(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
+    // todo: yes
 }
 
 void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s)) {
