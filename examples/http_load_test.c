@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
 
     port = atoi(argv[3]);
     host = malloc(strlen(argv[2]) + 1);
-    strncpy_s(host, strlen(argv[2]) + 1, argv[2], strlen(argv[2]) + 1);
+    memcpy(host, argv[2], strlen(argv[2]) + 1);
     connections = atoi(argv[1]);
 
     /* Create the event loop */
