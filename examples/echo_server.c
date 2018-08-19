@@ -90,7 +90,7 @@ void on_echo_socket_data(struct us_socket *s, char *data, int length) {
 }
 
 /* Socket opened handler */
-void on_echo_socket_open(struct us_socket *s) {
+void on_echo_socket_open(struct us_socket *s, int is_client) {
 	struct echo_socket *es = (struct echo_socket *) us_socket_ext(s);
 
 	/* Initialize the new socket's extension */

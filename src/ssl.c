@@ -99,41 +99,30 @@ BIO_METHOD *us_internal_create_biom() {
     return biom;
 }
 
+// put these per loop in ssl_loop_data!
+static BIO *shared_rbio = 0;
+static BIO *shared_wbio = 0;
+static BIO_METHOD *shared_biom = 0;
+
 void ssl_on_open(struct us_ssl_socket *s, int is_client) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
-    // determine if this is client or server -> set
-
     // server only?
     s->ssl = SSL_new(context->ssl_context);
+    SSL_set_bio(s->ssl, shared_rbio, shared_wbio);
+
+    // yes?
+    BIO_up_ref(shared_rbio);
+    BIO_up_ref(shared_wbio);
 
     if (is_client) {
         SSL_set_connect_state(s->ssl);
     } else {
         SSL_set_accept_state(s->ssl);
     }
-
-
-
-    // todo: move all BIO boilerplate to bio.c
-
-    // let's share these (per loop, or per ssl context)
-    static BIO *shared_rbio = 0;
-    static BIO *shared_wbio = 0;
-    if (!shared_rbio) {
-        shared_rbio = BIO_new(us_internal_create_biom());
-        shared_wbio = BIO_new(us_internal_create_biom());
-        BIO_set_data(shared_rbio, loop_ssl_data);
-        BIO_set_data(shared_wbio, loop_ssl_data);
-    }
-
-    BIO_up_ref(shared_rbio);
-    BIO_up_ref(shared_wbio);
-
-    SSL_set_bio(s->ssl, shared_rbio, shared_wbio);
 
     context->on_open(s, is_client);
 }
@@ -214,23 +203,69 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     }
 }
 
-/* Per-context functions */
-struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options) {
-
+/* Lazily inits loop ssl data first time */
+void us_internal_init_loop_ssl_data(struct us_loop *loop) {
     // should not be needed in openssl 1.1.0+
     SSL_library_init();
 
-    struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_create_socket_context(loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
-    if (!loop->data.ssl_data) {
-        // init loop_ssl_data
+    // todo: this shoud be freed when freeing the loop, including BIOs
+    // we also should init the BIOs here!
 
+    if (!loop->data.ssl_data) {
         struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
 
         loop_ssl_data->ssl_read_input = malloc(LIBUS_RECV_BUFFER_LENGTH);
 
+
+
+        // let's share these (per loop, or per ssl context)
+
+        shared_biom = us_internal_create_biom();
+
+
+        shared_rbio = BIO_new(shared_biom);
+        shared_wbio = BIO_new(shared_biom);
+        BIO_set_data(shared_rbio, loop_ssl_data);
+        BIO_set_data(shared_wbio, loop_ssl_data);
+
+        BIO_up_ref(shared_rbio);
+        BIO_up_ref(shared_wbio);
+
+
         loop->data.ssl_data = loop_ssl_data;
     }
+}
 
+/* Called by loop free, clears any loop ssl data */
+void us_internal_free_loop_ssl_data(struct us_loop *loop) {
+    printf("us_internal_free_loop_ssl_data()\n");
+
+    struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
+
+    if (loop_ssl_data) {
+
+        free(loop_ssl_data->ssl_read_input);
+
+        // free the meth
+
+        BIO_free(shared_rbio);
+        BIO_free(shared_wbio);
+
+        BIO_free(shared_rbio);
+        BIO_free(shared_wbio);
+
+        BIO_meth_free(shared_biom);
+
+        free(loop_ssl_data);
+    }
+}
+
+/* Per-context functions */
+struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options) {
+
+    us_internal_init_loop_ssl_data(loop);
+
+    struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_create_socket_context(loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
 
     // this is a server?
     context->ssl_context = SSL_CTX_new(TLS_server_method());
@@ -263,7 +298,9 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 }
 
 void us_ssl_socket_context_free(struct us_ssl_socket_context *context) {
-    // todo: yes
+    SSL_CTX_free(context->ssl_context);
+
+    us_socket_context_free(&context->sc);
 }
 
 struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
@@ -271,7 +308,7 @@ struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_conte
 }
 
 struct us_ssl_socket *us_ssl_socket_context_connect(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
-    return us_socket_context_connect(&context->sc, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
+    return (struct us_ssl_socket *) us_socket_context_connect(&context->sc, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
 }
 
 void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s, int is_client)) {

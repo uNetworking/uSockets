@@ -30,6 +30,9 @@ void us_internal_timer_sweep(struct us_loop *loop);
 void us_internal_free_closed_sockets(struct us_loop *loop);
 unsigned int us_internal_accept_poll_event(struct us_poll *p);
 
+void us_internal_init_loop_ssl_data(struct us_loop *loop);
+void us_internal_free_loop_ssl_data(struct us_loop *loop);
+
 int us_internal_socket_is_closed(struct us_socket *);
 
 struct us_socket {

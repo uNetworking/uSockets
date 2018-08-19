@@ -20,6 +20,11 @@ void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct u
 }
 
 void us_internal_loop_data_free(struct us_loop *loop) {
+    // we need to hook into the SSL layer here to free stuff
+#ifndef LIBUS_NO_SSL
+    us_internal_free_loop_ssl_data(loop);
+#endif
+
     free(loop->data.recv_buf);
 
     us_timer_close(loop->data.sweep_timer);

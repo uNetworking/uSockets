@@ -1,8 +1,6 @@
 /* This example, or test, is a moron test where the library is being hammered in all the possible ways randomly over time */
 
-#define USE_SSL
-
-#ifdef USE_SSL
+#ifndef LIBUS_NO_SSL
 #define LIBUS_SOCKET us_ssl_socket
 #define LIBUS_SOCKET_CONTEXT us_ssl_socket_context
 #else
@@ -25,8 +23,8 @@ void *long_buffer;
 int long_length = 5 * 1024 * 1024;
 
 void perform_random_operation(struct LIBUS_SOCKET *s) {
-    switch (rand() % 4) {
-#ifdef USE_SSL
+    switch (rand() % 1) {
+#ifndef LIBUS_NO_SSL
         case 0: {
             us_ssl_socket_close(s);
         }
@@ -101,7 +99,7 @@ void on_http_socket_close(struct LIBUS_SOCKET *s) {
 
 void on_http_socket_end(struct LIBUS_SOCKET *s) {
     // we need to close on shutdown
-#ifdef USE_SSL
+#ifndef LIBUS_NO_SSL
      us_ssl_socket_close(s);
 #else
      us_socket_close(s);
@@ -118,7 +116,7 @@ void on_http_socket_open(struct LIBUS_SOCKET *s, int is_client) {
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
     if (opened_connections % 2 == 0 && opened_connections < 10000) {
-#ifdef USE_SSL
+#ifndef LIBUS_NO_SSL
         us_ssl_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
 #else
         us_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
@@ -139,7 +137,7 @@ int main() {
 
     struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
 
-#ifdef USE_SSL
+#ifndef LIBUS_NO_SSL
     struct us_ssl_socket_context_options ssl_options = {};
     ssl_options.key_file_name = "/home/alexhultman/uWebSockets/misc/ssl/key.pem";
     ssl_options.cert_file_name = "/home/alexhultman/uWebSockets/misc/ssl/cert.pem";
@@ -179,7 +177,7 @@ int main() {
         printf("Cannot listen to port 3000!\n");
     }
 
-#ifdef USE_SSL
+#ifndef LIBUS_NO_SSL
     us_ssl_socket_context_free(http_context);
 #else
     us_socket_context_free(http_context);

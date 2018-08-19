@@ -59,7 +59,7 @@ void on_http_socket_data(struct us_socket *s, char *data, int length) {
     responses++;
 }
 
-void on_http_socket_open(struct us_socket *s) {
+void on_http_socket_open(struct us_socket *s, int is_client) {
     struct http_socket *http_socket = (struct http_socket *) us_socket_ext(s);
 
     /* Reset offset */
