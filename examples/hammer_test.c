@@ -113,7 +113,7 @@ void on_http_socket_data(struct LIBUS_SOCKET *s, char *data, int length) {
     perform_random_operation(s);
 }
 
-void on_http_socket_open(struct LIBUS_SOCKET *s) {
+void on_http_socket_open(struct LIBUS_SOCKET *s, int is_client) {
     opened_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
@@ -141,6 +141,9 @@ int main() {
 
 #ifdef USE_SSL
     struct us_ssl_socket_context_options ssl_options = {};
+    ssl_options.key_file_name = "/home/alexhultman/uWebSockets/misc/ssl/key.pem";
+    ssl_options.cert_file_name = "/home/alexhultman/uWebSockets/misc/ssl/cert.pem";
+    ssl_options.passphrase = "1234";
 
     http_context = us_create_ssl_socket_context(loop, sizeof(struct http_context), ssl_options);
 

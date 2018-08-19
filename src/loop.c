@@ -81,7 +81,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 // change type to socket here
                 us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
 
-                s->context->on_open(s);
+                s->context->on_open(s, 1);
             } else {
                 struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
 
@@ -109,7 +109,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                         // make sure to link this socket into its context!
                         us_socket_context_link(listen_socket->s.context, s);
 
-                        listen_socket->s.context->on_open(s);
+                        listen_socket->s.context->on_open(s, 0);
                     } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
                 }
             }

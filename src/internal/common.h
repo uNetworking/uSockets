@@ -50,7 +50,7 @@ struct us_socket_context {
     struct us_socket *head;
     struct us_socket_context *next;
 
-    void (*on_open)(struct us_socket *);
+    void (*on_open)(struct us_socket *, int is_client);
     void (*on_data)(struct us_socket *, char *data, int length);
     void (*on_writable)(struct us_socket *);
     void (*on_close)(struct us_socket *);

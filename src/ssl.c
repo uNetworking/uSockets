@@ -28,7 +28,7 @@ struct us_ssl_socket_context {
     SSL_CTX *ssl_context;
 
     // här måste det vara!
-    void (*on_open)(struct us_ssl_socket *);
+    void (*on_open)(struct us_ssl_socket *, int is_client);
     void (*on_data)(struct us_ssl_socket *, char *data, int length);
     void (*on_close)(struct us_ssl_socket *);
 };
@@ -99,15 +99,24 @@ BIO_METHOD *us_internal_create_biom() {
     return biom;
 }
 
-void ssl_on_open(struct us_ssl_socket *s) {
+void ssl_on_open(struct us_ssl_socket *s, int is_client) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
+    // determine if this is client or server -> set
+
     // server only?
     s->ssl = SSL_new(context->ssl_context);
-    SSL_set_accept_state(s->ssl);
+
+    if (is_client) {
+        SSL_set_connect_state(s->ssl);
+    } else {
+        SSL_set_accept_state(s->ssl);
+    }
+
+
 
     // todo: move all BIO boilerplate to bio.c
 
@@ -126,7 +135,7 @@ void ssl_on_open(struct us_ssl_socket *s) {
 
     SSL_set_bio(s->ssl, shared_rbio, shared_wbio);
 
-    context->on_open(s);
+    context->on_open(s, is_client);
 }
 
 void ssl_on_close(struct us_ssl_socket *s) {
@@ -262,11 +271,11 @@ struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_conte
 }
 
 struct us_ssl_socket *us_ssl_socket_context_connect(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
-    // todo: yes
+    return us_socket_context_connect(&context->sc, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
 }
 
-void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s)) {
-    us_socket_context_on_open(&context->sc, (void (*)(struct us_socket *)) ssl_on_open);
+void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s, int is_client)) {
+    us_socket_context_on_open(&context->sc, (void (*)(struct us_socket *, int)) ssl_on_open);
     context->on_open = on_open;
 }
 
@@ -302,7 +311,7 @@ struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s)
 }
 
 int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, int msg_more) {
-    if (us_ssl_socket_is_shut_down(s)) {
+    if (us_internal_socket_is_closed(&s->s) || us_ssl_socket_is_shut_down(s)) {
         return 0;
     }
 
@@ -314,6 +323,7 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
     loop_ssl_data->ssl_read_input_length = 0;
     loop_ssl_data->ssl_socket = &s->s;
     loop_ssl_data->msg_more = msg_more;
+    loop_ssl_data->last_write_was_msg_more = 0;
     int written = SSL_write(s->ssl, data, length);
     loop_ssl_data->msg_more = 0;
 
@@ -333,11 +343,12 @@ void *us_ssl_socket_ext(struct us_ssl_socket *s) {
 }
 
 int us_ssl_socket_is_shut_down(struct us_ssl_socket *s) {
+    // should we also check if the underlying socket is shutdown?
     return SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
 }
 
 void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
-    if (!us_ssl_socket_is_shut_down(s)) {
+    if (!us_internal_socket_is_closed(&s->s) && !us_ssl_socket_is_shut_down(s)) {
         struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
         struct us_loop *loop = us_socket_context_loop(&context->sc);
         struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;

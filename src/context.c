@@ -109,7 +109,7 @@ void us_socket_context_link(struct us_socket_context *context, struct us_socket 
     context->head = s;
 }
 
-void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s)) {
+void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s, int is_client)) {
     context->on_open = on_open;
 }
 
