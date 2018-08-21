@@ -17,6 +17,10 @@ struct loop_ssl_data {
 
     int last_write_was_msg_more;
     int msg_more;
+
+    BIO *shared_rbio;
+    BIO *shared_wbio;
+    BIO_METHOD *shared_biom;
 };
 
 struct us_ssl_socket_context {
@@ -37,6 +41,7 @@ struct us_ssl_socket_context {
 struct us_ssl_socket {
     struct us_socket s;
     SSL *ssl;
+    int ssl_write_wants_read; // we use this for now
 };
 
 int passphrase_cb(char *buf, int size, int rwflag, void *u) {
@@ -64,12 +69,25 @@ long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) BIO_get_data(bio);
 
+    //printf("BIO_s_custom_write\n");
+
     loop_ssl_data->last_write_was_msg_more = loop_ssl_data->msg_more || length == 16413;
-    return us_socket_write(loop_ssl_data->ssl_socket, data, length, loop_ssl_data->last_write_was_msg_more);
+    int written = us_socket_write(loop_ssl_data->ssl_socket, data, length, loop_ssl_data->last_write_was_msg_more);
+
+    if (!written) {
+        BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_WRITE);
+        return -1;
+    }
+
+    //printf("BIO_s_custom_write returns: %d\n", ret);
+
+    return written;
 }
 
 int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) BIO_get_data(bio);
+
+    //printf("BIO_s_custom_read\n");
 
     if (!loop_ssl_data->ssl_read_input_length) {
         BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_READ);
@@ -87,7 +105,6 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     return length;
 }
 
-// frigör dessa !
 BIO_METHOD *us_internal_create_biom() {
     BIO_METHOD *biom = BIO_meth_new(BIO_TYPE_MEM, "µS BIO");
 
@@ -99,24 +116,18 @@ BIO_METHOD *us_internal_create_biom() {
     return biom;
 }
 
-// put these per loop in ssl_loop_data!
-static BIO *shared_rbio = 0;
-static BIO *shared_wbio = 0;
-static BIO_METHOD *shared_biom = 0;
-
 void ssl_on_open(struct us_ssl_socket *s, int is_client) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
-    // server only?
     s->ssl = SSL_new(context->ssl_context);
-    SSL_set_bio(s->ssl, shared_rbio, shared_wbio);
+    s->ssl_write_wants_read = 0;
+    SSL_set_bio(s->ssl, loop_ssl_data->shared_rbio, loop_ssl_data->shared_wbio);
 
-    // yes?
-    BIO_up_ref(shared_rbio);
-    BIO_up_ref(shared_wbio);
+    BIO_up_ref(loop_ssl_data->shared_rbio);
+    BIO_up_ref(loop_ssl_data->shared_wbio);
 
     if (is_client) {
         SSL_set_connect_state(s->ssl);
@@ -168,30 +179,58 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
         return;
     }
 
-    int read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output, LIBUS_RECV_BUFFER_LENGTH);
-    if (loop_ssl_data->ssl_read_input_length) {
-        // serious error we cannot recover from
-        us_ssl_socket_close(s);
-        return;
+    int read = 0;
+    while (loop_ssl_data->ssl_read_input_length) {
+        int just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + read, LIBUS_RECV_BUFFER_LENGTH - read);
+        if (just_read > 0) {
+            read += just_read;
+        } else if (loop_ssl_data->ssl_read_input_length) {
+            // serious error we cannot recover from
+            printf("Serious error!\n");
+            us_ssl_socket_close(s);
+            exit(-2);
+            return;
+        }
+    }
+
+
+    if (read > 0) {
+
+        // note: if we got a shutdown we cannot send anything, so we need to handle shutdown earlier than this
+
+        context->on_data(s, loop_ssl_data->ssl_read_output, read);
+        if (us_internal_socket_is_closed(&s->s)) {
+            return;
+        }
+
+        // if we are closed from here, return!
+
+    } else if (read == 0) {
+        // hmmmmmm?
+        // ignore any sending of 0 length, wtf
     } else {
-        if (read > 0) {
+        int err = SSL_get_error(s->ssl, read);
+        //if (err == SSL_ERROR_ZERO_RETURN) {
+            // is this path even needed?
+            //goto received_shutdown;
+        /*} else */if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+            // terminate connection here
+            us_ssl_socket_close(s);
+            return;
+        }
+    }
 
-            // note: if we got a shutdown we cannot send anything, so we need to handle shutdown earlier than this
 
-            context->on_data(s, loop_ssl_data->ssl_read_output, read);
-        } else if (read == 0) {
-            // hmmmmmm?
-            // ignore any sending of 0 length, wtf
-        } else {
-            int err = SSL_get_error(s->ssl, read);
-            //if (err == SSL_ERROR_ZERO_RETURN) {
-                // is this path even needed?
-                //goto received_shutdown;
-            /*} else */if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-                // terminate connection here
-                us_ssl_socket_close(s);
-                return;
-            }
+    //printf("Hello!\n");
+
+    // trigger writable if we failed last write with want read
+    if (s->ssl_write_wants_read) {
+        s->ssl_write_wants_read = 0;
+
+        context->sc.on_writable(s); // cast here!
+        // if we are closed here, then exit
+        if (us_internal_socket_is_closed(&s->s)) {
+            return;
         }
     }
 
@@ -199,38 +238,30 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     if (SSL_get_shutdown(s->ssl) & SSL_RECEIVED_SHUTDOWN) {
         printf("SSL_RECEIVED_SHUTDOWN\n");
 
+        //exit(-2);
+
+        //us_ssl_socket_close(s);
+
         //us_
     }
 }
 
 /* Lazily inits loop ssl data first time */
 void us_internal_init_loop_ssl_data(struct us_loop *loop) {
-    // should not be needed in openssl 1.1.0+
-    SSL_library_init();
-
-    // todo: this shoud be freed when freeing the loop, including BIOs
-    // we also should init the BIOs here!
 
     if (!loop->data.ssl_data) {
         struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
 
-        loop_ssl_data->ssl_read_input = malloc(LIBUS_RECV_BUFFER_LENGTH);
+        // input ändrades till output här!
+        loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH);
 
+        OPENSSL_init_ssl(0, NULL);
 
-
-        // let's share these (per loop, or per ssl context)
-
-        shared_biom = us_internal_create_biom();
-
-
-        shared_rbio = BIO_new(shared_biom);
-        shared_wbio = BIO_new(shared_biom);
-        BIO_set_data(shared_rbio, loop_ssl_data);
-        BIO_set_data(shared_wbio, loop_ssl_data);
-
-        BIO_up_ref(shared_rbio);
-        BIO_up_ref(shared_wbio);
-
+        loop_ssl_data->shared_biom = us_internal_create_biom();
+        loop_ssl_data->shared_rbio = BIO_new(loop_ssl_data->shared_biom);
+        loop_ssl_data->shared_wbio = BIO_new(loop_ssl_data->shared_biom);
+        BIO_set_data(loop_ssl_data->shared_rbio, loop_ssl_data);
+        BIO_set_data(loop_ssl_data->shared_wbio, loop_ssl_data);
 
         loop->data.ssl_data = loop_ssl_data;
     }
@@ -238,23 +269,16 @@ void us_internal_init_loop_ssl_data(struct us_loop *loop) {
 
 /* Called by loop free, clears any loop ssl data */
 void us_internal_free_loop_ssl_data(struct us_loop *loop) {
-    printf("us_internal_free_loop_ssl_data()\n");
-
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     if (loop_ssl_data) {
 
-        free(loop_ssl_data->ssl_read_input);
+        free(loop_ssl_data->ssl_read_output);
 
-        // free the meth
+        BIO_free(loop_ssl_data->shared_rbio);
+        BIO_free(loop_ssl_data->shared_wbio);
 
-        BIO_free(shared_rbio);
-        BIO_free(shared_wbio);
-
-        BIO_free(shared_rbio);
-        BIO_free(shared_wbio);
-
-        BIO_meth_free(shared_biom);
+        BIO_meth_free(loop_ssl_data->shared_biom);
 
         free(loop_ssl_data);
     }
@@ -268,11 +292,13 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_create_socket_context(loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
 
     // this is a server?
-    context->ssl_context = SSL_CTX_new(TLS_server_method());
+    context->ssl_context = SSL_CTX_new(TLS_method());
 
     // options
     SSL_CTX_set_read_ahead(context->ssl_context, 1);
-    SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
+
     //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
     SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
 
@@ -368,7 +394,19 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
         us_socket_flush(&s->s);
     }
 
-    return written;
+    if (written > 0) {
+        return written;
+    } else {
+        int err = SSL_get_error(s->ssl, written);
+        if (err == SSL_ERROR_WANT_READ) {
+            // here we need to trigger writable event next ssl_read!
+            s->ssl_write_wants_read = 1;
+        } else {
+            // all errors here except for want write are critical and should not happen
+        }
+
+        return 0;
+    }
 }
 
 void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds) {

@@ -22,8 +22,11 @@ struct us_listen_socket *listen_socket;
 void *long_buffer;
 int long_length = 5 * 1024 * 1024;
 
+// todo: if write failed, it needs to be called again with THE SAME content!
+// otherwise SSL errors!
+
 void perform_random_operation(struct LIBUS_SOCKET *s) {
-    switch (rand() % 1) {
+    switch (rand() % 3) {
 #ifndef LIBUS_NO_SSL
         case 0: {
             us_ssl_socket_close(s);
@@ -34,10 +37,12 @@ void perform_random_operation(struct LIBUS_SOCKET *s) {
         }
         break;
         case 2: {
-            us_ssl_socket_shutdown(s);
+        // this one is simply not working as it should
+            //us_ssl_socket_shutdown(s); // funkar inte helt
         }
-        break;
+        //break;
         case 3: {
+        // if not complete, we need to queue this up for the writable event!
             us_ssl_socket_write(s, (char *) long_buffer, long_length, 0);
         }
         break;
@@ -108,6 +113,7 @@ void on_http_socket_end(struct LIBUS_SOCKET *s) {
 }
 
 void on_http_socket_data(struct LIBUS_SOCKET *s, char *data, int length) {
+    //printf("Fick data: <%.*s>\n", length, data);
     perform_random_operation(s);
 }
 
