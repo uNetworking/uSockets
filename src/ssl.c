@@ -185,7 +185,6 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
         }
     }
 
-
     if (read > 0) {
 
         // note: if we got a shutdown we cannot send anything, so we need to handle shutdown earlier than this
@@ -425,10 +424,11 @@ void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
 
         // sets SSL_SENT_SHUTDOWN no matter what (not actually true if error!)
         int ret = SSL_shutdown(s->ssl);
+        if (ret == 0) {
+            ret = SSL_shutdown(s->ssl);
+        }
 
-        int err = SSL_get_error(s->ssl, ret);
-
-        if (err == SSL_ERROR_SSL) {
+        if (ret < 0) {
             // we get here if we are shutting down while still in init
             us_socket_shutdown(&s->s);
         }
