@@ -215,7 +215,7 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     if (s->ssl_write_wants_read) {
         s->ssl_write_wants_read = 0;
 
-        context->sc.on_writable(s); // cast here!
+        context->sc.on_writable(&s->s); // cast here!
         // if we are closed here, then exit
         if (us_internal_socket_is_closed(&s->s)) {
             return;
