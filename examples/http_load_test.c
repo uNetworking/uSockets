@@ -2,6 +2,26 @@
 
 #include <libusockets.h>
 
+#ifndef LIBUS_NO_SSL
+#define us_socket us_ssl_socket
+#define us_socket_context us_ssl_socket_context
+#define us_socket_write us_ssl_socket_write
+#define us_socket_close us_ssl_socket_close
+#define us_socket_shutdown us_ssl_socket_shutdown
+#define us_socket_context_on_end us_ssl_socket_context_on_end
+#define us_socket_context_on_open us_ssl_socket_context_on_open
+#define us_socket_context_on_close us_ssl_socket_context_on_close
+#define us_socket_context_on_writable us_ssl_socket_context_on_writable
+#define us_socket_context_on_data us_ssl_socket_context_on_data
+#define us_socket_context_on_timeout us_ssl_socket_context_on_timeout
+#define us_socket_ext us_ssl_socket_ext
+#define us_socket_context_ext us_ssl_socket_context_ext
+#define us_socket_get_context us_ssl_socket_get_context
+#define us_socket_context_listen us_ssl_socket_context_listen
+#define us_socket_timeout us_ssl_socket_timeout
+#define us_socket_context_connect us_ssl_socket_context_connect
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,7 +123,12 @@ int main(int argc, char **argv) {
     struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
 
     /* Create a socket context for HTTP */
+#ifndef LIBUS_NO_SSL
+    struct us_ssl_socket_context_options ssl_options = {};
+    struct us_socket_context *http_context = us_create_ssl_socket_context(loop, 0, ssl_options);
+#else
     struct us_socket_context *http_context = us_create_socket_context(loop, 0);
+#endif
 
     /* Set up event handlers */
     us_socket_context_on_open(http_context, on_http_socket_open);
