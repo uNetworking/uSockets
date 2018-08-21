@@ -26,7 +26,7 @@ int long_length = 5 * 1024 * 1024;
 // otherwise SSL errors!
 
 void perform_random_operation(struct LIBUS_SOCKET *s) {
-    switch (rand() % 3) {
+    switch (rand() % 4) {
 #ifndef LIBUS_NO_SSL
         case 0: {
             us_ssl_socket_close(s);
@@ -37,10 +37,9 @@ void perform_random_operation(struct LIBUS_SOCKET *s) {
         }
         break;
         case 2: {
-        // this one is simply not working as it should
-            //us_ssl_socket_shutdown(s); // funkar inte helt
+            us_ssl_socket_shutdown(s);
         }
-        //break;
+        break;
         case 3: {
         // if not complete, we need to queue this up for the writable event!
             us_ssl_socket_write(s, (char *) long_buffer, long_length, 0);
@@ -178,6 +177,9 @@ int main() {
 
     if (listen_socket) {
         printf("Running hammer test\n");
+
+        // todo: connect only here
+
         us_loop_run(loop);
     } else {
         printf("Cannot listen to port 3000!\n");

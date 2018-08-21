@@ -105,17 +105,6 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     return length;
 }
 
-BIO_METHOD *us_internal_create_biom() {
-    BIO_METHOD *biom = BIO_meth_new(BIO_TYPE_MEM, "µS BIO");
-
-    BIO_meth_set_create(biom, BIO_s_custom_create);
-    BIO_meth_set_write(biom, BIO_s_custom_write);
-    BIO_meth_set_read(biom, BIO_s_custom_read);
-    BIO_meth_set_ctrl(biom, BIO_s_custom_ctrl);
-
-    return biom;
-}
-
 void ssl_on_open(struct us_ssl_socket *s, int is_client) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
@@ -150,10 +139,11 @@ void ssl_on_end(struct us_ssl_socket *s) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     // whatever state we are in, a TCP FIN is always an answered shutdown
-    printf("ssl_on_end aka someone sent us a TCP FIN??\n");
+    //printf("ssl_on_end aka someone sent us a TCP FIN??\n");
     us_ssl_socket_close(s);
 }
 
+// this whole function needs a complete clean-up
 void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
@@ -166,13 +156,15 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
     loop_ssl_data->ssl_socket = &s->s;
 
     if (us_ssl_socket_is_shut_down(s)) {
-        printf("Got data when in shutdown?\n");
+
 
         if (SSL_shutdown(s->ssl) == 1) {
             // two phase shutdown is complete here
             printf("Two step SSL shutdown complete\n");
 
             us_ssl_socket_close(s);
+        } else {
+            //printf("Got data when in shutdown?\n");
         }
 
         // no further processing of data when in shutdown state
@@ -220,9 +212,6 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
         }
     }
 
-
-    //printf("Hello!\n");
-
     // trigger writable if we failed last write with want read
     if (s->ssl_write_wants_read) {
         s->ssl_write_wants_read = 0;
@@ -236,11 +225,12 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
 
     // check this then?
     if (SSL_get_shutdown(s->ssl) & SSL_RECEIVED_SHUTDOWN) {
-        printf("SSL_RECEIVED_SHUTDOWN\n");
+        //printf("SSL_RECEIVED_SHUTDOWN\n");
 
         //exit(-2);
 
-        //us_ssl_socket_close(s);
+        // not correct anyways!
+        us_ssl_socket_close(s);
 
         //us_
     }
@@ -248,16 +238,19 @@ void ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
 
 /* Lazily inits loop ssl data first time */
 void us_internal_init_loop_ssl_data(struct us_loop *loop) {
-
     if (!loop->data.ssl_data) {
         struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
 
-        // input ändrades till output här!
         loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH);
 
         OPENSSL_init_ssl(0, NULL);
 
-        loop_ssl_data->shared_biom = us_internal_create_biom();
+        loop_ssl_data->shared_biom = BIO_meth_new(BIO_TYPE_MEM, "µS BIO");
+        BIO_meth_set_create(loop_ssl_data->shared_biom, BIO_s_custom_create);
+        BIO_meth_set_write(loop_ssl_data->shared_biom, BIO_s_custom_write);
+        BIO_meth_set_read(loop_ssl_data->shared_biom, BIO_s_custom_read);
+        BIO_meth_set_ctrl(loop_ssl_data->shared_biom, BIO_s_custom_ctrl);
+
         loop_ssl_data->shared_rbio = BIO_new(loop_ssl_data->shared_biom);
         loop_ssl_data->shared_wbio = BIO_new(loop_ssl_data->shared_biom);
         BIO_set_data(loop_ssl_data->shared_rbio, loop_ssl_data);
@@ -272,7 +265,6 @@ void us_internal_free_loop_ssl_data(struct us_loop *loop) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     if (loop_ssl_data) {
-
         free(loop_ssl_data->ssl_read_output);
 
         BIO_free(loop_ssl_data->shared_rbio);
@@ -418,8 +410,7 @@ void *us_ssl_socket_ext(struct us_ssl_socket *s) {
 }
 
 int us_ssl_socket_is_shut_down(struct us_ssl_socket *s) {
-    // should we also check if the underlying socket is shutdown?
-    return SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
+    return us_socket_is_shut_down(&s->s) || SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
 }
 
 void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
@@ -432,8 +423,15 @@ void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
         loop_ssl_data->ssl_socket = &s->s;
         loop_ssl_data->msg_more = 0;
 
-        // sets SSL_SENT_SHUTDOWN no matter what
-        SSL_shutdown(s->ssl);
+        // sets SSL_SENT_SHUTDOWN no matter what (not actually true if error!)
+        int ret = SSL_shutdown(s->ssl);
+
+        int err = SSL_get_error(s->ssl, ret);
+
+        if (err == SSL_ERROR_SSL) {
+            // we get here if we are shutting down while still in init
+            us_socket_shutdown(&s->s);
+        }
     }
 }
 
