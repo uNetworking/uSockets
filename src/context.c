@@ -89,7 +89,7 @@ struct us_socket_context *us_create_child_socket_context(struct us_socket_contex
 struct us_socket *us_socket_context_adopt_socket(struct us_socket_context *context, struct us_socket *s, int ext_size) {
     us_internal_socket_context_unlink(s->context, s);
 
-    struct us_socket *new_s = us_poll_resize(s, s->context->loop, ext_size);
+    struct us_socket *new_s = (struct us_socket *) us_poll_resize(&s->p, s->context->loop, ext_size);
 
     us_internal_socket_context_link(context, new_s);
 
