@@ -42,7 +42,7 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     ls->s.context = context;
     ls->s.timeout = 0;
     ls->s.next = 0;
-    us_socket_context_link(context, &ls->s);
+    us_internal_socket_context_link(context, &ls->s);
 
     ls->socket_ext_size = socket_ext_size;
 
@@ -50,7 +50,7 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
 }
 
 void us_listen_socket_close(struct us_listen_socket *ls) {
-    us_socket_context_unlink(ls->s.context, &ls->s);
+    us_internal_socket_context_unlink(ls->s.context, &ls->s);
 
     us_poll_stop((struct us_poll *) &ls->s, ls->s.context->loop);
     bsd_close_socket(us_poll_fd((struct us_poll *) &ls->s));
@@ -76,13 +76,27 @@ struct us_socket *us_socket_context_connect(struct us_socket_context *context, c
     connect_socket->context = context;
 
     // make sure to link this socket into its context!
-    us_socket_context_link(context, connect_socket);
+    us_internal_socket_context_link(context, connect_socket);
 
     return connect_socket;
 }
 
-// make internal?
-void us_socket_context_unlink(struct us_socket_context *context, struct us_socket *s) {
+// this is needed
+struct us_socket_context *us_create_child_socket_context(struct us_socket_context *context) {
+    return context; // for now just return the same thing
+}
+
+struct us_socket *us_socket_context_adopt_socket(struct us_socket_context *context, struct us_socket *s, int ext_size) {
+    us_internal_socket_context_unlink(s->context, s);
+
+    struct us_socket *new_s = us_poll_resize(s, s->context->loop, ext_size);
+
+    us_internal_socket_context_link(context, new_s);
+
+    return new_s;
+}
+
+void us_internal_socket_context_unlink(struct us_socket_context *context, struct us_socket *s) {
     if (s->prev == s->next) {
         context->head = 0;
     } else {
@@ -97,9 +111,7 @@ void us_socket_context_unlink(struct us_socket_context *context, struct us_socke
     }
 }
 
-// this one should probably be made internal!
-// unlinking should only happen at the very last moment, risky to call this
-void us_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
+void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
     s->timeout = 0; // this was needed?
     s->next = context->head;
     s->prev = 0;

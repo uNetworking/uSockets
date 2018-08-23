@@ -22,3 +22,6 @@ WIN32_EXPORT void *us_poll_ext(struct us_poll *p);
 
 /* Get associated socket descriptor from a poll */
 WIN32_EXPORT LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p);
+
+/* Resize an active poll */
+WIN32_EXPORT struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_size);

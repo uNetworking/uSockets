@@ -46,7 +46,7 @@ void us_socket_flush(struct us_socket *s) {
 
 void us_socket_close(struct us_socket *s) {
     if (!us_internal_socket_is_closed(s)) {
-        us_socket_context_unlink(s->context, s);
+        us_internal_socket_context_unlink(s->context, s);
         us_poll_stop((struct us_poll *) s, s->context->loop);
         bsd_close_socket(us_poll_fd((struct us_poll *) s));
 

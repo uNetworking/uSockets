@@ -25,6 +25,11 @@ int long_length = 5 * 1024 * 1024;
 // todo: if write failed, it needs to be called again with THE SAME content!
 // otherwise SSL errors!
 
+// add socket adoption as one case! (calls perform_random_operation again)
+// also make sure to have socket ext data
+// and context ext data
+// and loop ext data
+
 void perform_random_operation(struct LIBUS_SOCKET *s) {
     switch (rand() % 4) {
 #ifndef LIBUS_NO_SSL

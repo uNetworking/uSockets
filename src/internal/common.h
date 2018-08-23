@@ -35,6 +35,9 @@ void us_internal_free_loop_ssl_data(struct us_loop *loop);
 
 int us_internal_socket_is_closed(struct us_socket *);
 
+void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s);
+void us_internal_socket_context_unlink(struct us_socket_context *context, struct us_socket *s);
+
 struct us_socket {
     struct us_poll p;
     struct us_socket_context *context;

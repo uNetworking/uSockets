@@ -43,6 +43,17 @@ struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_si
     return malloc(sizeof(struct us_poll) + ext_size);
 }
 
+struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_size) {
+    int events = us_poll_events(p);
+
+    struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
+    if (p != new_p && events) {
+        us_poll_change(new_p, loop, events);
+    }
+
+    return new_p;
+}
+
 void us_poll_free(struct us_poll *p, struct us_loop *loop) {
     loop->num_polls--;
     free(p);

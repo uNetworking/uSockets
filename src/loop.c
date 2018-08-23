@@ -112,7 +112,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                         bsd_socket_nodelay(client_fd, 1);
 
                         // make sure to link this socket into its context!
-                        us_socket_context_link(listen_socket->s.context, s);
+                        us_internal_socket_context_link(listen_socket->s.context, s);
 
                         listen_socket->s.context->on_open(s, 0);
                     } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
