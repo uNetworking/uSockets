@@ -30,6 +30,7 @@ struct us_ssl_socket_context {
     // maybe instead of holding once you hold many, a vector or set
     // when a socket that belongs to another socket context transfers to a new socket context
     SSL_CTX *ssl_context;
+    int is_parent;
 
     // här måste det vara!
     struct us_ssl_socket *(*on_open)(struct us_ssl_socket *, int is_client);
@@ -280,6 +281,7 @@ struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_s
 
     // I think this is the only thing being shared
     child_context->ssl_context = context->ssl_context;
+    child_context->is_parent = 0;
 
     return child_context;
 }
@@ -290,8 +292,8 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_create_socket_context(loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
 
-    // this is a server?
     context->ssl_context = SSL_CTX_new(TLS_method());
+    context->is_parent = 1;
 
     // options
     SSL_CTX_set_read_ahead(context->ssl_context, 1);
@@ -323,7 +325,9 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 }
 
 void us_ssl_socket_context_free(struct us_ssl_socket_context *context) {
-    SSL_CTX_free(context->ssl_context);
+    if (context->is_parent) {
+        SSL_CTX_free(context->ssl_context);
+    }
 
     us_socket_context_free(&context->sc);
 }
