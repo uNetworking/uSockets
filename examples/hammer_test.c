@@ -1,7 +1,5 @@
 /* This example, or test, is a moron test where the library is being hammered in all the possible ways randomly over time */
 
-#define LIBUS_NO_SSL
-
 #include <libusockets.h>
 
 #ifndef LIBUS_NO_SSL
@@ -22,6 +20,9 @@
 #define us_socket_context_listen us_ssl_socket_context_listen
 #define us_socket_timeout us_ssl_socket_timeout
 #define us_socket_context_connect us_ssl_socket_context_connect
+#define us_socket_context_adopt_socket us_ssl_socket_context_adopt_socket
+#define us_create_child_socket_context us_create_child_ssl_socket_context
+#define us_socket_context_free us_ssl_socket_context_free
 #endif
 
 #include <stdio.h>

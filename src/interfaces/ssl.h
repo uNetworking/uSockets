@@ -16,12 +16,12 @@ WIN32_EXPORT struct us_ssl_socket_context *us_create_ssl_socket_context(struct u
 WIN32_EXPORT void us_ssl_socket_context_free(struct us_ssl_socket_context *context);
 
 /* See us_socket_context */
-WIN32_EXPORT void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, void (*on_open)(struct us_ssl_socket *s, int is_client));
-WIN32_EXPORT void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, void (*on_close)(struct us_ssl_socket *s));
-WIN32_EXPORT void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, void (*on_data)(struct us_ssl_socket *s, char *data, int length));
-WIN32_EXPORT void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, void (*on_writable)(struct us_ssl_socket *s));
-WIN32_EXPORT void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, void (*on_timeout)(struct us_ssl_socket *s));
-WIN32_EXPORT void us_ssl_socket_context_on_end(struct us_ssl_socket_context *context, void (*on_end)(struct us_ssl_socket *s));
+WIN32_EXPORT void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client));
+WIN32_EXPORT void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_close)(struct us_ssl_socket *s));
+WIN32_EXPORT void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_data)(struct us_ssl_socket *s, char *data, int length));
+WIN32_EXPORT void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_writable)(struct us_ssl_socket *s));
+WIN32_EXPORT void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_timeout)(struct us_ssl_socket *s));
+WIN32_EXPORT void us_ssl_socket_context_on_end(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_end)(struct us_ssl_socket *s));
 
 /* See us_socket_context */
 WIN32_EXPORT struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size);
@@ -51,6 +51,15 @@ WIN32_EXPORT int us_ssl_socket_is_shut_down(struct us_ssl_socket *s);
 WIN32_EXPORT void us_ssl_socket_shutdown(struct us_ssl_socket *s);
 
 /* */
-WIN32_EXPORT void us_ssl_socket_close(struct us_ssl_socket *s);
+WIN32_EXPORT struct us_ssl_socket *us_ssl_socket_close(struct us_ssl_socket *s);
+
+/* Invalidates passed socket, returning a new resized socket which belongs to a different socket context.
+ * Used mainly for "socket upgrades" such as when transitioning from HTTP to WebSocket. */
+WIN32_EXPORT struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_context *context, struct us_ssl_socket *s, int ext_size);
+
+/* Create a child socket context which acts much like its own socket context with its own callbacks yet still relies on the
+ * parent socket context for some shared resources. Child socket contexts should be used together with socket adoptions and nothing else. */
+WIN32_EXPORT struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context);
+
 
 #endif
