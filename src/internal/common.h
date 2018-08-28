@@ -38,6 +38,8 @@ int us_internal_socket_is_closed(struct us_socket *);
 void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s);
 void us_internal_socket_context_unlink(struct us_socket_context *context, struct us_socket *s);
 
+void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *context);
+
 struct us_socket {
     struct us_poll p;
     struct us_socket_context *context;
@@ -47,7 +49,7 @@ struct us_socket {
 
 struct us_listen_socket {
     struct us_socket s;
-    int socket_ext_size;
+    unsigned int socket_ext_size;
 };
 
 struct us_socket_context {
@@ -55,7 +57,7 @@ struct us_socket_context {
     //unsigned short timeout;
     struct us_socket *head;
     struct us_socket *iterator;
-    struct us_socket_context *next;
+    struct us_socket_context *prev, *next;
 
     struct us_socket *(*on_open)(struct us_socket *, int is_client);
     struct us_socket *(*on_data)(struct us_socket *, char *data, int length);

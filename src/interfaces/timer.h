@@ -1,7 +1,7 @@
 /* Public interfaces for timers */
 
 /* Create a new high precision, low performance timer. May fail and return null */
-WIN32_EXPORT struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size);
+WIN32_EXPORT struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, unsigned int ext_size);
 
 /* */
 WIN32_EXPORT void us_timer_close(struct us_timer *timer);

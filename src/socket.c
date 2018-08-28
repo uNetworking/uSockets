@@ -57,7 +57,10 @@ struct us_socket *us_socket_close(struct us_socket *s) {
         s->context->loop->data.closed_head = s;
 
         // signal closed socket by having prev = next
-        s->prev = s->next;
+        //s->prev = s->next;
+
+        // signal socket closed by having prev = context
+        s->prev = (struct us_socket *) s->context;
 
         return s->context->on_close(s);
     }
@@ -80,5 +83,9 @@ void us_socket_shutdown(struct us_socket *s) {
 }
 
 int us_internal_socket_is_closed(struct us_socket *s) {
-    return s->prev == s->next;
+    // this does not work as flag if only holding 1 single socket in a context
+    // we only trigger this bug in a separate context since it holds no listen socket!
+    //return s->prev == s->next;
+
+    return s->prev == (struct us_socket *) s->context;
 }

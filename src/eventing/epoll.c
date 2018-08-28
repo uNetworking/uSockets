@@ -5,7 +5,7 @@
 #ifdef LIBUS_USE_EPOLL
 
 // loop
-struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int ext_size) {
+struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), unsigned int ext_size) {
     struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + ext_size);
     loop->num_polls = 0;
     loop->epfd = epoll_create1(EPOLL_CLOEXEC);
@@ -36,14 +36,14 @@ void us_loop_run(struct us_loop *loop) {
 }
 
 // poll
-struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_size) {
+struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
     if (!fallthrough) {
         loop->num_polls++;
     }
     return malloc(sizeof(struct us_poll) + ext_size);
 }
 
-struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_size) {
+struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
 
     struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
@@ -130,7 +130,7 @@ unsigned int us_internal_accept_poll_event(struct us_poll *p) {
 }
 
 // timer
-struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size) {
+struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
     struct us_poll *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
     us_poll_init(p, timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC), POLL_TYPE_CALLBACK);
 
@@ -172,7 +172,7 @@ struct us_loop *us_timer_loop(struct us_timer *t) {
 }
 
 // async (internal only)
-struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, int ext_size) {
+struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
     struct us_poll *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
     us_poll_init(p, eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC), POLL_TYPE_CALLBACK);
 

@@ -1,7 +1,7 @@
 /* Public interfaces for polls */
 
 /* A fallthrough poll does not keep the loop running, it falls through */
-WIN32_EXPORT struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_size);
+WIN32_EXPORT struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, unsigned int ext_size);
 
 /* After stopping a poll you must manually free the memory */
 WIN32_EXPORT void us_poll_free(struct us_poll *p, struct us_loop *loop);
@@ -24,4 +24,4 @@ WIN32_EXPORT void *us_poll_ext(struct us_poll *p);
 WIN32_EXPORT LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p);
 
 /* Resize an active poll */
-WIN32_EXPORT struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_size);
+WIN32_EXPORT struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, unsigned int ext_size);

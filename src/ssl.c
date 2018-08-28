@@ -446,7 +446,7 @@ struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_s
     return context;
 }
 
-struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
+struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context, int context_ext_size) {
     return context->sc.loop;
 }
 

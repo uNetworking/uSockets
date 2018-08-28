@@ -36,6 +36,15 @@ void us_wakeup_loop(struct us_loop *loop) {
     us_internal_async_wakeup(loop->data.wakeup_async);
 }
 
+void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *context) {
+    context->next = loop->data.head;
+    context->prev = 0;
+    if (loop->data.head) {
+        loop->data.head->prev = context;
+    }
+    loop->data.head = context;
+}
+
 void us_internal_timer_sweep(struct us_loop *loop) {
 
     if (loop->data.iterator != 0) {
@@ -54,6 +63,8 @@ void us_internal_timer_sweep(struct us_loop *loop) {
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
         struct us_socket_context *context = loop_data->iterator;
+
+        //printf("Sweeping context: %ld\n", context);
 
         for (context->iterator = context->head; context->iterator; ) {
 

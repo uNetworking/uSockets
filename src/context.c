@@ -12,10 +12,7 @@ struct us_socket_context *us_create_socket_context(struct us_loop *loop, int con
     context->iterator = 0;
     context->next = 0;
 
-    // link it to loop
-    // us_loop_link(context)
-    // bug: support multiple contexts
-    loop->data.head = context;
+    us_internal_loop_link(loop, context);
 
     return context;
 }
@@ -83,11 +80,12 @@ struct us_socket *us_socket_context_connect(struct us_socket_context *context, c
     return connect_socket;
 }
 
-// this is needed
-struct us_socket_context *us_create_child_socket_context(struct us_socket_context *context) {
-    return context; // for now just return the same thing
+struct us_socket_context *us_create_child_socket_context(struct us_socket_context *context, int context_ext_size) {
+    // in the case of TCP, nothing is shared
+    return us_create_socket_context(context->loop, context_ext_size);
 }
 
+// bug: this will set timeout to 0
 struct us_socket *us_socket_context_adopt_socket(struct us_socket_context *context, struct us_socket *s, int ext_size) {
     // if you do this while closed, it's your own problem
     if (us_internal_socket_is_closed(s)) {
@@ -128,7 +126,8 @@ void us_internal_socket_context_unlink(struct us_socket_context *context, struct
 // also check iterator, etc
 // we always add in the top, which means we never modify any next
 void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
-    s->timeout = 0; // this was needed?
+    s->context = context; // this was added
+    s->timeout = 0; // this was needed? bug: do not reset timeout when adopting socket!
     s->next = context->head;
     s->prev = 0;
     if (context->head) {

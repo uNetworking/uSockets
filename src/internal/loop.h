@@ -4,8 +4,9 @@
 // we need to define us_internal_async here still!
 
 struct us_internal_async;
+struct us_loop;
 
-struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, int ext_size);
+struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, unsigned int ext_size);
 void us_internal_async_close(struct us_internal_async *a);
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *));
 void us_internal_async_wakeup(struct us_internal_async *a);

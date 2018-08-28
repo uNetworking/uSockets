@@ -97,8 +97,8 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
     return p->fd;
 }
 
-struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), int userdata_size) {
-    struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + userdata_size);
+struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), unsigned int ext_size) {
+    struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + ext_size);
 
     loop->uv_loop = default_hint ? uv_default_loop() : uv_loop_new();
 
@@ -146,12 +146,12 @@ void us_loop_run(struct us_loop *loop) {
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
 
-struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_size) {
+struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
     return malloc(sizeof(struct us_poll) + ext_size);
 }
 
 // this one is broken, see us_poll
-struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_size) {
+struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, unsigned int ext_size) {
 
     // do not support it yet
     return p;
@@ -165,7 +165,7 @@ struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_
 }
 
 // timer
-struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size) {
+struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
     struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_timer_t) + ext_size);
 
     cb->loop = loop;
@@ -212,7 +212,7 @@ struct us_loop *us_timer_loop(struct us_timer *t) {
 }
 
 // async (internal only)
-struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, int ext_size) {
+struct us_internal_async *us_internal_create_async(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
     struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_async_t) + ext_size);
 
     cb->loop = loop;
