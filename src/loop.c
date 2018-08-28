@@ -165,7 +165,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
             // epollerr epollhup
             if (error) {
-                s = p = us_socket_close(s);
+                s = us_socket_close(s);
                 return;
             }
 
@@ -173,7 +173,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 // bug: what if we changed context! then last_write_failed will not point to the same!
                 s->context->loop->data.last_write_failed = 0;
 
-                s = p = s->context->on_writable(s);
+                s = s->context->on_writable(s);
 
                 if (us_internal_socket_is_closed(s)) {
                     return;
@@ -181,25 +181,25 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                 // if we shut down then do this for sure!
                 if (!s->context->loop->data.last_write_failed || us_socket_is_shut_down(s)) {
-                    us_poll_change(p, us_socket_get_context(s)->loop, us_poll_events(p) & LIBUS_SOCKET_READABLE);
+                    us_poll_change(&s->p, us_socket_get_context(s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
                 }
             }
 
             if (events & LIBUS_SOCKET_READABLE) {
-                int length = bsd_recv(us_poll_fd(p), s->context->loop->data.recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
+                int length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
-                    s = p = s->context->on_data(s, s->context->loop->data.recv_buf, length);
+                    s = s->context->on_data(s, s->context->loop->data.recv_buf, length);
                 } else if (!length) {
                     // is_shut_down is better name now that we do not wait for writing finished
                     if (us_socket_is_shut_down(s)) {
-                        s = p = us_socket_close(s);
+                        s = us_socket_close(s);
                     } else {
-                        us_poll_change(p, us_socket_get_context(s)->loop, us_poll_events(p) & LIBUS_SOCKET_WRITABLE);
+                        us_poll_change(&s->p, us_socket_get_context(s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
                         // for HTTP and other similar high-level protocols a close is needed
-                        s = p = s->context->on_end(s);
+                        s = s->context->on_end(s);
                     }
                 } else if (length == LIBUS_SOCKET_ERROR && !bsd_would_block()) {
-                    s = p = us_socket_close(s);
+                    s = us_socket_close(s);
                 }
 
                 // here we need is_closed and free or queue up the poll for removal in next loop iteration

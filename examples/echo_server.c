@@ -1,6 +1,8 @@
 /* This is a basic TCP echo server. */
 
 #include <libusockets.h>
+#include "helper.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +34,7 @@ void on_post(struct us_loop *loop) {
 }
 
 /* Socket writable handler */
-void on_echo_socket_writable(struct us_socket *s) {
+struct us_socket *on_echo_socket_writable(struct us_socket *s) {
 	struct echo_socket *es = (struct echo_socket *) us_socket_ext(s);
 
 	/* Continue writing out our backpressure */
@@ -50,25 +52,29 @@ void on_echo_socket_writable(struct us_socket *s) {
 
 	/* Client is not boring */
 	us_socket_timeout(s, 30);
+
+	return s;
 }
 
 /* Socket closed handler */
-void on_echo_socket_close(struct us_socket *s) {
+struct us_socket *on_echo_socket_close(struct us_socket *s) {
 	struct echo_socket *es = (struct echo_socket *) us_socket_ext(s);
 
 	printf("Client disconnected\n");
 
 	free(es->backpressure);
+
+	return s;
 }
 
 /* Socket half-closed handler */
-void on_echo_socket_end(struct us_socket *s) {
+struct us_socket *on_echo_socket_end(struct us_socket *s) {
 	us_socket_shutdown(s);
-	us_socket_close(s);
+	return us_socket_close(s);
 }
 
 /* Socket data handler */
-void on_echo_socket_data(struct us_socket *s, char *data, int length) {
+struct us_socket *on_echo_socket_data(struct us_socket *s, char *data, int length) {
 	struct echo_socket *es = (struct echo_socket *) us_socket_ext(s);
 
 	/* Print the data we received */
@@ -87,10 +93,12 @@ void on_echo_socket_data(struct us_socket *s, char *data, int length) {
 
 	/* Client is not boring */
 	us_socket_timeout(s, 30);
+
+	return s;
 }
 
 /* Socket opened handler */
-void on_echo_socket_open(struct us_socket *s, int is_client) {
+struct us_socket *on_echo_socket_open(struct us_socket *s, int is_client) {
 	struct echo_socket *es = (struct echo_socket *) us_socket_ext(s);
 
 	/* Initialize the new socket's extension */
@@ -101,12 +109,14 @@ void on_echo_socket_open(struct us_socket *s, int is_client) {
 	us_socket_timeout(s, 30);
 
 	printf("Client connected\n");
+
+	return s;
 }
 
 /* Socket timeout handler */
-void on_echo_socket_timeout(struct us_socket *s) {
+struct us_socket *on_echo_socket_timeout(struct us_socket *s) {
 	printf("Client was idle for too long\n");
-	us_socket_close(s);
+	return us_socket_close(s);
 }
 
 int main() {
@@ -114,7 +124,16 @@ int main() {
 	struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
 
 	/* Socket context */
+#ifndef LIBUS_NO_SSL
+	struct us_ssl_socket_context_options ssl_options = {};
+	ssl_options.key_file_name = "/home/alexhultman/uWebSockets/misc/ssl/key.pem";
+	ssl_options.cert_file_name = "/home/alexhultman/uWebSockets/misc/ssl/cert.pem";
+	ssl_options.passphrase = "1234";
+
+	struct us_socket_context *echo_context = us_create_ssl_socket_context(loop, sizeof(struct echo_context), ssl_options);
+#else
 	struct us_socket_context *echo_context = us_create_socket_context(loop, sizeof(struct echo_context));
+#endif
 
 	/* Registering event handlers */
 	us_socket_context_on_open(echo_context, on_echo_socket_open);

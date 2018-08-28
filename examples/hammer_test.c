@@ -1,29 +1,7 @@
 /* This example, or test, is a moron test where the library is being hammered in all the possible ways randomly over time */
 
 #include <libusockets.h>
-
-#ifndef LIBUS_NO_SSL
-#define us_socket us_ssl_socket
-#define us_socket_context us_ssl_socket_context
-#define us_socket_write us_ssl_socket_write
-#define us_socket_close us_ssl_socket_close
-#define us_socket_shutdown us_ssl_socket_shutdown
-#define us_socket_context_on_end us_ssl_socket_context_on_end
-#define us_socket_context_on_open us_ssl_socket_context_on_open
-#define us_socket_context_on_close us_ssl_socket_context_on_close
-#define us_socket_context_on_writable us_ssl_socket_context_on_writable
-#define us_socket_context_on_data us_ssl_socket_context_on_data
-#define us_socket_context_on_timeout us_ssl_socket_context_on_timeout
-#define us_socket_ext us_ssl_socket_ext
-#define us_socket_context_ext us_ssl_socket_context_ext
-#define us_socket_get_context us_ssl_socket_get_context
-#define us_socket_context_listen us_ssl_socket_context_listen
-#define us_socket_timeout us_ssl_socket_timeout
-#define us_socket_context_connect us_ssl_socket_context_connect
-#define us_socket_context_adopt_socket us_ssl_socket_context_adopt_socket
-#define us_create_child_socket_context us_create_child_ssl_socket_context
-#define us_socket_context_free us_ssl_socket_context_free
-#endif
+#include "helper.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,29 +1,11 @@
 /* This is a barebone keep-alive HTTP server */
 
 #include <libusockets.h>
+#include "helper.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef LIBUS_NO_SSL
-#define us_socket us_ssl_socket
-#define us_socket_context us_ssl_socket_context
-#define us_socket_write us_ssl_socket_write
-#define us_socket_close us_ssl_socket_close
-#define us_socket_shutdown us_ssl_socket_shutdown
-#define us_socket_context_on_end us_ssl_socket_context_on_end
-#define us_socket_context_on_open us_ssl_socket_context_on_open
-#define us_socket_context_on_close us_ssl_socket_context_on_close
-#define us_socket_context_on_writable us_ssl_socket_context_on_writable
-#define us_socket_context_on_data us_ssl_socket_context_on_data
-#define us_socket_context_on_timeout us_ssl_socket_context_on_timeout
-#define us_socket_ext us_ssl_socket_ext
-#define us_socket_context_ext us_ssl_socket_context_ext
-#define us_socket_get_context us_ssl_socket_get_context
-#define us_socket_context_listen us_ssl_socket_context_listen
-#define us_socket_timeout us_ssl_socket_timeout
-#endif
 
 struct http_socket {
 	/* How far we have streamed our response */
@@ -50,25 +32,29 @@ void on_post(struct us_loop *loop) {
 
 }
 
-void on_http_socket_writable(struct us_socket *s) {
+struct us_socket *on_http_socket_writable(struct us_socket *s) {
 	struct http_socket *http_socket = (struct http_socket *) us_socket_ext(s);
 	struct http_context *http_context = (struct http_context *) us_socket_context_ext(us_socket_get_context(s));
 
 	/* Stream whatever is remaining of the response */
 	http_socket->offset += us_socket_write(s, http_context->response + http_socket->offset, http_context->length - http_socket->offset, 0);
+
+	return s;
 }
 
-void on_http_socket_close(struct us_socket *s) {
+struct us_socket *on_http_socket_close(struct us_socket *s) {
 	printf("Client disconnected\n");
+
+	return s;
 }
 
-void on_http_socket_end(struct us_socket *s) {
+struct us_socket *on_http_socket_end(struct us_socket *s) {
 	/* HTTP does not support half-closed sockets */
 	us_socket_shutdown(s);
-	us_socket_close(s);
+	return us_socket_close(s);
 }
 
-void on_http_socket_data(struct us_socket *s, char *data, int length) {
+struct us_socket *on_http_socket_data(struct us_socket *s, char *data, int length) {
 	/* Get socket extension and the socket's context's extension */
 	struct http_socket *http_socket = (struct http_socket *) us_socket_ext(s);
 	struct http_context *http_context = (struct http_context *) us_socket_context_ext(us_socket_get_context(s));
@@ -78,9 +64,11 @@ void on_http_socket_data(struct us_socket *s, char *data, int length) {
 
 	/* Reset idle timer */
 	us_socket_timeout(s, 30);
+
+	return s;
 }
 
-void on_http_socket_open(struct us_socket *s, int is_client) {
+struct us_socket *on_http_socket_open(struct us_socket *s, int is_client) {
 	struct http_socket *http_socket = (struct http_socket *) us_socket_ext(s);
 
 	/* Reset offset */
@@ -90,11 +78,13 @@ void on_http_socket_open(struct us_socket *s, int is_client) {
 	us_socket_timeout(s, 30);
 
 	printf("Client connected\n");
+
+	return s;
 }
 
-void on_http_socket_timeout(struct us_socket *s) {
+struct us_socket *on_http_socket_timeout(struct us_socket *s) {
 	/* Close idle HTTP sockets */
-	us_socket_close(s);
+	return us_socket_close(s);
 }
 
 int main() {

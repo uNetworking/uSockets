@@ -61,5 +61,6 @@ WIN32_EXPORT struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_
  * parent socket context for some shared resources. Child socket contexts should be used together with socket adoptions and nothing else. */
 WIN32_EXPORT struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context);
 
+WIN32_EXPORT struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context);
 
 #endif
