@@ -275,6 +275,15 @@ void us_internal_free_loop_ssl_data(struct us_loop *loop) {
 }
 
 /* Per-context functions */
+struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context, int context_ext_size) {
+    struct us_ssl_socket_context *child_context = (struct us_ssl_socket_context *) us_create_socket_context(context->sc.loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
+
+    // I think this is the only thing being shared
+    child_context->ssl_context = context->ssl_context;
+
+    return child_context;
+}
+
 struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options) {
 
     us_internal_init_loop_ssl_data(loop);
@@ -442,11 +451,7 @@ struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_co
     return s;
 }
 
-struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context) {
-    return context;
-}
-
-struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context, int context_ext_size) {
+struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
     return context->sc.loop;
 }
 
