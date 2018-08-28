@@ -150,6 +150,20 @@ struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, int ext_si
     return malloc(sizeof(struct us_poll) + ext_size);
 }
 
+// this one is broken, see us_poll
+struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_size) {
+
+    // do not support it yet
+    return p;
+
+    struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
+    if (p != new_p) {
+        new_p->uv_p.data = new_p;
+    }
+
+    return new_p;
+}
+
 // timer
 struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, int ext_size) {
     struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_timer_t) + ext_size);

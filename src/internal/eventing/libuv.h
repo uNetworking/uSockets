@@ -17,6 +17,7 @@ struct us_loop {
 };
 
 struct us_poll {
+    // this one needs to be a pointer to support resize
     uv_poll_t uv_p;
     LIBUS_SOCKET_DESCRIPTOR fd;
     unsigned char poll_type;

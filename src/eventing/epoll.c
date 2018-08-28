@@ -47,9 +47,11 @@ struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_
     int events = us_poll_events(p);
 
     struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
-    //if (p != new_p && events) {
+    if (p != new_p && events) {
+        // forcefully update poll by stripping away already set events
+        new_p->state.poll_type = us_internal_poll_type(new_p);
         us_poll_change(new_p, loop, events);
-    //}
+    }
 
     if (loop->ready_events[loop->fd_iterator].data.ptr != p) {
         for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
@@ -91,10 +93,7 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
 }
 
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
-
-    // the bug here is that we really need to change even though the events is the same in case of resize!
-
-    //if (us_poll_events(p) != events) {
+    if (us_poll_events(p) != events) {
 
         p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
@@ -102,7 +101,7 @@ void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
         event.events = events;
         event.data.ptr = p;
         epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
-    //}
+    }
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
