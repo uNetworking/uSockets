@@ -23,4 +23,4 @@ WIN32_EXPORT void us_socket_shutdown(struct us_socket *s);
 WIN32_EXPORT int us_socket_is_shut_down(struct us_socket *s);
 
 /* Immediately closes the socket */
-WIN32_EXPORT void us_socket_close(struct us_socket *s);
+WIN32_EXPORT struct us_socket *us_socket_close(struct us_socket *s);

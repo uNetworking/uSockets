@@ -25,10 +25,10 @@ void us_loop_run(struct us_loop *loop) {
 
     while (loop->num_polls) {
         loop->data.pre_cb(loop);
-        int num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
-        for (int i = 0; i < num_fd_ready; i++) {
-            struct us_poll *poll = (struct us_poll *) loop->ready_events[i].data.ptr;
-            us_internal_dispatch_ready_poll(poll, loop->ready_events[i].events & (EPOLLERR | EPOLLHUP), loop->ready_events[i].events);
+        loop->num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
+        for (loop->fd_iterator = 0; loop->fd_iterator < loop->num_fd_ready; loop->fd_iterator++) {
+            struct us_poll *poll = (struct us_poll *) loop->ready_events[loop->fd_iterator].data.ptr;
+            us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
         }
         us_internal_free_closed_sockets(loop);
         loop->data.post_cb(loop);
@@ -47,8 +47,17 @@ struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, int ext_
     int events = us_poll_events(p);
 
     struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
-    if (p != new_p && events) {
+    //if (p != new_p && events) {
         us_poll_change(new_p, loop, events);
+    //}
+
+    if (loop->ready_events[loop->fd_iterator].data.ptr != p) {
+        for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
+            if (loop->ready_events[i].data.ptr == p) {
+                loop->ready_events[i].data.ptr = new_p;
+                break;
+            }
+        }
     }
 
     return new_p;
@@ -82,7 +91,10 @@ void us_poll_start(struct us_poll *p, struct us_loop *loop, int events) {
 }
 
 void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
-    if (us_poll_events(p) != events) {
+
+    // the bug here is that we really need to change even though the events is the same in case of resize!
+
+    //if (us_poll_events(p) != events) {
 
         p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
@@ -90,7 +102,7 @@ void us_poll_change(struct us_poll *p, struct us_loop *loop, int events) {
         event.events = events;
         event.data.ptr = p;
         epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
-    }
+    //}
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {

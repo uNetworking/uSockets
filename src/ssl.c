@@ -1,3 +1,5 @@
+#define LIBUS_NO_SSL
+
 #ifndef LIBUS_NO_SSL
 
 #include "libusockets.h"

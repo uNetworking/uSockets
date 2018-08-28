@@ -15,6 +15,7 @@ struct us_loop_data {
     struct us_internal_async *wakeup_async;
     int last_write_failed;
     struct us_socket_context *head;
+    struct us_socket_context *iterator;
     void *recv_buf;
     void *ssl_data;
     void (*pre_cb)(struct us_loop *);

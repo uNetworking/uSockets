@@ -37,37 +37,41 @@ struct us_listen_socket *listen_socket;
 void *long_buffer;
 int long_length = 5 * 1024 * 1024;
 
-// todo: if write failed, it needs to be called again with THE SAME content!
-// otherwise SSL errors!
-
-// add socket adoption as one case! (calls perform_random_operation again)
 // also make sure to have socket ext data
 // and context ext data
 // and loop ext data
 
-void perform_random_operation(struct us_socket *s) {
-    switch (rand() % 4) {
+// todo: it would be nice to randomly select socket instead of
+// using the one responsible for the event
+struct us_socket *perform_random_operation(struct us_socket *s) {
+    switch (rand() % 5) {
         case 0: {
-            us_socket_close(s);
+            // close
+            return us_socket_close(s);
         }
-        break;
         case 1: {
-            us_socket_write(s, "short", 5, 0);
+            // adopt
+            s = us_socket_context_adopt_socket(us_socket_get_context(s), s, rand() % 10);
+            return perform_random_operation(s);
         }
-        break;
         case 2: {
-            us_socket_shutdown(s);
+            // write
+            us_socket_write(s, (char *) long_buffer, rand() % long_length, 0);
         }
         break;
         case 3: {
-        // if not complete, we need to queue this up for the writable event!
-            us_socket_write(s, (char *) long_buffer, long_length, 0);
+            // shutdown
+            us_socket_shutdown(s);
         }
         break;
-
-        // case 4: adopt socket (makes use of the socket's context's data to point to the other context)
-        // case 5: do whatever via the wakeup event (make use of a socket collection in the loop data)
+        case 4: {
+            // loop wakeup and timeout sweep
+            us_socket_timeout(s, 1);
+            us_wakeup_loop(us_socket_context_loop(us_socket_get_context(s)));
+        }
+        break;
     }
+    return s;
 }
 
 struct http_socket {
@@ -79,59 +83,71 @@ struct http_context {
 };
 
 void on_wakeup(struct us_loop *loop) {
-    // test these also
+    // note: we expose internal functions to trigger a timeout sweep to find bugs
+    extern void us_internal_timer_sweep(struct us_loop *loop);
+    us_internal_timer_sweep(loop);
 }
 
+// maybe use thse to count spurious wakeups?
+// that is, if we get tons of pre/post over and over without any events
+// that would point towards 100% cpu usage kind of bugs
 void on_pre(struct us_loop *loop) {
     printf("PRE\n");
+
+    // reset a boolean here
 }
 
 void on_post(struct us_loop *loop) {
-
+    // check if we did perform_random_operation
 }
 
-void on_http_socket_writable(struct us_socket *s) {
-    perform_random_operation(s);
+struct us_socket *on_http_socket_writable(struct us_socket *s) {
+    return perform_random_operation(s);
 }
 
-void on_http_socket_close(struct us_socket *s) {
+struct us_socket *on_http_socket_close(struct us_socket *s) {
     closed_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
     if (closed_connections == 10000) {
         us_listen_socket_close(listen_socket);
     } else {
-        perform_random_operation(s);
+        return perform_random_operation(s);
     }
+    return s;
 }
 
-void on_http_socket_end(struct us_socket *s) {
+struct us_socket *on_http_socket_end(struct us_socket *s) {
     // we need to close on shutdown
-    us_socket_close(s);
-    perform_random_operation(s);
+    s = us_socket_close(s);
+    return perform_random_operation(s);
 }
 
-void on_http_socket_data(struct us_socket *s, char *data, int length) {
+struct us_socket *on_http_socket_data(struct us_socket *s, char *data, int length) {
+    if (length == 0) {
+        printf("ERROR: Got data event with no data\n");
+        exit(-1);
+    }
+
     //printf("Fick data: <%.*s>\n", length, data);
-    perform_random_operation(s);
+    return perform_random_operation(s);
 }
 
-void on_http_socket_open(struct us_socket *s, int is_client) {
+struct us_socket *on_http_socket_open(struct us_socket *s, int is_client) {
     opened_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
-    if (opened_connections % 2 == 0 && opened_connections < 10000) {
+    if (/*opened_connections % 2 == 0*/ is_client && opened_connections < 10000) {
         us_socket_context_connect(http_context, "localhost", 3000, 0, sizeof(struct http_socket));
     }
 
-    perform_random_operation(s);
+    return perform_random_operation(s);
 }
 
-void on_http_socket_timeout(struct us_socket *s) {
-    perform_random_operation(s);
+struct us_socket *on_http_socket_timeout(struct us_socket *s) {
+    return perform_random_operation(s);
 }
 
-// todo: a separate thread which hammers the wakeup which tries to mess up as much as possible
 int main() {
     srand(time(0));
     long_buffer = calloc(long_length, 1);
@@ -149,7 +165,7 @@ int main() {
     http_context = us_create_socket_context(loop, sizeof(struct http_context));
 #endif
 
-    struct us_socket_CONTEXT *websocket_context = us_create_child_socket_context(http_context);
+    struct us_socket_context *websocket_context = us_create_child_socket_context(http_context);
 
     us_socket_context_on_open(http_context, on_http_socket_open);
     us_socket_context_on_data(http_context, on_http_socket_data);

@@ -54,15 +54,16 @@ struct us_socket_context {
     struct us_loop *loop;
     //unsigned short timeout;
     struct us_socket *head;
+    struct us_socket *iterator;
     struct us_socket_context *next;
 
-    void (*on_open)(struct us_socket *, int is_client);
-    void (*on_data)(struct us_socket *, char *data, int length);
-    void (*on_writable)(struct us_socket *);
-    void (*on_close)(struct us_socket *);
+    struct us_socket *(*on_open)(struct us_socket *, int is_client);
+    struct us_socket *(*on_data)(struct us_socket *, char *data, int length);
+    struct us_socket *(*on_writable)(struct us_socket *);
+    struct us_socket *(*on_close)(struct us_socket *);
     //void (*on_timeout)(struct us_socket_context *);
-    void (*on_socket_timeout)(struct us_socket *);
-    void (*on_end)(struct us_socket *);
+    struct us_socket *(*on_socket_timeout)(struct us_socket *);
+    struct us_socket *(*on_end)(struct us_socket *);
 };
 
 struct us_internal_callback {

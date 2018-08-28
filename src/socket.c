@@ -44,7 +44,9 @@ void us_socket_flush(struct us_socket *s) {
     }
 }
 
-void us_socket_close(struct us_socket *s) {
+// if anything, close should return null and people should handle that!
+// including us really, however I guess libuv requires it to stick around?
+struct us_socket *us_socket_close(struct us_socket *s) {
     if (!us_internal_socket_is_closed(s)) {
         us_internal_socket_context_unlink(s->context, s);
         us_poll_stop((struct us_poll *) s, s->context->loop);
@@ -57,8 +59,9 @@ void us_socket_close(struct us_socket *s) {
         // signal closed socket by having prev = next
         s->prev = s->next;
 
-        s->context->on_close(s);
+        return s->context->on_close(s);
     }
+    return s;
 }
 
 int us_socket_is_shut_down(struct us_socket *s) {

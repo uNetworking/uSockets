@@ -15,6 +15,8 @@ struct us_loop {
 
     // epoll extensions
     int num_polls;
+    int num_fd_ready;
+    int fd_iterator;
     int epfd;
     struct epoll_event ready_events[1024];
 };

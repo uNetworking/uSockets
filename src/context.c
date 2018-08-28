@@ -9,10 +9,12 @@ struct us_socket_context *us_create_socket_context(struct us_loop *loop, int con
     // us_socket_context_init(loop)
     context->loop = loop;
     context->head = 0;
+    context->iterator = 0;
     context->next = 0;
 
     // link it to loop
     // us_loop_link(context)
+    // bug: support multiple contexts
     loop->data.head = context;
 
     return context;
@@ -87,16 +89,28 @@ struct us_socket_context *us_create_child_socket_context(struct us_socket_contex
 }
 
 struct us_socket *us_socket_context_adopt_socket(struct us_socket_context *context, struct us_socket *s, int ext_size) {
+    // if you do this while closed, it's your own problem
+    if (us_internal_socket_is_closed(s)) {
+        return s;
+    }
+
+    // this will update the iterator if in on_timeout
     us_internal_socket_context_unlink(s->context, s);
 
-    struct us_socket *new_s = (struct us_socket *) us_poll_resize(&s->p, s->context->loop, ext_size);
+    struct us_socket *new_s = (struct us_socket *) us_poll_resize(&s->p, s->context->loop, sizeof(struct us_socket) + ext_size);
 
     us_internal_socket_context_link(context, new_s);
 
     return new_s;
 }
 
+// check and update context->iterator against s!
 void us_internal_socket_context_unlink(struct us_socket_context *context, struct us_socket *s) {
+    // update iterator
+    if (s == context->iterator) {
+        context->iterator = s->next;
+    }
+
     if (s->prev == s->next) {
         context->head = 0;
     } else {
@@ -111,6 +125,8 @@ void us_internal_socket_context_unlink(struct us_socket_context *context, struct
     }
 }
 
+// also check iterator, etc
+// we always add in the top, which means we never modify any next
 void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
     s->timeout = 0; // this was needed?
     s->next = context->head;
@@ -121,27 +137,27 @@ void us_internal_socket_context_link(struct us_socket_context *context, struct u
     context->head = s;
 }
 
-void us_socket_context_on_open(struct us_socket_context *context, void (*on_open)(struct us_socket *s, int is_client)) {
+void us_socket_context_on_open(struct us_socket_context *context, struct us_socket *(*on_open)(struct us_socket *s, int is_client)) {
     context->on_open = on_open;
 }
 
-void us_socket_context_on_close(struct us_socket_context *context, void (*on_close)(struct us_socket *s)) {
+void us_socket_context_on_close(struct us_socket_context *context, struct us_socket *(*on_close)(struct us_socket *s)) {
     context->on_close = on_close;
 }
 
-void us_socket_context_on_data(struct us_socket_context *context, void (*on_data)(struct us_socket *s, char *data, int length)) {
+void us_socket_context_on_data(struct us_socket_context *context, struct us_socket *(*on_data)(struct us_socket *s, char *data, int length)) {
     context->on_data = on_data;
 }
 
-void us_socket_context_on_writable(struct us_socket_context *context, void (*on_writable)(struct us_socket *s)) {
+void us_socket_context_on_writable(struct us_socket_context *context, struct us_socket *(*on_writable)(struct us_socket *s)) {
     context->on_writable = on_writable;
 }
 
-void us_socket_context_on_timeout(struct us_socket_context *context, void (*on_timeout)(struct us_socket *)) {
+void us_socket_context_on_timeout(struct us_socket_context *context, struct us_socket *(*on_timeout)(struct us_socket *)) {
     context->on_socket_timeout = on_timeout;
 }
 
-void us_socket_context_on_end(struct us_socket_context *context, void (*on_end)(struct us_socket *)) {
+void us_socket_context_on_end(struct us_socket_context *context, struct us_socket *(*on_end)(struct us_socket *)) {
     context->on_end = on_end;
 }
 

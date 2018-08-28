@@ -2,11 +2,14 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
+#define LIBUS_NO_SSL
+
 void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop)) {
     loop->data.sweep_timer = us_create_timer(loop, 1, 0);
     loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);
     loop->data.ssl_data = 0;
     loop->data.head = 0;
+    loop->data.iterator = 0;
     loop->data.closed_head = 0;
 
     loop->data.pre_cb = pre_cb;
@@ -36,16 +39,53 @@ void us_wakeup_loop(struct us_loop *loop) {
 }
 
 void us_internal_timer_sweep(struct us_loop *loop) {
+
+    if (loop->data.iterator != 0) {
+        printf("TIMER SWEEP RECURSION!\n");
+        exit(-2);
+    }
+
+    // we need loop->socket_iterator
+    // and loop->context_iterator
+    // then unlink/link functions for both
+    // also make sure to check for recursion here! timer_sweep should never run recursively!
+
+    struct us_loop_data *loop_data = &loop->data;
+
     printf("sweeping timers now\n");
-    for (struct us_socket_context *context = loop->data.head; context; context = context->next) {
-        for (struct us_socket *s = context->head; s; s = s->next) {
-            if (--(s->timeout) == 0) {
+    for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
+
+        struct us_socket_context *context = loop_data->iterator;
+
+        for (context->iterator = context->head; context->iterator; ) {
+
+            struct us_socket *s = context->iterator;
+
+            // this shouldn't count down if already at 0!
+            if (s->timeout && --(s->timeout) == 0) {
+
+                // if we adopt in the middle here we are fucked and thus it crashes
                 context->on_socket_timeout(s);
+
+                // did they somehow update the iterator? (they unlinked, etc?)
+                if (s == context->iterator) {
+                    context->iterator = s->next;
+                }
+            } else {
+                context->iterator = s->next;
             }
+
+
         }
+    }
+
+    if (loop_data->iterator) {
+        printf("WTF!!!\n");
+        exit(-2);
     }
 }
 
+// this one also works with the linked list
 void us_internal_free_closed_sockets(struct us_loop *loop) {
     // free all closed sockets (maybe we want to reverse this order?)
     if (loop->data.closed_head) {
@@ -122,18 +162,20 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
         break;
     case POLL_TYPE_SOCKET_SHUT_DOWN:
     case POLL_TYPE_SOCKET: {
+            // any use of p after this point should be invalid
             struct us_socket *s = (struct us_socket *) p;
 
             // epollerr epollhup
             if (error) {
-                us_socket_close(s);
+                s = p = us_socket_close(s);
                 return;
             }
 
             if (events & LIBUS_SOCKET_WRITABLE) {
+                // bug: what if we changed context! then last_write_failed will not point to the same!
                 s->context->loop->data.last_write_failed = 0;
 
-                s->context->on_writable(s);
+                s = p = s->context->on_writable(s);
 
                 if (us_internal_socket_is_closed(s)) {
                     return;
@@ -148,18 +190,18 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             if (events & LIBUS_SOCKET_READABLE) {
                 int length = bsd_recv(us_poll_fd(p), s->context->loop->data.recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
-                    s->context->on_data((struct us_socket *) p, s->context->loop->data.recv_buf, length);
+                    s = p = s->context->on_data(s, s->context->loop->data.recv_buf, length);
                 } else if (!length) {
                     // is_shut_down is better name now that we do not wait for writing finished
                     if (us_socket_is_shut_down(s)) {
-                        us_socket_close(s);
+                        s = p = us_socket_close(s);
                     } else {
                         us_poll_change(p, us_socket_get_context(s)->loop, us_poll_events(p) & LIBUS_SOCKET_WRITABLE);
                         // for HTTP and other similar high-level protocols a close is needed
-                        s->context->on_end(s);
+                        s = p = s->context->on_end(s);
                     }
                 } else if (length == LIBUS_SOCKET_ERROR && !bsd_would_block()) {
-                    us_socket_close(s);
+                    s = p = us_socket_close(s);
                 }
 
                 // here we need is_closed and free or queue up the poll for removal in next loop iteration

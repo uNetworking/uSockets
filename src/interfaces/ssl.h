@@ -21,8 +21,6 @@ WIN32_EXPORT void us_ssl_socket_context_on_close(struct us_ssl_socket_context *c
 WIN32_EXPORT void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, void (*on_data)(struct us_ssl_socket *s, char *data, int length));
 WIN32_EXPORT void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, void (*on_writable)(struct us_ssl_socket *s));
 WIN32_EXPORT void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, void (*on_timeout)(struct us_ssl_socket *s));
-
-/* Technically SSL sockets cannot be half-closed, so this callback is never called */
 WIN32_EXPORT void us_ssl_socket_context_on_end(struct us_ssl_socket_context *context, void (*on_end)(struct us_ssl_socket *s));
 
 /* See us_socket_context */
