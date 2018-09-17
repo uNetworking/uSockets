@@ -155,6 +155,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
     loop_ssl_data->ssl_read_input_length = length;
     loop_ssl_data->ssl_read_input_offset = 0;
     loop_ssl_data->ssl_socket = &s->s;
+    loop_ssl_data->msg_more = 0;
 
     if (us_ssl_socket_is_shut_down(s)) {
 
@@ -297,8 +298,8 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 
     // options
     SSL_CTX_set_read_ahead(context->ssl_context, 1);
-    //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
+    SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
 
     //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
     SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
