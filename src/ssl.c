@@ -151,6 +151,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
     struct us_loop *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
+    // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
     loop_ssl_data->ssl_read_input = data;
     loop_ssl_data->ssl_read_input_length = length;
     loop_ssl_data->ssl_read_input_offset = 0;
@@ -175,15 +176,28 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
 
     int read = 0;
     while (loop_ssl_data->ssl_read_input_length) {
+        // a better check is to have a global integer be three modes: inside_nothing, inside_read, inside_write to better track the stack
+        //printf("Calling SSL_read\n");
         int just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + read, LIBUS_RECV_BUFFER_LENGTH - read);
+        //printf("Returned from SSL_read\n");
         if (just_read > 0) {
             read += just_read;
         } else if (loop_ssl_data->ssl_read_input_length) {
-            // serious error here, we could not read all data
-            printf("ERROR: SSL_read could not drain input buffer\n");
+
+            int err = SSL_get_error(s->ssl, just_read);
+            if (err == SSL_ERROR_SSL) {
+                printf("SSL_read returned with SSL_ERROR_SSL, not our problem\n");
+            } else {
+                // serious error here, we could not read all data
+                printf("ERROR: SSL_read could not drain input buffer\n");
+                printf("ERROR: SSL_read error was: %d\n", err);
+            }
+
             return us_ssl_socket_close(s);
         }
     }
+
+    // whenever we come here, the read input length will and should and have to be 0
 
     if (read > 0) {
 
@@ -415,11 +429,21 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
     struct us_loop *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
+    // it makes literally no sense to touch this here! it should start at 0 and ONLY be set and reset by the on_data function!
+    // the way is is now, triggering a write from a read will essentially delete all input data!
+    // what we need to do is to check if this ever is non-zero and print a warning
+
+
+
     loop_ssl_data->ssl_read_input_length = 0;
+
+
     loop_ssl_data->ssl_socket = &s->s;
     loop_ssl_data->msg_more = msg_more;
     loop_ssl_data->last_write_was_msg_more = 0;
+    //printf("Calling SSL_write\n");
     int written = SSL_write(s->ssl, data, length);
+    //printf("Returning from SSL_write\n");
     loop_ssl_data->msg_more = 0;
 
     if (loop_ssl_data->last_write_was_msg_more && !msg_more) {
@@ -459,8 +483,18 @@ void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
         struct us_loop *loop = us_socket_context_loop(&context->sc);
         struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
+        // also makes no sense to touch this here!
+        // however the idea is that if THIS socket is not the same as ssl_socket then this data is not for me
+        // but this is not correct as it is currently anyways, any data available should be properly reset
         loop_ssl_data->ssl_read_input_length = 0;
+
+
+        // essentially we need two of these: one for CURRENT CALL and one for CURRENT SOCKET WITH DATA
+        // if those match in the BIO function then you may read, if not then you may not read
+        // we need ssl_read_socket to be set in on_data and checked in the BIO
         loop_ssl_data->ssl_socket = &s->s;
+
+
         loop_ssl_data->msg_more = 0;
 
         // sets SSL_SENT_SHUTDOWN no matter what (not actually true if error!)
