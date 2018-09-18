@@ -303,6 +303,7 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 
     //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
     SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
+    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_TLSv1);
 
     // these are going to be extended
     if (options.passphrase) {
@@ -318,6 +319,33 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 
     if (options.key_file_name) {
         if (SSL_CTX_use_PrivateKey_file(context->ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+            return 0;
+        }
+    }
+
+    if (options.dh_params_file_name) {
+        /* Set up ephemeral DH parameters. */
+        DH *dh_2048 = NULL;
+        FILE *paramfile;
+        paramfile = fopen(options.dh_params_file_name, "r");
+
+        if (paramfile) {
+            dh_2048 = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
+            fclose(paramfile);
+        } else {
+            return 0;
+        }
+
+        if (dh_2048 == NULL) {
+            return 0;
+        }
+
+        if (SSL_CTX_set_tmp_dh(context->ssl_context, dh_2048) != 1) {
+            return 0;
+        }
+
+        /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
+        if (SSL_CTX_set_cipher_list(context->ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
             return 0;
         }
     }
