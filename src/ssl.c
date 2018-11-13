@@ -337,6 +337,14 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
         }
     }
 
+    if (options.ca_file_name) {
+        if (SSL_CTX_load_verify_locations(context->ssl_context, options.ca_file_name, NULL) != 1){
+            return 0;
+        }
+        SSL_CTX_set_client_CA_list(context->ssl_context, SSL_load_client_CA_file(options.ca_file_name));
+        SSL_CTX_set_verify(context->ssl_context, SSL_VERIFY_PEER, NULL);
+    }
+
     if (options.dh_params_file_name) {
         /* Set up ephemeral DH parameters. */
         DH *dh_2048 = NULL;

@@ -106,6 +106,7 @@ struct us_ssl_socket_context_options {
     const char *key_file_name;
     const char *cert_file_name;
     const char *passphrase;
+    const char *ca_file_name;
 };
 
 /* See us_create_socket_context. SSL variant taking SSL options structure */
