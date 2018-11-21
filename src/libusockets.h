@@ -21,6 +21,8 @@
 #define LIBUS_RECV_BUFFER_LENGTH 524288
 /* A timeout granularity of 4 seconds means give or take 4 seconds from set timeout */
 #define LIBUS_TIMEOUT_GRANULARITY 4
+/* 32 byte padding of receive buffer ends */
+#define LIBUS_RECV_BUFFER_PADDING 32
 
 /* Define what a socket descriptor is based on platform */
 #ifdef _WIN32

@@ -20,7 +20,7 @@
 
 void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop)) {
     loop->data.sweep_timer = us_create_timer(loop, 1, 0);
-    loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH);
+    loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
     loop->data.ssl_data = 0;
     loop->data.head = 0;
     loop->data.iterator = 0;
@@ -213,9 +213,9 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
             }
 
             if (events & LIBUS_SOCKET_READABLE) {
-                int length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf, LIBUS_RECV_BUFFER_LENGTH, 0);
+                int length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
-                    s = s->context->on_data(s, s->context->loop->data.recv_buf, length);
+                    s = s->context->on_data(s, s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, length);
                 } else if (!length) {
                     // is_shut_down is better name now that we do not wait for writing finished
                     if (us_socket_is_shut_down(s)) {
