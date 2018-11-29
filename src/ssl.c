@@ -190,69 +190,55 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
         return s;
     }
 
-    // this loop is completely busted; what happens if we run out of buffer to put things in?
-
+    // bug checking: this loop needs a lot of attention and clean-ups and check-ups
     int read = 0;
-    while (loop_ssl_data->ssl_read_input_length) {
-        // a better check is to have a global integer be three modes: inside_nothing, inside_read, inside_write to better track the stack
-        //printf("Calling SSL_read\n");
+    restart:
+    while (1) {
         int just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING + read, LIBUS_RECV_BUFFER_LENGTH - read);
-        //printf("Returned from SSL_read\n");
-        if (just_read > 0) {
-            read += just_read;
-        } else if (loop_ssl_data->ssl_read_input_length) {
 
+        if (just_read <= 0) {
             int err = SSL_get_error(s->ssl, just_read);
-            if (err == SSL_ERROR_SSL) {
-                printf("SSL_read returned with SSL_ERROR_SSL, not our problem\n");
+
+            // as far as I know these are the only errors we want to handle
+            if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+                // terminate connection here
+                return us_ssl_socket_close(s);
             } else {
-                // serious error here, we could not read all data
-                printf("ERROR: SSL_read could not drain input buffer\n");
-                printf("ERROR: SSL_read error was: %d\n", err);
+                // emit the data we have and exit
+
+                // assume we emptied the input buffer fully or error here as well!
+                if (loop_ssl_data->ssl_read_input_length) {
+                    return us_ssl_socket_close(s);
+                }
+
+                // cannot emit zero length to app
+                if (!read) {
+                    break;
+                }
+
+                s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
+                if (us_internal_socket_is_closed(&s->s)) {
+                    return s;
+                }
+
+                break;
             }
 
-            return us_ssl_socket_close(s);
         }
-    }
 
-    // whenever we come here, the read input length will and should and have to be 0
-
-    int just_read;
-drain:
-    just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING + read, LIBUS_RECV_BUFFER_LENGTH - read);
-    if (just_read > 0) {
         read += just_read;
-        goto drain;
-    }
 
-    // we ran out of buffer to put things in, should have emitted data
-    if (read == LIBUS_RECV_BUFFER_LENGTH) {
-        printf("BUFFER OUT OF IT NOW YES!\n");
-        exit(2);
-    }
+        // at this point we might be full and need to emit the data to application and start over
+        if (read == LIBUS_RECV_BUFFER_LENGTH) {
 
-    if (read > 0) {
+            // emit data and restart
+            s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
+            if (us_internal_socket_is_closed(&s->s)) {
+                return s;
+            }
 
-        // note: if we got a shutdown we cannot send anything, so we need to handle shutdown earlier than this
-
-        s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
-        if (us_internal_socket_is_closed(&s->s)) {
-            return s;
-        }
-
-        // if we are closed from here, return!
-
-    } else if (read == 0) {
-        // hmmmmmm?
-        // ignore any sending of 0 length, wtf
-    } else {
-        int err = SSL_get_error(s->ssl, read);
-        //if (err == SSL_ERROR_ZERO_RETURN) {
-            // is this path even needed?
-            //goto received_shutdown;
-        /*} else */if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-            // terminate connection here
-            return us_ssl_socket_close(s);
+            read = 0;
+            goto restart;
         }
     }
 
