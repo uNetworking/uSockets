@@ -108,7 +108,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
 
     if (!loop_ssl_data->ssl_read_input_length) {
         BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_READ);
-        return 0;
+        return -1;
     }
 
     if (length > loop_ssl_data->ssl_read_input_length) {
@@ -190,6 +190,8 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
         return s;
     }
 
+    // this loop is completely busted; what happens if we run out of buffer to put things in?
+
     int read = 0;
     while (loop_ssl_data->ssl_read_input_length) {
         // a better check is to have a global integer be three modes: inside_nothing, inside_read, inside_write to better track the stack
@@ -214,6 +216,20 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
     }
 
     // whenever we come here, the read input length will and should and have to be 0
+
+    int just_read;
+drain:
+    just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING + read, LIBUS_RECV_BUFFER_LENGTH - read);
+    if (just_read > 0) {
+        read += just_read;
+        goto drain;
+    }
+
+    // we ran out of buffer to put things in, should have emitted data
+    if (read == LIBUS_RECV_BUFFER_LENGTH) {
+        printf("BUFFER OUT OF IT NOW YES!\n");
+        exit(2);
+    }
 
     if (read > 0) {
 
