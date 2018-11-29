@@ -194,7 +194,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
     while (loop_ssl_data->ssl_read_input_length) {
         // a better check is to have a global integer be three modes: inside_nothing, inside_read, inside_write to better track the stack
         //printf("Calling SSL_read\n");
-        int just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + read, LIBUS_RECV_BUFFER_LENGTH - read);
+        int just_read = SSL_read(s->ssl, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING + read, LIBUS_RECV_BUFFER_LENGTH - read);
         //printf("Returned from SSL_read\n");
         if (just_read > 0) {
             read += just_read;
@@ -219,7 +219,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
 
         // note: if we got a shutdown we cannot send anything, so we need to handle shutdown earlier than this
 
-        s = context->on_data(s, loop_ssl_data->ssl_read_output, read);
+        s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
         if (us_internal_socket_is_closed(&s->s)) {
             return s;
         }
@@ -271,7 +271,7 @@ void us_internal_init_loop_ssl_data(struct us_loop *loop) {
     if (!loop->data.ssl_data) {
         struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
 
-        loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH);
+        loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
 
         OPENSSL_init_ssl(0, NULL);
 
@@ -531,7 +531,8 @@ struct us_ssl_socket *us_ssl_socket_close(struct us_ssl_socket *s) {
 }
 
 struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_context *context, struct us_ssl_socket *s, int ext_size) {
-    return s;
+    // todo: this is completely untested
+    return us_socket_context_adopt_socket(&context->sc, &s->s, ext_size);
 }
 
 struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
