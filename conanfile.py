@@ -18,15 +18,11 @@ class uwebsocketConan(ConanFile):
     options = {"shared": [True, False]}
     default_options = "shared=False"
     generators = "cmake"
-    exports_sources = "src/*"
-
-    def source(self):
-        git = tools.Git(folder="usockets")
-        git.clone(self.url, "cmake_build")
+    exports_sources = "src/*", "CMakeLists.txt"
 
     def build(self):
         cmake = CMake(self)
-        cmake.configure(source_folder="src")
+        cmake.configure(source_folder=".")
         cmake.build()
 
     def package(self):
