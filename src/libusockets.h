@@ -26,6 +26,7 @@
 
 /* Define what a socket descriptor is based on platform */
 #ifdef _WIN32
+#pragma comment(lib, "Ws2_32.lib")
 #define NOMINMAX
 #include <WinSock2.h>
 #define LIBUS_SOCKET_DESCRIPTOR SOCKET
