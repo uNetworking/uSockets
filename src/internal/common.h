@@ -49,8 +49,6 @@ unsigned int us_internal_accept_poll_event(struct us_poll *p);
 void us_internal_init_loop_ssl_data(struct us_loop *loop);
 void us_internal_free_loop_ssl_data(struct us_loop *loop);
 
-int us_internal_socket_is_closed(struct us_socket *);
-
 void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s);
 void us_internal_socket_context_unlink(struct us_socket_context *context, struct us_socket *s);
 

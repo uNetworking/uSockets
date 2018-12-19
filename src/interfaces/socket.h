@@ -38,5 +38,8 @@ WIN32_EXPORT void us_socket_shutdown(struct us_socket *s);
 /* Returns whether the socket has been shut down or not */
 WIN32_EXPORT int us_socket_is_shut_down(struct us_socket *s);
 
+/* Returns whether this socket has been closed. Only valid if memory has not yet been released. */
+WIN32_EXPORT int us_socket_is_closed(struct us_socket *s);
+
 /* Immediately closes the socket */
 WIN32_EXPORT struct us_socket *us_socket_close(struct us_socket *s);

@@ -104,7 +104,7 @@ struct us_socket_context *us_create_child_socket_context(struct us_socket_contex
 // bug: this will set timeout to 0
 struct us_socket *us_socket_context_adopt_socket(struct us_socket_context *context, struct us_socket *s, int ext_size) {
     // if you do this while closed, it's your own problem
-    if (us_internal_socket_is_closed(s)) {
+    if (us_socket_is_closed(s)) {
         return s;
     }
 

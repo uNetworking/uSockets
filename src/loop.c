@@ -202,7 +202,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                 s = s->context->on_writable(s);
 
-                if (us_internal_socket_is_closed(s)) {
+                if (us_socket_is_closed(s)) {
                     return;
                 }
 

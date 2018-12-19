@@ -23,7 +23,7 @@ void us_internal_init_socket(struct us_socket *s) {
 }
 
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
-    if (us_internal_socket_is_closed(s) || us_socket_is_shut_down(s)) {
+    if (us_socket_is_closed(s) || us_socket_is_shut_down(s)) {
         return 0;
     }
 
@@ -63,7 +63,7 @@ void us_socket_flush(struct us_socket *s) {
 // if anything, close should return null and people should handle that!
 // including us really, however I guess libuv requires it to stick around?
 struct us_socket *us_socket_close(struct us_socket *s) {
-    if (!us_internal_socket_is_closed(s)) {
+    if (!us_socket_is_closed(s)) {
         us_internal_socket_context_unlink(s->context, s);
         us_poll_stop((struct us_poll *) s, s->context->loop);
         bsd_close_socket(us_poll_fd((struct us_poll *) s));
@@ -91,14 +91,14 @@ void us_socket_shutdown(struct us_socket *s) {
     // todo: should we emit on_close if calling shutdown on an already half-closed socket?
     // we need more states in that case, we need to track RECEIVED_FIN
     // so far, the app has to track this and call close as needed
-    if (!us_internal_socket_is_closed(s) && !us_socket_is_shut_down(s)) {
+    if (!us_socket_is_closed(s) && !us_socket_is_shut_down(s)) {
         us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
         us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
         bsd_shutdown_socket(us_poll_fd((struct us_poll *) s));
     }
 }
 
-int us_internal_socket_is_closed(struct us_socket *s) {
+int us_socket_is_closed(struct us_socket *s) {
     // this does not work as flag if only holding 1 single socket in a context
     // we only trigger this bug in a separate context since it holds no listen socket!
     //return s->prev == s->next;
