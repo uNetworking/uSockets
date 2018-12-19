@@ -217,7 +217,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
                 }
 
                 s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
-                if (us_internal_socket_is_closed(&s->s)) {
+                if (us_socket_is_closed(&s->s)) {
                     return s;
                 }
 
@@ -233,7 +233,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
 
             // emit data and restart
             s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
-            if (us_internal_socket_is_closed(&s->s)) {
+            if (us_socket_is_closed(&s->s)) {
                 return s;
             }
 
@@ -248,7 +248,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
 
         s = (struct us_ssl_socket *) context->sc.on_writable(&s->s); // cast here!
         // if we are closed here, then exit
-        if (us_internal_socket_is_closed(&s->s)) {
+        if (us_socket_is_closed(&s->s)) {
             return s;
         }
     }
@@ -438,7 +438,7 @@ struct us_ssl_socket_context *us_ssl_socket_get_context(struct us_ssl_socket *s)
 }
 
 int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, int msg_more) {
-    if (us_internal_socket_is_closed(&s->s) || us_ssl_socket_is_shut_down(s)) {
+    if (us_socket_is_closed(&s->s) || us_ssl_socket_is_shut_down(s)) {
         return 0;
     }
 
@@ -496,7 +496,7 @@ int us_ssl_socket_is_shut_down(struct us_ssl_socket *s) {
 }
 
 void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
-    if (!us_internal_socket_is_closed(&s->s) && !us_ssl_socket_is_shut_down(s)) {
+    if (!us_socket_is_closed(&s->s) && !us_ssl_socket_is_shut_down(s)) {
         struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
         struct us_loop *loop = us_socket_context_loop(&context->sc);
         struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
