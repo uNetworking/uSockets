@@ -237,6 +237,11 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     }
 }
 
+// sets up the sweep timer
+void us_loop_integrate(struct us_loop *loop) {
+    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+}
+
 void *us_loop_ext(struct us_loop *loop) {
     return loop + 1;
 }

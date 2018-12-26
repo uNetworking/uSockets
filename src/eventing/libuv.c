@@ -157,7 +157,7 @@ void us_loop_free(struct us_loop *loop) {
 }
 
 void us_loop_run(struct us_loop *loop) {
-    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+    us_loop_integrate(loop);
 
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
