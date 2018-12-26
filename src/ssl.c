@@ -111,7 +111,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
         return -1;
     }
 
-    if (length > loop_ssl_data->ssl_read_input_length) {
+    if ((unsigned int) length > loop_ssl_data->ssl_read_input_length) {
         length = loop_ssl_data->ssl_read_input_length;
     }
 
@@ -534,7 +534,7 @@ struct us_ssl_socket *us_ssl_socket_close(struct us_ssl_socket *s) {
 
 struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_context *context, struct us_ssl_socket *s, int ext_size) {
     // todo: this is completely untested
-    return us_socket_context_adopt_socket(&context->sc, &s->s, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + ext_size);
+    return (struct us_ssl_socket *) us_socket_context_adopt_socket(&context->sc, &s->s, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + ext_size);
 }
 
 struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
