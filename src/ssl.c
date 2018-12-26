@@ -394,11 +394,11 @@ void us_ssl_socket_context_free(struct us_ssl_socket_context *context) {
 }
 
 struct us_listen_socket *us_ssl_socket_context_listen(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
-    return us_socket_context_listen(&context->sc, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
+    return us_socket_context_listen(&context->sc, host, port, options, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + socket_ext_size);
 }
 
 struct us_ssl_socket *us_ssl_socket_context_connect(struct us_ssl_socket_context *context, const char *host, int port, int options, int socket_ext_size) {
-    return (struct us_ssl_socket *) us_socket_context_connect(&context->sc, host, port, options, sizeof(struct us_ssl_socket) + socket_ext_size);
+    return (struct us_ssl_socket *) us_socket_context_connect(&context->sc, host, port, options, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + socket_ext_size);
 }
 
 void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client)) {
@@ -534,7 +534,7 @@ struct us_ssl_socket *us_ssl_socket_close(struct us_ssl_socket *s) {
 
 struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_context *context, struct us_ssl_socket *s, int ext_size) {
     // todo: this is completely untested
-    return us_socket_context_adopt_socket(&context->sc, &s->s, ext_size);
+    return us_socket_context_adopt_socket(&context->sc, &s->s, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + ext_size);
 }
 
 struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
