@@ -1,7 +1,13 @@
 # libusockets.h
 This is the only header you include. Following documentation has been extracted from this header. It may be outdated, go read the header directly for up-to-date documentation.
 
-These interfaces are "alpha" and subject to change.
+These interfaces are "alpha" and subject to change. Last updated **2018-12-27**.
+
+# A quick note on compilation
+Major differences in performance can be seen based solely on compiler and/or linker options. Important is to compile with some kind of link-time-optimization mode, preferably with static linking of this library such as including all C source files in the user program build step itself. Proper compilation and linking can lead to over 25% performance increase (in my case, YMMV).
+
+# Cross-platform benchmarks
+While the library is compatible with many platforms, Linux in particular is the preferred production system. Benchmarking has been done on Windows, Linux and macOS where Linux clearly stood out as significant winner. Windows performed about half that of Linux and macOS was not much better than Windows. Do run your production systems on Linux.
 
 # Loop
 ```c
