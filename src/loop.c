@@ -75,7 +75,7 @@ void us_internal_timer_sweep(struct us_loop *loop) {
 
     struct us_loop_data *loop_data = &loop->data;
 
-    printf("sweeping timers now\n");
+    //printf("sweeping timers now\n");
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
         struct us_socket_context *context = loop_data->iterator;
