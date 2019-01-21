@@ -18,8 +18,6 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <stdalign.h>
-
 #include "internal/networking/bsd.h"
 
 #ifdef LIBUS_USE_EPOLL
