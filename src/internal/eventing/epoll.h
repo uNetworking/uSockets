@@ -26,9 +26,11 @@
 #define LIBUS_SOCKET_READABLE EPOLLIN
 #define LIBUS_SOCKET_WRITABLE EPOLLOUT
 
+#include <stdalign.h>
+
 struct us_loop {
     // common data
-    struct us_loop_data data;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
 
     // epoll extensions
     int num_polls;

@@ -24,6 +24,8 @@
 #define LIBUS_TIMEOUT_GRANULARITY 4
 /* 32 byte padding of receive buffer ends */
 #define LIBUS_RECV_BUFFER_PADDING 32
+/* Guaranteed alignment of extension memory */
+#define LIBUS_EXT_ALIGNMENT 16
 
 /* Define what a socket descriptor is based on platform */
 #ifdef _WIN32

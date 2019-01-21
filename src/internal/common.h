@@ -18,6 +18,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stdalign.h>
+
 #include "internal/networking/bsd.h"
 
 #ifdef LIBUS_USE_EPOLL
@@ -56,19 +58,19 @@ void us_internal_socket_context_unlink(struct us_socket_context *context, struct
 void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *context);
 
 struct us_socket {
-    struct us_poll p;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_poll p;
     struct us_socket_context *context;
     struct us_socket *prev, *next;
     unsigned short timeout;
 };
 
 struct us_listen_socket {
-    struct us_socket s;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_socket s;
     unsigned int socket_ext_size;
 };
 
 struct us_socket_context {
-    struct us_loop *loop;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop *loop;
     //unsigned short timeout;
     struct us_socket *head;
     struct us_socket *iterator;
