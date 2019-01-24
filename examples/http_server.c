@@ -56,7 +56,7 @@ struct us_new_socket_t *on_http_socket_end(struct us_new_socket_t *s) {
 struct us_new_socket_t *on_http_socket_data(struct us_new_socket_t *s, char *data, int length) {
 	/* Get socket extension and the socket's context's extension */
 	struct http_socket *http_socket = (struct http_socket *) us_new_socket_ext(SSL, s);
-	struct http_context *http_context = (struct http_context *) us_new_socket_context_ext(SSL, us_new_socket_get_context(SSL, s));
+	struct http_context *http_context = (struct http_context *) us_new_socket_context_ext(SSL, us_new_socket_context(SSL, s));
 
 	/* We treat all data events as a request */
 	http_socket->offset = us_new_socket_write(SSL, s, http_context->response, http_context->length, 0);

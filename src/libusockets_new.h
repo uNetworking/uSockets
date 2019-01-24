@@ -202,9 +202,9 @@ inline void us_new_socket_shutdown(const int ssl, struct us_new_socket_t *s) {
 
 inline int us_new_socket_write(const int ssl, struct us_new_socket_t *s, const char *data, int length, int msg_more) {
 #ifdef LIBUS_NO_SSL
-    return us_socket_write((struct us_socket *) s);
+    return us_socket_write((struct us_socket *) s, data, length, msg_more);
 #else
-    return ssl ? us_ssl_socket_write((struct us_ssl_socket *) s) : us_socket_write((struct us_socket *) s);
+    return ssl ? us_ssl_socket_write((struct us_ssl_socket *) s, data, length, msg_more) : us_socket_write((struct us_socket *) s, data, length, msg_more);
 #endif
 }
 
