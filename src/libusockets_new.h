@@ -35,6 +35,14 @@ struct us_new_socket_context_options_t {
 };
 
 /* Per-socket-context functions */
+struct us_new_socket_t *us_new_socket_context_connect(const int ssl, struct us_new_socket_context_t *c, const char *host, int port, int options, int socket_ext_size) {
+#ifdef LIBUS_NO_SSL
+    return (struct us_new_socket_t *) us_socket_context_connect((struct us_socket_context *) c, host, port, options, socket_ext_size);
+#else
+    return ssl ? (struct us_new_socket_t *) us_ssl_socket_context_connect((struct us_ssl_socket_context *) c, host, port, options, socket_ext_size) : (struct us_new_socket_t *) us_socket_context_connect((struct us_socket_context *) c, host, port, options, socket_ext_size);
+#endif
+}
+
 struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);
