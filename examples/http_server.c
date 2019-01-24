@@ -1,6 +1,7 @@
 /* This is a barebone keep-alive HTTP server */
 #include <libusockets_new.h>
-const int SSL = 0;
+/* Compiling with LIBUS_NO_SSL will ignore SSL */
+const int SSL = 1;
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,8 +93,8 @@ int main() {
 
 	/* Create a socket context for HTTP */
 	struct us_new_socket_context_options_t options = {};
-	options.key_file_name = "/home/alexhultman/uWebSockets/misc/ssl/key.pem";
-	options.cert_file_name = "/home/alexhultman/uWebSockets/misc/ssl/cert.pem";
+	options.key_file_name = "/home/alexhultman/uWebSockets.js/misc/key.pem";
+	options.cert_file_name = "/home/alexhultman/uWebSockets.js/misc/cert.pem";
 	options.passphrase = "1234";
 
 	struct us_new_socket_context_t *http_context = us_new_create_socket_context(SSL, loop, sizeof(struct http_context), options);

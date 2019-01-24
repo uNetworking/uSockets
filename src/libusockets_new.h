@@ -35,11 +35,19 @@ struct us_new_socket_context_options_t {
 };
 
 /* Per-socket-context functions */
-inline struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
+struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);
 #else
-    return ssl ? (struct us_new_socket_context_t *) us_ssl_create_socket_context(loop, socket_context_ext_size, options) : (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);
+    /* Convert between the two structs */
+    struct us_ssl_socket_context_options ssl_options = {
+        options.key_file_name,
+        options.cert_file_name,
+        options.passphrase,
+        options.dh_params_file_name
+    };
+
+    return ssl ? (struct us_new_socket_context_t *) us_create_ssl_socket_context(loop, socket_context_ext_size, ssl_options) : (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);
 #endif
 }
 
@@ -225,11 +233,8 @@ inline struct us_new_socket_t *us_new_socket_close(const int ssl, struct us_new_
 }
 
 inline int us_new_socket_is_closed(const int ssl, struct us_new_socket_t *s) {
-#ifdef LIBUS_NO_SSL
+    /* There is no SSL variant of this function */
     return us_socket_is_closed((struct us_socket *) s);
-#else
-    return ssl ? us_ssl_socket_is_closed((struct us_ssl_socket *) s) : us_socket_is_closed((struct us_socket *) s);
-#endif
 }
 
 inline int us_new_socket_is_shut_down(const int ssl, struct us_new_socket_t *s) {
