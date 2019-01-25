@@ -163,6 +163,7 @@ struct us_ssl_socket *ssl_on_end(struct us_ssl_socket *s) {
 
 // this whole function needs a complete clean-up
 struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int length) {
+    // note: this context can change when we adopt the socket!
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
@@ -246,6 +247,9 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
     // trigger writable if we failed last write with want read
     if (s->ssl_write_wants_read) {
         s->ssl_write_wants_read = 0;
+
+        // make sure to update context before we call (context can change if the user adopts the socket!)
+        context = us_socket_get_context(&s->s);
 
         s = (struct us_ssl_socket *) context->sc.on_writable(&s->s); // cast here!
         // if we are closed here, then exit
