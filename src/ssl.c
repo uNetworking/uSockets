@@ -249,7 +249,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
         s->ssl_write_wants_read = 0;
 
         // make sure to update context before we call (context can change if the user adopts the socket!)
-        context = us_socket_get_context(&s->s);
+        context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
         s = (struct us_ssl_socket *) context->sc.on_writable(&s->s); // cast here!
         // if we are closed here, then exit

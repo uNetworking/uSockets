@@ -35,7 +35,7 @@ struct us_new_socket_context_options_t {
 };
 
 /* Per-socket-context functions */
-struct us_new_socket_t *us_new_socket_context_connect(const int ssl, struct us_new_socket_context_t *c, const char *host, int port, int options, int socket_ext_size) {
+inline static struct us_new_socket_t *us_new_socket_context_connect(const int ssl, struct us_new_socket_context_t *c, const char *host, int port, int options, int socket_ext_size) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_t *) us_socket_context_connect((struct us_socket_context *) c, host, port, options, socket_ext_size);
 #else
@@ -43,7 +43,7 @@ struct us_new_socket_t *us_new_socket_context_connect(const int ssl, struct us_n
 #endif
 }
 
-struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
+inline static struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);
 #else
@@ -59,7 +59,7 @@ struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, stru
 #endif
 }
 
-inline struct us_new_socket_context_t *us_new_create_child_socket_context(const int ssl, struct us_new_socket_context_t *c, int socket_context_ext_size) {
+inline static struct us_new_socket_context_t *us_new_create_child_socket_context(const int ssl, struct us_new_socket_context_t *c, int socket_context_ext_size) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_context_t *) us_create_child_socket_context((struct us_socket_context *) c, socket_context_ext_size);
 #else
@@ -67,7 +67,7 @@ inline struct us_new_socket_context_t *us_new_create_child_socket_context(const 
 #endif
 }
 
-inline struct us_new_socket_t *us_new_socket_context_adopt_socket(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *s, int socket_ext_size) {
+inline static struct us_new_socket_t *us_new_socket_context_adopt_socket(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *s, int socket_ext_size) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_t *) us_socket_context_adopt_socket((struct us_socket_context *) c, (struct us_socket *) s, socket_ext_size);
 #else
@@ -75,7 +75,7 @@ inline struct us_new_socket_t *us_new_socket_context_adopt_socket(const int ssl,
 #endif
 }
 
-inline void us_new_socket_context_free(const int ssl, struct us_new_socket_context_t *c) {
+inline static void us_new_socket_context_free(const int ssl, struct us_new_socket_context_t *c) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_free((struct us_socket_context *) c);
 #else
@@ -87,7 +87,7 @@ inline void us_new_socket_context_free(const int ssl, struct us_new_socket_conte
 #endif
 }
 
-inline struct us_listen_socket *us_new_socket_context_listen(const int ssl, struct us_new_socket_context_t *c, const char *host, int port, int options, int socket_ext_size) {
+inline static struct us_listen_socket *us_new_socket_context_listen(const int ssl, struct us_new_socket_context_t *c, const char *host, int port, int options, int socket_ext_size) {
 #ifdef LIBUS_NO_SSL
     return us_socket_context_listen((struct us_socket_context *) c, host, port, options, socket_ext_size);
 #else
@@ -95,7 +95,7 @@ inline struct us_listen_socket *us_new_socket_context_listen(const int ssl, stru
 #endif
 }
 
-inline struct us_loop *us_new_socket_context_loop(const int ssl, struct us_new_socket_context_t *c) {
+inline static struct us_loop *us_new_socket_context_loop(const int ssl, struct us_new_socket_context_t *c) {
 #ifdef LIBUS_NO_SSL
     return us_socket_context_loop((struct us_socket_context *) c);
 #else
@@ -103,7 +103,7 @@ inline struct us_loop *us_new_socket_context_loop(const int ssl, struct us_new_s
 #endif
 }
 
-inline void us_new_socket_context_on_data(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_data)(struct us_new_socket_t *s, char *data, int length)) {
+inline static void us_new_socket_context_on_data(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_data)(struct us_new_socket_t *s, char *data, int length)) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_on_data((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s, char *data, int length)) on_data);
 #else
@@ -115,7 +115,7 @@ inline void us_new_socket_context_on_data(const int ssl, struct us_new_socket_co
 #endif
 }
 
-inline void us_new_socket_context_on_timeout(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_timeout)(struct us_new_socket_t *s)) {
+inline static void us_new_socket_context_on_timeout(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_timeout)(struct us_new_socket_t *s)) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_on_timeout((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s)) on_timeout);
 #else
@@ -127,7 +127,7 @@ inline void us_new_socket_context_on_timeout(const int ssl, struct us_new_socket
 #endif
 }
 
-inline void us_new_socket_context_on_end(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_end)(struct us_new_socket_t *s)) {
+inline static void us_new_socket_context_on_end(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_end)(struct us_new_socket_t *s)) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_on_end((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s)) on_end);
 #else
@@ -139,7 +139,7 @@ inline void us_new_socket_context_on_end(const int ssl, struct us_new_socket_con
 #endif
 }
 
-inline void us_new_socket_context_on_writable(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_writable)(struct us_new_socket_t *s)) {
+inline static void us_new_socket_context_on_writable(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_writable)(struct us_new_socket_t *s)) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_on_writable((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s)) on_writable);
 #else
@@ -151,7 +151,7 @@ inline void us_new_socket_context_on_writable(const int ssl, struct us_new_socke
 #endif
 }
 
-inline void us_new_socket_context_on_close(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_close)(struct us_new_socket_t *s)) {
+inline static void us_new_socket_context_on_close(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_close)(struct us_new_socket_t *s)) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_on_close((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s)) on_close);
 #else
@@ -163,7 +163,7 @@ inline void us_new_socket_context_on_close(const int ssl, struct us_new_socket_c
 #endif
 }
 
-inline void us_new_socket_context_on_open(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_open)(struct us_new_socket_t *s, int is_client)) {
+inline static void us_new_socket_context_on_open(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_open)(struct us_new_socket_t *s, int is_client)) {
 #ifdef LIBUS_NO_SSL
     us_socket_context_on_open((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s, int is_client)) on_open);
 #else
@@ -175,7 +175,7 @@ inline void us_new_socket_context_on_open(const int ssl, struct us_new_socket_co
 #endif
 }
 
-inline void *us_new_socket_context_ext(const int ssl, struct us_new_socket_context_t *c) {
+inline static void *us_new_socket_context_ext(const int ssl, struct us_new_socket_context_t *c) {
 #ifdef LIBUS_NO_SSL
     return us_socket_context_ext((struct us_socket_context *) c);
 #else
@@ -184,7 +184,7 @@ inline void *us_new_socket_context_ext(const int ssl, struct us_new_socket_conte
 }
 
 /* Per-socket functions */
-inline struct us_new_socket_context_t *us_new_socket_context(const int ssl, struct us_new_socket_t *s) {
+inline static struct us_new_socket_context_t *us_new_socket_context(const int ssl, struct us_new_socket_t *s) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_context_t *) us_socket_get_context((struct us_socket *) s);
 #else
@@ -192,7 +192,7 @@ inline struct us_new_socket_context_t *us_new_socket_context(const int ssl, stru
 #endif
 }
 
-inline void us_new_socket_timeout(const int ssl, struct us_new_socket_t *s, unsigned int seconds) {
+inline static void us_new_socket_timeout(const int ssl, struct us_new_socket_t *s, unsigned int seconds) {
 #ifdef LIBUS_NO_SSL
     us_socket_timeout((struct us_socket *) s, seconds);
 #else
@@ -204,7 +204,7 @@ inline void us_new_socket_timeout(const int ssl, struct us_new_socket_t *s, unsi
 #endif
 }
 
-inline void us_new_socket_shutdown(const int ssl, struct us_new_socket_t *s) {
+inline static void us_new_socket_shutdown(const int ssl, struct us_new_socket_t *s) {
 #ifdef LIBUS_NO_SSL
     us_socket_shutdown((struct us_socket *) s);
 #else
@@ -216,7 +216,7 @@ inline void us_new_socket_shutdown(const int ssl, struct us_new_socket_t *s) {
 #endif
 }
 
-inline int us_new_socket_write(const int ssl, struct us_new_socket_t *s, const char *data, int length, int msg_more) {
+inline static int us_new_socket_write(const int ssl, struct us_new_socket_t *s, const char *data, int length, int msg_more) {
 #ifdef LIBUS_NO_SSL
     return us_socket_write((struct us_socket *) s, data, length, msg_more);
 #else
@@ -224,7 +224,7 @@ inline int us_new_socket_write(const int ssl, struct us_new_socket_t *s, const c
 #endif
 }
 
-inline void *us_new_socket_ext(const int ssl, struct us_new_socket_t *s) {
+inline static void *us_new_socket_ext(const int ssl, struct us_new_socket_t *s) {
 #ifdef LIBUS_NO_SSL
     return us_socket_ext((struct us_socket *) s);
 #else
@@ -232,7 +232,7 @@ inline void *us_new_socket_ext(const int ssl, struct us_new_socket_t *s) {
 #endif
 }
 
-inline struct us_new_socket_t *us_new_socket_close(const int ssl, struct us_new_socket_t *s) {
+inline static struct us_new_socket_t *us_new_socket_close(const int ssl, struct us_new_socket_t *s) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_t *) us_socket_close((struct us_socket *) s);
 #else
@@ -240,12 +240,12 @@ inline struct us_new_socket_t *us_new_socket_close(const int ssl, struct us_new_
 #endif
 }
 
-inline int us_new_socket_is_closed(const int ssl, struct us_new_socket_t *s) {
+inline static int us_new_socket_is_closed(const int ssl, struct us_new_socket_t *s) {
     /* There is no SSL variant of this function */
     return us_socket_is_closed((struct us_socket *) s);
 }
 
-inline int us_new_socket_is_shut_down(const int ssl, struct us_new_socket_t *s) {
+inline static int us_new_socket_is_shut_down(const int ssl, struct us_new_socket_t *s) {
 #ifdef LIBUS_NO_SSL
     return us_socket_is_shut_down((struct us_socket *) s);
 #else
