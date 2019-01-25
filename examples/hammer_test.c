@@ -21,19 +21,31 @@ unsigned int long_length = 5 * 1024 * 1024;
 // and context ext data
 // and loop ext data
 
+const double pad_should_always_be = 14.652752;
+
 struct http_socket {
+    double pad_invariant;
     int is_http;
+    double post_pad_invariant;
     //char content[512];
 };
 
 struct web_socket {
+    double pad_invariant;
     int is_http;
+    double post_pad_invariant;
     //char content[128];
 };
 
 /* This checks the ext data state according to callbacks */
 void assume_state(struct us_socket *s, int is_http) {
     struct http_socket *hs = (struct http_socket *) us_socket_ext(s);
+
+    if (hs->pad_invariant != pad_should_always_be || hs->post_pad_invariant != pad_should_always_be) {
+        printf("ERROR: Pad invariant is not correct!\n");
+        free((void *) 1);
+    }
+
     if (hs->is_http != is_http) {
         printf("ERROR: State is: %d should be: %d. Terminating now!\n", hs->is_http, is_http);
         free((void *) 1);
@@ -199,6 +211,8 @@ struct us_socket *on_web_socket_open(struct us_socket *s, int is_client) {
 struct us_socket *on_http_socket_open(struct us_socket *s, int is_client) {
     struct http_socket *hs = (struct http_socket *) us_socket_ext(s);
     hs->is_http = 1;
+    hs->pad_invariant = pad_should_always_be;
+    hs->post_pad_invariant = pad_should_always_be;
 
     assume_state(s, 1);
 
