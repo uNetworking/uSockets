@@ -27,14 +27,14 @@ struct http_socket {
     double pad_invariant;
     int is_http;
     double post_pad_invariant;
-    //char content[512];
+    char content[1024];
 };
 
 struct web_socket {
     double pad_invariant;
     int is_http;
     double post_pad_invariant;
-    //char content[128];
+    char content[128];
 };
 
 /* This checks the ext data state according to callbacks */
@@ -49,6 +49,13 @@ void assume_state(struct us_new_socket_t *s, int is_http) {
     if (hs->is_http != is_http) {
         printf("ERROR: State is: %d should be: %d. Terminating now!\n", hs->is_http, is_http);
         free((void *) 1);
+    }
+
+    // try and cause havoc (different size)
+    if (hs->is_http) {
+        memset(hs->content, 0, 1024);
+    } else {
+        memset(hs->content, 0, 128);
     }
 }
 
