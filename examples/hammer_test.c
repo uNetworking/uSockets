@@ -22,12 +22,23 @@ unsigned int long_length = 5 * 1024 * 1024;
 // and loop ext data
 
 struct http_socket {
-    char content[512];
+    int is_http;
+    //char content[512];
 };
 
 struct web_socket {
-    char content[128];
+    int is_http;
+    //char content[128];
 };
+
+/* This checks the ext data state according to callbacks */
+void assume_state(struct us_socket *s, int is_http) {
+    struct http_socket *hs = (struct http_socket *) us_socket_ext(s);
+    if (hs->is_http != is_http) {
+        printf("ERROR: State is: %d should be: %d. Terminating now!\n", hs->is_http, is_http);
+        free((void *) 1);
+    }
+}
 
 struct http_context {
     // link to the other context here
@@ -43,11 +54,17 @@ struct us_socket *perform_random_operation(struct us_socket *s) {
             return us_socket_close(s);
         }
         case 1: {
-            // adopt
-            if (rand() % 2) {
-                s = us_socket_context_adopt_socket(websocket_context, s, sizeof(struct web_socket));
-            } else {
-                s = us_socket_context_adopt_socket(http_context, s, sizeof(struct http_socket));
+            // adoption cannot happen if closed!
+            if (!us_socket_is_closed(s)) {
+                if (rand() % 2) {
+                    s = us_socket_context_adopt_socket(websocket_context, s, sizeof(struct web_socket));
+                    struct http_socket *hs = (struct http_socket *) us_socket_ext(s);
+                    hs->is_http = 0;
+                } else {
+                    s = us_socket_context_adopt_socket(http_context, s, sizeof(struct http_socket));
+                    struct http_socket *hs = (struct http_socket *) us_socket_ext(s);
+                    hs->is_http = 1;
+                }
             }
 
             return perform_random_operation(s);
@@ -92,22 +109,21 @@ void on_post(struct us_loop *loop) {
 }
 
 struct us_socket *on_web_socket_writable(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct web_socket));
+    printf("on_web_socket_writable\n");
+    assume_state(s, 0);
 
     return perform_random_operation(s);
 }
 
 struct us_socket *on_http_socket_writable(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct http_socket));
+    printf("on_http_socket_writable\n");
+    assume_state(s, 1);
 
     return perform_random_operation(s);
 }
 
 struct us_socket *on_web_socket_close(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct web_socket));
+    assume_state(s, 0);
 
     closed_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
@@ -121,8 +137,7 @@ struct us_socket *on_web_socket_close(struct us_socket *s) {
 }
 
 struct us_socket *on_http_socket_close(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct http_socket));
+    assume_state(s, 1);
 
     closed_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
@@ -136,8 +151,7 @@ struct us_socket *on_http_socket_close(struct us_socket *s) {
 }
 
 struct us_socket *on_web_socket_end(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct web_socket));
+    assume_state(s, 0);
 
     // we need to close on shutdown
     s = us_socket_close(s);
@@ -145,8 +159,7 @@ struct us_socket *on_web_socket_end(struct us_socket *s) {
 }
 
 struct us_socket *on_http_socket_end(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct http_socket));
+    assume_state(s, 1);
 
     // we need to close on shutdown
     s = us_socket_close(s);
@@ -154,8 +167,7 @@ struct us_socket *on_http_socket_end(struct us_socket *s) {
 }
 
 struct us_socket *on_web_socket_data(struct us_socket *s, char *data, int length) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct web_socket));
+    assume_state(s, 0);
 
     if (length == 0) {
         printf("ERROR: Got data event with no data\n");
@@ -167,8 +179,7 @@ struct us_socket *on_web_socket_data(struct us_socket *s, char *data, int length
 }
 
 struct us_socket *on_http_socket_data(struct us_socket *s, char *data, int length) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct http_socket));
+    assume_state(s, 1);
 
     if (length == 0) {
         printf("ERROR: Got data event with no data\n");
@@ -186,8 +197,10 @@ struct us_socket *on_web_socket_open(struct us_socket *s, int is_client) {
 }
 
 struct us_socket *on_http_socket_open(struct us_socket *s, int is_client) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct http_socket));
+    struct http_socket *hs = (struct http_socket *) us_socket_ext(s);
+    hs->is_http = 1;
+
+    assume_state(s, 1);
 
     opened_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
@@ -200,15 +213,13 @@ struct us_socket *on_http_socket_open(struct us_socket *s, int is_client) {
 }
 
 struct us_socket *on_web_socket_timeout(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct web_socket));
+    assume_state(s, 0);
 
     return perform_random_operation(s);
 }
 
 struct us_socket *on_http_socket_timeout(struct us_socket *s) {
-    // check that we are in fact of type http_socket
-    memset(us_socket_ext(s), 0, sizeof(struct http_socket));
+    assume_state(s, 1);
 
     return perform_random_operation(s);
 }
@@ -227,8 +238,8 @@ int main() {
 
 #ifndef LIBUS_NO_SSL
     struct us_ssl_socket_context_options ssl_options = {};
-    ssl_options.key_file_name = "/home/alexhultman/uWebSockets/misc/ssl/key.pem";
-    ssl_options.cert_file_name = "/home/alexhultman/uWebSockets/misc/ssl/cert.pem";
+    ssl_options.key_file_name = "/home/alexhultman/uWebSockets.js/misc/key.pem";
+    ssl_options.cert_file_name = "/home/alexhultman/uWebSockets.js/misc/cert.pem";
     ssl_options.passphrase = "1234";
 
     http_context = us_create_ssl_socket_context(loop, sizeof(struct http_context), ssl_options);
