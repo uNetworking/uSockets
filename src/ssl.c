@@ -26,6 +26,11 @@
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 
+/* We do not want to block the loop with tons and tons of CPU-intensive work.
+ * Spread it out during many loop iterations, prioritizing already open connections,
+ * they are far easier on CPU */
+static const int MAX_HANDSHAKES_PER_LOOP_ITERATION = 5;
+
 struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
@@ -34,6 +39,10 @@ struct loop_ssl_data {
 
     int last_write_was_msg_more;
     int msg_more;
+
+    // these are used to throttle SSL handshakes per loop iteration
+    long long last_iteration_nr;
+    int handshake_budget;
 
     BIO *shared_rbio;
     BIO *shared_wbio;
@@ -123,7 +132,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     return length;
 }
 
-void ssl_on_open(struct us_ssl_socket *s, int is_client) {
+struct us_ssl_socket *ssl_on_open(struct us_ssl_socket *s, int is_client) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
@@ -142,7 +151,7 @@ void ssl_on_open(struct us_ssl_socket *s, int is_client) {
         SSL_set_accept_state(s->ssl);
     }
 
-    context->on_open(s, is_client);
+    return (struct us_ssl_socket *) context->on_open(s, is_client);
 }
 
 struct us_ssl_socket *ssl_on_close(struct us_ssl_socket *s) {
@@ -293,6 +302,10 @@ void us_internal_init_loop_ssl_data(struct us_loop *loop) {
         BIO_set_data(loop_ssl_data->shared_rbio, loop_ssl_data);
         BIO_set_data(loop_ssl_data->shared_wbio, loop_ssl_data);
 
+        // reset handshake budget (doesn't matter what loop nr we start on)
+        loop_ssl_data->last_iteration_nr = 0;
+        loop_ssl_data->handshake_budget = MAX_HANDSHAKES_PER_LOOP_ITERATION;
+
         loop->data.ssl_data = loop_ssl_data;
     }
 }
@@ -313,8 +326,40 @@ void us_internal_free_loop_ssl_data(struct us_loop *loop) {
     }
 }
 
+// we ignore reading data for ssl sockets that are
+// in init state, if our so called budget for doing
+// so won't allow it. here we actually use
+// the kernel buffering to our advantage
+int ssl_ignore_data(struct us_ssl_socket *s) {
+
+    // fast path just checks for init
+    if (!SSL_in_init(s->ssl)) {
+        return 0;
+    }
+
+    // this path is run for all ssl sockets that are in init and just got data event from polling
+
+    struct us_loop *loop = s->s.context->loop;
+    struct loop_ssl_data *loop_ssl_data = loop->data.ssl_data;
+
+    // reset handshake budget if new iteration
+    if (loop_ssl_data->last_iteration_nr != us_loop_iteration_number(loop)) {
+        loop_ssl_data->last_iteration_nr = us_loop_iteration_number(loop);
+        loop_ssl_data->handshake_budget = MAX_HANDSHAKES_PER_LOOP_ITERATION;
+    }
+
+    if (loop_ssl_data->handshake_budget) {
+        loop_ssl_data->handshake_budget--;
+        return 0;
+    }
+
+    // ignore this data event
+    return 1;
+}
+
 /* Per-context functions */
 struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context, int context_ext_size) {
+    // varför anropar denna inte rätt underliggande funktion?
     struct us_ssl_socket_context *child_context = (struct us_ssl_socket_context *) us_create_socket_context(context->sc.loop, sizeof(struct us_ssl_socket_context) + context_ext_size);
 
     // I think this is the only thing being shared
@@ -332,6 +377,8 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
 
     context->ssl_context = SSL_CTX_new(TLS_method());
     context->is_parent = 1;
+    // only parent ssl contexts may need to ignore data
+    context->sc.ignore_data = (int (*)(struct us_socket *)) ssl_ignore_data;
 
     // options
     SSL_CTX_set_read_ahead(context->ssl_context, 1);

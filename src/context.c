@@ -19,6 +19,10 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
+int default_ignore_data_handler(struct us_socket *s) {
+    return 0;
+}
+
 // put this in loop.c?
 struct us_socket_context *us_create_socket_context(struct us_loop *loop, int context_ext_size) {
     struct us_socket_context *context = malloc(sizeof(struct us_socket_context) + context_ext_size);
@@ -28,6 +32,9 @@ struct us_socket_context *us_create_socket_context(struct us_loop *loop, int con
     context->head = 0;
     context->iterator = 0;
     context->next = 0;
+
+    // by default never ignore any data
+    context->ignore_data = default_ignore_data_handler;
 
     us_internal_loop_link(loop, context);
 

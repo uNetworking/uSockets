@@ -39,9 +39,15 @@ struct us_loop_data {
     void (*pre_cb)(struct us_loop *);
     void (*post_cb)(struct us_loop *);
     struct us_socket *closed_head;
+    // we use this to ease the separation between ssl and tcp
+    // it doesn't matter if this flips, but it never will
+    // it increases by 1 every loop pre
+    long long iteration_nr;
 };
 
 void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop));
 void us_internal_loop_data_free(struct us_loop *loop);
+void us_internal_loop_pre(struct us_loop *loop);
+void us_internal_loop_post(struct us_loop *loop);
 
 #endif // LOOP_H

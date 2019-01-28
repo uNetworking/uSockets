@@ -43,14 +43,13 @@ void us_loop_run(struct us_loop *loop) {
     us_loop_integrate(loop);
 
     while (loop->num_polls) {
-        loop->data.pre_cb(loop);
+        us_internal_loop_pre(loop);
         loop->num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
         for (loop->fd_iterator = 0; loop->fd_iterator < loop->num_fd_ready; loop->fd_iterator++) {
             struct us_poll *poll = (struct us_poll *) loop->ready_events[loop->fd_iterator].data.ptr;
             us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
         }
-        us_internal_free_closed_sockets(loop);
-        loop->data.post_cb(loop);
+        us_internal_loop_post(loop);
     }
 }
 

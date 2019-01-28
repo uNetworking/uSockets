@@ -35,3 +35,6 @@ WIN32_EXPORT void us_wakeup_loop(struct us_loop *loop);
 
 /* Hook up timers in existing loop */
 WIN32_EXPORT void us_loop_integrate(struct us_loop *loop);
+
+/* Returns the loop iteration number */
+WIN32_EXPORT long long us_loop_iteration_number(struct us_loop *loop);

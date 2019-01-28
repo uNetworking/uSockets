@@ -28,14 +28,13 @@ static void poll_cb(uv_poll_t *p, int status, int events) {
 
 static void prepare_cb(uv_prepare_t *p) {
     struct us_loop *loop = p->data;
-    loop->data.pre_cb(loop);
+    us_internal_loop_pre(loop);
 }
 
 /* Note: libuv timers execute AFTER the post callback */
 static void check_cb(uv_check_t *p) {
     struct us_loop *loop = p->data;
-    us_internal_free_closed_sockets(loop);
-    loop->data.post_cb(loop);
+    us_internal_loop_post(loop);
 }
 
 static void close_cb_free(uv_handle_t *h) {

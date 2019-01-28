@@ -81,6 +81,7 @@ struct us_socket_context {
     //void (*on_timeout)(struct us_socket_context *);
     struct us_socket *(*on_socket_timeout)(struct us_socket *);
     struct us_socket *(*on_end)(struct us_socket *);
+    int (*ignore_data)(struct us_socket *);
 };
 
 struct us_internal_callback {
