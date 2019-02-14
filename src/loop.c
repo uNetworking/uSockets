@@ -105,11 +105,6 @@ void us_internal_timer_sweep(struct us_loop *loop) {
 
         }
     }
-
-    if (loop_data->iterator) {
-        printf("WTF!!!\n");
-        exit(-2);
-    }
 }
 
 // this one also works with the linked list
@@ -181,7 +176,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     // stop timer if any
 
                     do {
-                        struct us_poll *p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
+                        p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
                         us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
                         us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
 
