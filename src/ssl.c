@@ -287,6 +287,10 @@ void us_internal_init_loop_ssl_data(struct us_loop *loop) {
     if (!loop->data.ssl_data) {
         struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
 
+        if (loop_ssl_data == NULL) {
+            return;
+        }
+
         loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
 
         OPENSSL_init_ssl(0, NULL);
@@ -516,10 +520,6 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
     //printf("Returning from SSL_write\n");
     loop_ssl_data->msg_more = 0;
 
-    if (loop_ssl_data->last_write_was_msg_more && !msg_more) {
-        us_socket_flush(&s->s);
-    }
-
     if (written > 0) {
         return written;
     } else {
@@ -530,6 +530,8 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
         } else {
             // all errors here except for want write are critical and should not happen
         }
+
+        us_socket_flush(&s->s);
 
         return 0;
     }
