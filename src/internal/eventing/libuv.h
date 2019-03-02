@@ -28,6 +28,7 @@ struct us_loop {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
 
     uv_loop_t *uv_loop;
+    int is_default;
 
     uv_prepare_t *uv_pre;
     uv_check_t *uv_check;

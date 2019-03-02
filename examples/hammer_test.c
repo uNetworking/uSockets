@@ -249,7 +249,7 @@ int main() {
     srand(time(0));
     long_buffer = calloc(long_length, 1);
 
-    struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
+    struct us_loop *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     // us_loop_on_wakeup()
     // us_loop_on_pre()

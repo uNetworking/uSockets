@@ -38,6 +38,7 @@ static void check_cb(uv_check_t *p) {
 }
 
 static void close_cb_free(uv_handle_t *h) {
+    //printf("close_cb_free\n");
     free(h->data);
 }
 
@@ -117,6 +118,7 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
     struct us_loop *loop = (struct us_loop *) malloc(sizeof(struct us_loop) + ext_size);
 
     loop->uv_loop = default_hint ? uv_default_loop() : uv_loop_new();
+    loop->is_default = default_hint;
 
     loop->uv_pre = malloc(sizeof(uv_prepare_t));
     uv_prepare_init(loop->uv_loop, loop->uv_pre);
@@ -130,29 +132,42 @@ struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loo
     uv_check_start(loop->uv_check, check_cb);
     loop->uv_check->data = loop;
 
+    // here we create two unreffed handles - timer and async
     us_internal_loop_data_init(loop, wakeup_cb, pre_cb, post_cb);
+
+    // if we do not own this loop, we need to integrate and set up timer
+    if (default_hint) {
+        us_loop_integrate(loop);
+    }
+
     return loop;
 }
 
 // based on if this was default loop or not
 void us_loop_free(struct us_loop *loop) {
+    //printf("us_loop_free\n");
+
+    // ref and close down prepare and check
+    uv_ref((uv_handle_t *) loop->uv_pre);
     uv_prepare_stop(loop->uv_pre);
     loop->uv_pre->data = loop->uv_pre;
     uv_close((uv_handle_t *) loop->uv_pre, close_cb_free);
 
+    uv_ref((uv_handle_t *) loop->uv_check);
     uv_check_stop(loop->uv_check);
     loop->uv_check->data = loop->uv_check;
     uv_close((uv_handle_t *) loop->uv_check, close_cb_free);
 
     us_internal_loop_data_free(loop);
 
-    // we need to run the loop one last time to exectute all uv_close cbs
-    // only if not default loop
-    uv_run(loop->uv_loop, UV_RUN_NOWAIT);
+    // we need to run the loop one last round to call all close callbacks
+    // we cannot do this if we do not own the loop, default
+    if (!loop->is_default) {
+        uv_run(loop->uv_loop, UV_RUN_NOWAIT);
+        uv_loop_delete(loop->uv_loop);
+    }
 
-    uv_loop_delete(loop->uv_loop);
-
-    // this frees pre/post before their close callback is called!
+    // now we can free our part
     free(loop);
 }
 
@@ -202,6 +217,10 @@ void us_timer_close(struct us_timer *t) {
     struct us_internal_callback *cb = (struct us_internal_callback *) t;
 
     uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
+
+    // always ref the timer before closing it
+    uv_ref((uv_handle_t *) uv_timer);
+
     uv_timer_stop(uv_timer);
 
     uv_timer->data = cb;
@@ -239,6 +258,9 @@ void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback *cb = (struct us_internal_callback *) a;
 
     uv_async_t *uv_async = (uv_async_t *) (cb + 1);
+
+    // always ref the async before closing it
+    uv_ref((uv_handle_t *) uv_async);
 
     uv_async->data = cb;
     uv_close((uv_handle_t *) uv_async, close_cb_free);
