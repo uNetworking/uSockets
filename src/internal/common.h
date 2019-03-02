@@ -74,7 +74,7 @@ struct us_socket_context {
     struct us_socket *iterator;
     struct us_socket_context *prev, *next;
 
-    struct us_socket *(*on_open)(struct us_socket *, int is_client);
+    struct us_socket *(*on_open)(struct us_socket *, int is_client, char *ip, int ip_length);
     struct us_socket *(*on_data)(struct us_socket *, char *data, int length);
     struct us_socket *(*on_writable)(struct us_socket *);
     struct us_socket *(*on_close)(struct us_socket *);

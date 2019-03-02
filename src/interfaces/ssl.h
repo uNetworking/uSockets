@@ -34,7 +34,7 @@ WIN32_EXPORT struct us_ssl_socket_context *us_create_ssl_socket_context(struct u
 WIN32_EXPORT void us_ssl_socket_context_free(struct us_ssl_socket_context *context);
 
 /* See us_socket_context */
-WIN32_EXPORT void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client));
+WIN32_EXPORT void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client, char *ip, int ip_length));
 WIN32_EXPORT void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_close)(struct us_ssl_socket *s));
 WIN32_EXPORT void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_data)(struct us_ssl_socket *s, char *data, int length));
 WIN32_EXPORT void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_writable)(struct us_ssl_socket *s));

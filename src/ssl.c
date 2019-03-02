@@ -59,7 +59,7 @@ struct us_ssl_socket_context {
     int is_parent;
 
     // här måste det vara!
-    struct us_ssl_socket *(*on_open)(struct us_ssl_socket *, int is_client);
+    struct us_ssl_socket *(*on_open)(struct us_ssl_socket *, int is_client, char *ip, int ip_length);
     struct us_ssl_socket *(*on_data)(struct us_ssl_socket *, char *data, int length);
     struct us_ssl_socket *(*on_close)(struct us_ssl_socket *);
 };
@@ -132,7 +132,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     return length;
 }
 
-struct us_ssl_socket *ssl_on_open(struct us_ssl_socket *s, int is_client) {
+struct us_ssl_socket *ssl_on_open(struct us_ssl_socket *s, int is_client, char *ip, int ip_length) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
     struct us_loop *loop = us_socket_context_loop(&context->sc);
@@ -151,7 +151,7 @@ struct us_ssl_socket *ssl_on_open(struct us_ssl_socket *s, int is_client) {
         SSL_set_accept_state(s->ssl);
     }
 
-    return (struct us_ssl_socket *) context->on_open(s, is_client);
+    return (struct us_ssl_socket *) context->on_open(s, is_client, ip, ip_length);
 }
 
 struct us_ssl_socket *ssl_on_close(struct us_ssl_socket *s) {
@@ -453,8 +453,8 @@ struct us_ssl_socket *us_ssl_socket_context_connect(struct us_ssl_socket_context
     return (struct us_ssl_socket *) us_socket_context_connect(&context->sc, host, port, options, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + socket_ext_size);
 }
 
-void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client)) {
-    us_socket_context_on_open(&context->sc, (struct us_socket *(*)(struct us_socket *, int)) ssl_on_open);
+void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client, char *ip, int ip_length)) {
+    us_socket_context_on_open(&context->sc, (struct us_socket *(*)(struct us_socket *, int, char *, int)) ssl_on_open);
     context->on_open = on_open;
 }
 

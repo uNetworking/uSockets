@@ -99,15 +99,32 @@ static inline void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 }
 
 // called by dispatch_ready_poll
-static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
+static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd, char *ip, int *ip_length) {
     LIBUS_SOCKET_DESCRIPTOR accepted_fd;
+
+    struct sockaddr_storage addr;
+    socklen_t addrlen = sizeof(addr);
+
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
     // Linux, FreeBSD
-    accepted_fd = accept4(fd, 0, 0, SOCK_CLOEXEC | SOCK_NONBLOCK);
+    accepted_fd = accept4(fd, (struct sockaddr *) &addr, &addrlen, SOCK_CLOEXEC | SOCK_NONBLOCK);
 #else
     // Windows, OS X
-    accepted_fd = accept(fd, 0, 0);
+    accepted_fd = accept(fd, (struct sockaddr *) &addr, &addrlen);
 #endif
+
+    // copy out ipv6 or ipv4 addresses
+    if (addr.ss_family == AF_INET6) {
+        struct sockaddr_in6 *ipv6_addr = (struct sockaddr_in6 *) &addr;
+        memcpy(ip, &ipv6_addr->sin6_addr, 16);
+        *ip_length = 16;
+    } else if (addr.ss_family == AF_INET) {
+        struct sockaddr_in *ipv4_addr = (struct sockaddr_in *) &addr;
+        memcpy(ip, &ipv4_addr->sin_addr, 4);
+        *ip_length = 4;
+    } else {
+        *ip_length = 0;
+    }
 
     return apple_no_sigpipe(accepted_fd);
 }

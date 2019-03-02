@@ -163,14 +163,14 @@ inline static void us_new_socket_context_on_close(const int ssl, struct us_new_s
 #endif
 }
 
-inline static void us_new_socket_context_on_open(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_open)(struct us_new_socket_t *s, int is_client)) {
+inline static void us_new_socket_context_on_open(const int ssl, struct us_new_socket_context_t *c, struct us_new_socket_t *(*on_open)(struct us_new_socket_t *s, int is_client, char *ip, int ip_length)) {
 #ifdef LIBUS_NO_SSL
-    us_socket_context_on_open((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s, int is_client)) on_open);
+    us_socket_context_on_open((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s, int is_client, char *ip, int ip_length)) on_open);
 #else
     if (ssl) {
-        us_ssl_socket_context_on_open((struct us_ssl_socket_context *) c, (struct us_ssl_socket *(*)(struct us_ssl_socket *s, int is_client)) on_open);
+        us_ssl_socket_context_on_open((struct us_ssl_socket_context *) c, (struct us_ssl_socket *(*)(struct us_ssl_socket *s, int is_client, char *ip, int ip_length)) on_open);
     } else {
-        us_socket_context_on_open((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s, int is_client)) on_open);
+        us_socket_context_on_open((struct us_socket_context *) c, (struct us_socket *(*)(struct us_socket *s, int is_client, char *ip, int ip_length)) on_open);
     }
 #endif
 }

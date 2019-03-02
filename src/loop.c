@@ -65,11 +65,6 @@ void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *conte
 
 void us_internal_timer_sweep(struct us_loop *loop) {
 
-    if (loop->data.iterator != 0) {
-        printf("TIMER SWEEP RECURSION!\n");
-        exit(-2);
-    }
-
     // we need loop->socket_iterator
     // and loop->context_iterator
     // then unlink/link functions for both
@@ -104,11 +99,6 @@ void us_internal_timer_sweep(struct us_loop *loop) {
 
 
         }
-    }
-
-    if (loop_data->iterator) {
-        printf("WTF!!!\n");
-        exit(-2);
     }
 }
 
@@ -168,11 +158,15 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                 // change type to socket here
                 us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
 
-                s->context->on_open(s, 1);
+                s->context->on_open(s, 1, 0, 0);
             } else {
                 struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
 
-                LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p));
+                // ipv6 is 16 byte long
+                char ip[16];
+                int ip_length;
+
+                LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p), ip, &ip_length);
                 if (client_fd == LIBUS_SOCKET_ERROR) {
                     // start timer here
 
@@ -196,8 +190,8 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                         // make sure to link this socket into its context!
                         us_internal_socket_context_link(listen_socket->s.context, s);
 
-                        listen_socket->s.context->on_open(s, 0);
-                    } while ((client_fd = bsd_accept_socket(us_poll_fd(p))) != LIBUS_SOCKET_ERROR);
+                        listen_socket->s.context->on_open(s, 0, ip, ip_length);
+                    } while ((client_fd = bsd_accept_socket(us_poll_fd(p), ip, &ip_length)) != LIBUS_SOCKET_ERROR);
                 }
             }
         }
