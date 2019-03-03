@@ -1,21 +1,16 @@
 ## µSockets - miniscule networking & eventing
 
-This is a cross-platform async networking and eventing foundation library written in standard C. It is the heart and soul of [µWebSockets](https://github.com/uNetworking/uWebSockets) and outperforms (esp. in memory footprint) just about everything similar out there (libuv, ASIO, etc.).
+This is the cross-platform async networking and eventing foundation library used by [µWebSockets](https://github.com/uNetworking/uWebSockets).
 
-Read the [docs](misc/manual.md) for an overview.
+### Key aspects
 
-* Built-in SSL support with similar interface as for non-SSL makes it a breeze building secure servers and clients.
-* Integrates with any event-loop via a layered hierarchical design of plugins.
-* Maps well to other user space TCP stacks (wip).
-* Extremely pedantic about user space memory footprint.
-
-Non-SSL | SSL
---- | ---
-![](misc/http.png) | ![](misc/https.png)
-
-A sample HTTP & HTTPS server has been built to very thoroughly benchmark, track and compare many cases of IO against the well-known Node.js v10. It reliably wins in every possible test case, most significantly at smaller response sizes where user space plays a larger role than when just blasting the Linux kernel with large static data buffers.
-
-One can easily conclude that for servers sending large static data, Node.js will do just as good as any other C server. For everything else there is definitely room for major improvements not only in raw throughput but esp. in memory footprint.
+* Built-in (optionally available) TLS support exposed with identical interface as for TCP.
+* Acknowledges and integrates with any event-loop via a layered hierarchical design of plugins.
+* Extremely pedantic about user space memory footprint and designed to perform as good as can be.
+* Designed from scratch to map well to user space TCP stacks or other experimental platforms.
+* Low resolution timer system ideal for performant tracking of networking timeouts.
+* Minimal yet truly cross-platform, will not emit a billion different platform specific error codes.
+* Fully opaque library, inclusion will not completely pollute your global namespace.
 
 ### Extensible
 
