@@ -98,32 +98,43 @@ static inline void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 #endif
 }
 
-// called by dispatch_ready_poll
-static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd, char *ip, int *ip_length) {
-    LIBUS_SOCKET_DESCRIPTOR accepted_fd;
+struct bsd_addr_t {
+    struct sockaddr_storage mem;
+    socklen_t len;
+    char *ip;
+    int ip_length;
+};
 
-    struct sockaddr_storage addr;
-    socklen_t addrlen = sizeof(addr);
+static inline char *bsd_addr_get_ip(struct bsd_addr_t *addr) {
+    return addr->ip;
+}
+
+static inline int bsd_addr_get_ip_length(struct bsd_addr_t *addr) {
+    return addr->ip_length;
+}
+
+// called by dispatch_ready_poll
+static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr) {
+    LIBUS_SOCKET_DESCRIPTOR accepted_fd;
+    addr->len = sizeof(addr->mem);
 
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
     // Linux, FreeBSD
-    accepted_fd = accept4(fd, (struct sockaddr *) &addr, &addrlen, SOCK_CLOEXEC | SOCK_NONBLOCK);
+    accepted_fd = accept4(fd, (struct sockaddr *) &addr, &addr->len, SOCK_CLOEXEC | SOCK_NONBLOCK);
 #else
     // Windows, OS X
-    accepted_fd = accept(fd, (struct sockaddr *) &addr, &addrlen);
+    accepted_fd = accept(fd, (struct sockaddr *) &addr, &addr->len);
 #endif
 
-    // copy out ipv6 or ipv4 addresses
-    if (addr.ss_family == AF_INET6) {
-        struct sockaddr_in6 *ipv6_addr = (struct sockaddr_in6 *) &addr;
-        memcpy(ip, &ipv6_addr->sin6_addr, 16);
-        *ip_length = 16;
-    } else if (addr.ss_family == AF_INET) {
-        struct sockaddr_in *ipv4_addr = (struct sockaddr_in *) &addr;
-        memcpy(ip, &ipv4_addr->sin_addr, 4);
-        *ip_length = 4;
+    // parse, so to speak, the address
+    if (addr->mem.ss_family == AF_INET6) {
+        addr->ip = (char *) &((struct sockaddr_in6 *) &addr)->sin6_addr;
+        addr->ip_length = sizeof(IN6_ADDR);
+    } else if (addr->mem.ss_family == AF_INET) {
+        addr->ip = (char *) &((struct sockaddr_in *) &addr)->sin_addr;
+        addr->ip_length = sizeof(IN_ADDR);
     } else {
-        *ip_length = 0;
+        addr->ip_length = 0;
     }
 
     return apple_no_sigpipe(accepted_fd);
