@@ -23,6 +23,16 @@ void us_internal_init_socket(struct us_socket *s) {
     // shared nodelay here?
 }
 
+void us_socket_remote_address(struct us_socket *s, char *buf, int *length) {
+    struct bsd_addr_t addr;
+    if (bsd_socket_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
+        *length = 0;
+    } else {
+        *length = bsd_addr_get_ip_length(&addr);
+        memcpy(buf, bsd_addr_get_ip(&addr), *length);
+    }
+}
+
 int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
     if (us_socket_is_closed(s) || us_socket_is_shut_down(s)) {
         return 0;

@@ -253,4 +253,9 @@ inline static int us_new_socket_is_shut_down(const int ssl, struct us_new_socket
 #endif
 }
 
+inline static void us_new_socket_remote_address(const int ssl, struct us_new_socket_t *s, char *buf, int *length) {
+    /* There is no SSL variant of this function */
+    us_socket_remote_address((struct us_socket *) s, buf, length);
+}
+
 #endif
