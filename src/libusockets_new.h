@@ -32,6 +32,7 @@ struct us_new_socket_context_options_t {
     const char *cert_file_name;
     const char *passphrase;
     const char *dh_params_file_name;
+    int ssl_prefer_low_memory_usage;
 };
 
 /* Per-socket-context functions */
@@ -52,7 +53,8 @@ inline static struct us_new_socket_context_t *us_new_create_socket_context(const
         options.key_file_name,
         options.cert_file_name,
         options.passphrase,
-        options.dh_params_file_name
+        options.dh_params_file_name,
+        options.ssl_prefer_low_memory_usage
     };
 
     return ssl ? (struct us_new_socket_context_t *) us_create_ssl_socket_context(loop, socket_context_ext_size, ssl_options) : (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);

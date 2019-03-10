@@ -385,6 +385,11 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop,
     SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
 
+    // this lowers performance a bit in benchmarks
+    if (options.ssl_prefer_low_memory_usage) {
+       SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
+    }
+
     //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
     SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
     SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_TLSv1);
