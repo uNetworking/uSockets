@@ -190,7 +190,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
 
         if (SSL_shutdown(s->ssl) == 1) {
             // two phase shutdown is complete here
-            printf("Two step SSL shutdown complete\n");
+            //printf("Two step SSL shutdown complete\n");
 
             return us_ssl_socket_close(s);
         } else {
