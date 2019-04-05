@@ -46,7 +46,7 @@ extern "C" {
 
 /* I guess these are listening options */
 enum {
-    OPTION_REUSE_PORT
+    OPTION_DO_NOT_REUSE_PORT
 };
 
 /* Library types publicly available */
