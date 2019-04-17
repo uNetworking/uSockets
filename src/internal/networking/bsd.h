@@ -225,7 +225,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
 
     /* Always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
 #if defined(__linux) && defined(SO_REUSEPORT)
-    if (!(options & OPTION_DO_NOT_REUSE_PORT)) {
+    if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
         int optval = 1;
         setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
     }

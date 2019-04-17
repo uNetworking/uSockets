@@ -44,9 +44,11 @@
 extern "C" {
 #endif
 
-/* I guess these are listening options */
 enum {
-    OPTION_DO_NOT_REUSE_PORT = 2
+    /* No meaning, default listen option */
+    LIBUS_LISTEN_DEFAULT,
+    /* We exclusively own this port, do not share it */
+    LIBUS_LISTEN_EXCLUSIVE_PORT
 };
 
 /* Library types publicly available */
