@@ -159,6 +159,10 @@ struct us_timer *us_create_timer(struct us_loop *loop, int fallthrough, unsigned
     return (struct us_timer *) cb;
 }
 
+void *us_timer_ext(struct us_timer *timer) {
+    return ((struct us_internal_callback *) timer) + 1;
+}
+
 void us_timer_close(struct us_timer *timer) {
     struct us_internal_callback *cb = (struct us_internal_callback *) timer;
 
