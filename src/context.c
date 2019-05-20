@@ -54,19 +54,13 @@ struct us_listen_socket *us_socket_context_listen(struct us_socket_context *cont
     }
 
     struct us_poll *p = us_create_poll(context->loop, 0, sizeof(struct us_listen_socket));
+    us_internal_init_socket((struct us_socket*) p, 0);
+
     us_poll_init(p, listen_socket_fd, POLL_TYPE_SEMI_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_READABLE);
 
     struct us_listen_socket *ls = (struct us_listen_socket *) p;
-
-    //us_internal_init_socket(&ls->s, context);
-
-    // this is common, should be like us_internal_socket_init(context);
-    ls->s.context = context;
-    ls->s.timeout = 0;
-    ls->s.next = 0;
     us_internal_socket_context_link(context, &ls->s);
-
     ls->socket_ext_size = socket_ext_size;
 
     return ls;
@@ -91,12 +85,11 @@ struct us_socket *us_socket_context_connect(struct us_socket_context *context, c
 
     // connect sockets are also listen sockets but with writable ready
     struct us_poll *p = us_create_poll(context->loop, 0, sizeof(struct us_socket) + socket_ext_size);
+    us_internal_init_socket((struct us_socket*) p, 0);
+
     us_poll_init(p, connect_socket_fd, POLL_TYPE_SEMI_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_WRITABLE);
-
     struct us_socket *connect_socket = (struct us_socket *) p;
-
-    connect_socket->context = context;
 
     // make sure to link this socket into its context!
     us_internal_socket_context_link(context, connect_socket);
@@ -120,7 +113,7 @@ struct us_socket *us_socket_context_adopt_socket(struct us_socket_context *conte
     us_internal_socket_context_unlink(s->context, s);
 
     struct us_socket *new_s = (struct us_socket *) us_poll_resize(&s->p, s->context->loop, sizeof(struct us_socket) + ext_size);
-
+    us_internal_init_socket(new_s, 1);
     us_internal_socket_context_link(context, new_s);
 
     return new_s;
@@ -151,9 +144,7 @@ void us_internal_socket_context_unlink(struct us_socket_context *context, struct
 // we always add in the top, which means we never modify any next
 void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s) {
     s->context = context; // this was added
-    s->timeout = 0; // this was needed? bug: do not reset timeout when adopting socket!
     s->next = context->head;
-    s->prev = 0;
     if (context->head) {
         context->head->prev = s;
     }

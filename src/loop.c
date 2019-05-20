@@ -173,6 +173,8 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                     do {
                         struct us_poll *p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
+                        us_internal_init_socket((struct us_socket *)p, 0);
+
                         us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
                         us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
 

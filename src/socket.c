@@ -19,8 +19,14 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-void us_internal_init_socket(struct us_socket *s) {
+void us_internal_init_socket(struct us_socket *s, bool_t is_adopted) {
     // shared nodelay here?
+	s->p.state.fd = 0;
+	s->context = 0;
+	s->next = 0;
+	s->prev = 0;
+	is_adopted? 0 : (s->timeout = 0);
+	s->p.state.poll_type = POLL_TYPE_POLLING_INIT;
 }
 
 void us_socket_remote_address(struct us_socket *s, char *buf, int *length) {

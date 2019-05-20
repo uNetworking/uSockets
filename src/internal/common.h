@@ -35,12 +35,18 @@ enum {
 
     /* Two last bits */
     POLL_TYPE_POLLING_OUT = 4,
-    POLL_TYPE_POLLING_IN = 8
+    POLL_TYPE_POLLING_IN = 8,
+
+	/* All four bits */
+	POLL_TYPE_POLLING_INIT = 15
+
 };
+
+typedef unsigned char bool_t;
 
 int us_internal_poll_type(struct us_poll *p);
 void us_internal_poll_set_type(struct us_poll *p, int poll_type);
-void us_internal_init_socket(struct us_socket *s);
+void us_internal_init_socket(struct us_socket *s, bool_t is_adopted);
 
 void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events);
 void us_internal_timer_sweep(struct us_loop *loop);

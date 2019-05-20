@@ -94,7 +94,7 @@ void *us_poll_ext(struct us_poll *p) {
 
 void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) {
     p->state.fd = fd;
-    p->state.poll_type = poll_type;
+    p->state.poll_type &= poll_type;
 }
 
 int us_poll_events(struct us_poll *p) {
