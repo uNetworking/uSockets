@@ -55,10 +55,17 @@ void us_loop_run(struct us_loop *loop) {
 
 // poll
 struct us_poll *us_create_poll(struct us_loop *loop, int fallthrough, unsigned int ext_size) {
+	//adding 1 byte to keep track of fallthrough value.
+	unsigned char * ptr = malloc(sizeof(struct us_poll) + ext_size + 1);
+
     if (!fallthrough) {
         loop->num_polls++;
+        //assign zero to 1st byte.
+        *ptr = 0;
+    } else {
+    	*ptr = 1;
     }
-    return malloc(sizeof(struct us_poll) + ext_size);
+    return (struct us_poll*)ptr + 1;
 }
 
 struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, unsigned int ext_size) {
@@ -84,8 +91,14 @@ struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop *loop, unsigned
 }
 
 void us_poll_free(struct us_poll *p, struct us_loop *loop) {
-    loop->num_polls--;
-    free(p);
+	unsigned char * ptr = (unsigned char *)p;
+
+	--ptr;
+	//read the initial byte to know fallthrough value.
+	if(!(*ptr)) {
+		loop->num_polls--;
+	}
+    free(ptr);
 }
 
 void *us_poll_ext(struct us_poll *p) {
