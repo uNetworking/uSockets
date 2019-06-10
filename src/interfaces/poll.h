@@ -18,27 +18,27 @@
 /* Public interfaces for polls */
 
 /* A fallthrough poll does not keep the loop running, it falls through */
-WIN32_EXPORT struct us_poll *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size);
+WIN32_EXPORT struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size);
 
 /* After stopping a poll you must manually free the memory */
-WIN32_EXPORT void us_poll_free(struct us_poll *p, struct us_loop_t *loop);
+WIN32_EXPORT void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop);
 
 /* Associate this poll with a socket descriptor and poll type */
-WIN32_EXPORT void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type);
+WIN32_EXPORT void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type);
 
 /* Start, change and stop polling for events */
-WIN32_EXPORT void us_poll_start(struct us_poll *p, struct us_loop_t *loop, int events);
-WIN32_EXPORT void us_poll_change(struct us_poll *p, struct us_loop_t *loop, int events);
-WIN32_EXPORT void us_poll_stop(struct us_poll *p, struct us_loop_t *loop);
+WIN32_EXPORT void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events);
+WIN32_EXPORT void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events);
+WIN32_EXPORT void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop);
 
 /* Return what events we are polling for */
-WIN32_EXPORT int us_poll_events(struct us_poll *p);
+WIN32_EXPORT int us_poll_events(struct us_poll_t *p);
 
 /* Returns the user data extension of this poll */
-WIN32_EXPORT void *us_poll_ext(struct us_poll *p);
+WIN32_EXPORT void *us_poll_ext(struct us_poll_t *p);
 
 /* Get associated socket descriptor from a poll */
-WIN32_EXPORT LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p);
+WIN32_EXPORT LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p);
 
 /* Resize an active poll */
-WIN32_EXPORT struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop_t *loop, unsigned int ext_size);
+WIN32_EXPORT struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size);

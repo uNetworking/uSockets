@@ -35,7 +35,7 @@ struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
     unsigned int ssl_read_input_offset;
-    struct us_socket *ssl_socket;
+    struct us_socket_t *ssl_socket;
 
     int last_write_was_msg_more;
     int msg_more;
@@ -66,7 +66,7 @@ struct us_ssl_socket_context {
 
 // same here, should or shouldn't it contain s?
 struct us_ssl_socket {
-    struct us_socket s;
+    struct us_socket_t s;
     SSL *ssl;
     int ssl_write_wants_read; // we use this for now
 };
@@ -378,7 +378,7 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop_t *loo
     context->ssl_context = SSL_CTX_new(TLS_method());
     context->is_parent = 1;
     // only parent ssl contexts may need to ignore data
-    context->sc.ignore_data = (int (*)(struct us_socket *)) ssl_ignore_data;
+    context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
 
     // options
     SSL_CTX_set_read_ahead(context->ssl_context, 1);
@@ -459,30 +459,30 @@ struct us_ssl_socket *us_ssl_socket_context_connect(struct us_ssl_socket_context
 }
 
 void us_ssl_socket_context_on_open(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_open)(struct us_ssl_socket *s, int is_client, char *ip, int ip_length)) {
-    us_socket_context_on_open(&context->sc, (struct us_socket *(*)(struct us_socket *, int, char *, int)) ssl_on_open);
+    us_socket_context_on_open(&context->sc, (struct us_socket_t *(*)(struct us_socket_t *, int, char *, int)) ssl_on_open);
     context->on_open = on_open;
 }
 
 void us_ssl_socket_context_on_close(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_close)(struct us_ssl_socket *s)) {
-    us_socket_context_on_close((struct us_socket_context *) context, (struct us_socket *(*)(struct us_socket *)) ssl_on_close);
+    us_socket_context_on_close((struct us_socket_context *) context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_on_close);
     context->on_close = on_close;
 }
 
 void us_ssl_socket_context_on_data(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_data)(struct us_ssl_socket *s, char *data, int length)) {
-    us_socket_context_on_data((struct us_socket_context *) context, (struct us_socket *(*)(struct us_socket *, char *, int)) ssl_on_data);
+    us_socket_context_on_data((struct us_socket_context *) context, (struct us_socket_t *(*)(struct us_socket_t *, char *, int)) ssl_on_data);
     context->on_data = on_data;
 }
 
 void us_ssl_socket_context_on_writable(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_writable)(struct us_ssl_socket *s)) {
-    us_socket_context_on_writable((struct us_socket_context *) context, (struct us_socket *(*)(struct us_socket *)) on_writable);
+    us_socket_context_on_writable((struct us_socket_context *) context, (struct us_socket_t *(*)(struct us_socket_t *)) on_writable);
 }
 
 void us_ssl_socket_context_on_timeout(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_timeout)(struct us_ssl_socket *s)) {
-    us_socket_context_on_timeout((struct us_socket_context *) context, (struct us_socket *(*)(struct us_socket *)) on_timeout);
+    us_socket_context_on_timeout((struct us_socket_context *) context, (struct us_socket_t *(*)(struct us_socket_t *)) on_timeout);
 }
 
 void us_ssl_socket_context_on_end(struct us_ssl_socket_context *context, struct us_ssl_socket *(*on_end)(struct us_ssl_socket *)) {
-    us_socket_context_on_end((struct us_socket_context *) context, (struct us_socket *(*)(struct us_socket *)) ssl_on_end);
+    us_socket_context_on_end((struct us_socket_context *) context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_on_end);
 }
 
 void *us_ssl_socket_context_ext(struct us_ssl_socket_context *context) {
@@ -541,7 +541,7 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
 }
 
 void us_ssl_socket_timeout(struct us_ssl_socket *s, unsigned int seconds) {
-    us_socket_timeout((struct us_socket *) s, seconds);
+    us_socket_timeout((struct us_socket_t *) s, seconds);
 }
 
 void *us_ssl_socket_ext(struct us_ssl_socket *s) {
@@ -586,7 +586,7 @@ void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
 }
 
 struct us_ssl_socket *us_ssl_socket_close(struct us_ssl_socket *s) {
-    return (struct us_ssl_socket *) us_socket_close((struct us_socket *) s);
+    return (struct us_ssl_socket *) us_socket_close((struct us_socket_t *) s);
 }
 
 struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_context *context, struct us_ssl_socket *s, int ext_size) {

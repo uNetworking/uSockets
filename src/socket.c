@@ -19,11 +19,11 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-void us_internal_init_socket(struct us_socket *s) {
+void us_internal_init_socket(struct us_socket_t *s) {
     // shared nodelay here?
 }
 
-void us_socket_remote_address(struct us_socket *s, char *buf, int *length) {
+void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
     struct bsd_addr_t addr;
     if (bsd_socket_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
         *length = 0;
@@ -33,8 +33,8 @@ void us_socket_remote_address(struct us_socket *s, char *buf, int *length) {
     }
 }
 
-int us_socket_write(struct us_socket *s, const char *data, int length, int msg_more) {
-    if (us_socket_is_closed(s) || us_socket_is_shut_down(s)) {
+int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
+    if (us_socket_is_closed(ssl, s) || us_socket_is_shut_down(ssl, s)) {
         return 0;
     }
 
@@ -48,15 +48,23 @@ int us_socket_write(struct us_socket *s, const char *data, int length, int msg_m
     return written < 0 ? 0 : written;
 }
 
-void *us_socket_ext(struct us_socket *s) {
+/* This is an experimentation for new SSL-routing */
+void *us_socket_ext(int ssl, struct us_socket_t *s) {
+    /* We route this call to SSL if so? */
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return us_ssl_socket_ext(s);
+    }
+#endif
+
     return s + 1;
 }
 
-struct us_socket_context *us_socket_get_context(struct us_socket *s) {
+struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
     return s->context;
 }
 
-void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
+void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
     if (seconds) {
         unsigned short timeout_sweeps = 0.5f + ((float) seconds) / ((float) LIBUS_TIMEOUT_GRANULARITY);
         s->timeout = timeout_sweeps ? timeout_sweeps : 1;
@@ -65,19 +73,19 @@ void us_socket_timeout(struct us_socket *s, unsigned int seconds) {
     }
 }
 
-void us_socket_flush(struct us_socket *s) {
-    if (!us_socket_is_shut_down(s)) {
-        bsd_socket_flush(us_poll_fd((struct us_poll *) s));
+void us_socket_flush(int ssl, struct us_socket_t *s) {
+    if (!us_socket_is_shut_down(ssl, s)) {
+        bsd_socket_flush(us_poll_fd((struct us_poll_t *) s));
     }
 }
 
 // if anything, close should return null and people should handle that!
 // including us really, however I guess libuv requires it to stick around?
-struct us_socket *us_socket_close(struct us_socket *s) {
-    if (!us_socket_is_closed(s)) {
+struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
+    if (!us_socket_is_closed(ssl, s)) {
         us_internal_socket_context_unlink(s->context, s);
-        us_poll_stop((struct us_poll *) s, s->context->loop);
-        bsd_close_socket(us_poll_fd((struct us_poll *) s));
+        us_poll_stop((struct us_poll_t *) s, s->context->loop);
+        bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
 
         // link this socket to the close-list and let it be deleted after this iteration
         s->next = s->context->loop->data.closed_head;
@@ -87,32 +95,32 @@ struct us_socket *us_socket_close(struct us_socket *s) {
         //s->prev = s->next;
 
         // signal socket closed by having prev = context
-        s->prev = (struct us_socket *) s->context;
+        s->prev = (struct us_socket_t *) s->context;
 
         return s->context->on_close(s);
     }
     return s;
 }
 
-int us_socket_is_shut_down(struct us_socket *s) {
+int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
     return us_internal_poll_type(&s->p) == POLL_TYPE_SOCKET_SHUT_DOWN;
 }
 
-void us_socket_shutdown(struct us_socket *s) {
+void us_socket_shutdown(int ssl, struct us_socket_t *s) {
     // todo: should we emit on_close if calling shutdown on an already half-closed socket?
     // we need more states in that case, we need to track RECEIVED_FIN
     // so far, the app has to track this and call close as needed
-    if (!us_socket_is_closed(s) && !us_socket_is_shut_down(s)) {
+    if (!us_socket_is_closed(ssl, s) && !us_socket_is_shut_down(ssl, s)) {
         us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
         us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
-        bsd_shutdown_socket(us_poll_fd((struct us_poll *) s));
+        bsd_shutdown_socket(us_poll_fd((struct us_poll_t *) s));
     }
 }
 
-int us_socket_is_closed(struct us_socket *s) {
+int us_socket_is_closed(int ssl, struct us_socket_t *s) {
     // this does not work as flag if only holding 1 single socket in a context
     // we only trigger this bug in a separate context since it holds no listen socket!
     //return s->prev == s->next;
 
-    return s->prev == (struct us_socket *) s->context;
+    return s->prev == (struct us_socket_t *) s->context;
 }

@@ -23,7 +23,7 @@
 
 // poll dispatch
 static void poll_cb(uv_poll_t *p, int status, int events) {
-    us_internal_dispatch_ready_poll((struct us_poll *) p, status < 0, events);
+    us_internal_dispatch_ready_poll((struct us_poll_t *) p, status < 0, events);
 }
 
 static void prepare_cb(uv_prepare_t *p) {
@@ -54,12 +54,12 @@ static void async_cb(uv_async_t *a) {
 }
 
 // poll
-void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) {
+void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) {
     p->poll_type = poll_type;
     p->fd = fd;
 }
 
-void us_poll_free(struct us_poll *p, struct us_loop_t *loop) {
+void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
     if (uv_is_closing((uv_handle_t *) &p->uv_p)) {
         p->uv_p.data = p;
     } else {
@@ -67,14 +67,14 @@ void us_poll_free(struct us_poll *p, struct us_loop_t *loop) {
     }
 }
 
-void us_poll_start(struct us_poll *p, struct us_loop_t *loop, int events) {
+void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     p->poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     uv_poll_init_socket(loop->uv_loop, &p->uv_p, p->fd);
     uv_poll_start(&p->uv_p, events, poll_cb);
 }
 
-void us_poll_change(struct us_poll *p, struct us_loop_t *loop, int events) {
+void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     if (us_poll_events(p) != events) {
         p->poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
@@ -82,7 +82,7 @@ void us_poll_change(struct us_poll *p, struct us_loop_t *loop, int events) {
     }
 }
 
-void us_poll_stop(struct us_poll *p, struct us_loop_t *loop) {
+void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
     uv_poll_stop(&p->uv_p);
 
     // close but not free is needed here
@@ -90,23 +90,23 @@ void us_poll_stop(struct us_poll *p, struct us_loop_t *loop) {
     uv_close((uv_handle_t *) &p->uv_p, close_cb_free); // needed here
 }
 
-int us_poll_events(struct us_poll *p) {
+int us_poll_events(struct us_poll_t *p) {
     return ((p->poll_type & POLL_TYPE_POLLING_IN) ? LIBUS_SOCKET_READABLE : 0) | ((p->poll_type & POLL_TYPE_POLLING_OUT) ? LIBUS_SOCKET_WRITABLE : 0);
 }
 
-unsigned int us_internal_accept_poll_event(struct us_poll *p) {
+unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
     return 0;
 }
 
-int us_internal_poll_type(struct us_poll *p) {
+int us_internal_poll_type(struct us_poll_t *p) {
     return p->poll_type & 3;
 }
 
-void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
+void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
     p->poll_type = poll_type | (p->poll_type & 12);
 }
 
-LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
+LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
     /*uv_os_fd_t fd = LIBUS_SOCKET_ERROR;
     uv_fileno((uv_handle_t *) &p->uv_p, &fd);
     return (LIBUS_SOCKET_DESCRIPTOR) fd;*/
@@ -177,17 +177,17 @@ void us_loop_run(struct us_loop_t *loop) {
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
 
-struct us_poll *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    return malloc(sizeof(struct us_poll) + ext_size);
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+    return malloc(sizeof(struct us_poll_t) + ext_size);
 }
 
 // this one is broken, see us_poll
-struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop_t *loop, unsigned int ext_size) {
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
 
     // do not support it yet
     return p;
 
-    struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
+    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p) {
         new_p->uv_p.data = new_p;
     }
@@ -196,7 +196,7 @@ struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop_t *loop, unsign
 }
 
 // timer
-struct us_timer *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_timer_t) + ext_size);
 
     cb->loop = loop;
@@ -210,14 +210,14 @@ struct us_timer *us_create_timer(struct us_loop_t *loop, int fallthrough, unsign
         uv_unref((uv_handle_t *) uv_timer);
     }
 
-    return (struct us_timer *) cb;
+    return (struct us_timer_t *) cb;
 }
 
-void *us_timer_ext(struct us_timer *timer) {
+void *us_timer_ext(struct us_timer_t *timer) {
     return ((struct us_internal_callback *) timer) + 1;
 }
 
-void us_timer_close(struct us_timer *t) {
+void us_timer_close(struct us_timer_t *t) {
     struct us_internal_callback *cb = (struct us_internal_callback *) t;
 
     uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
@@ -231,7 +231,7 @@ void us_timer_close(struct us_timer *t) {
     uv_close((uv_handle_t *) uv_timer, close_cb_free);
 }
 
-void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
+void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
     internal_cb->cb = (void(*)(struct us_internal_callback *)) cb;
@@ -244,7 +244,7 @@ void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, in
     }
 }
 
-struct us_loop_t *us_timer_loop(struct us_timer *t) {
+struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
     return internal_cb->loop;

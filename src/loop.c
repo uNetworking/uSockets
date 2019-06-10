@@ -54,7 +54,7 @@ void us_wakeup_loop(struct us_loop_t *loop) {
     us_internal_async_wakeup(loop->data.wakeup_async);
 }
 
-void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context *context) {
+void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context_t *context) {
     context->next = loop->data.head;
     context->prev = 0;
     if (loop->data.head) {
@@ -75,13 +75,13 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
     //printf("sweeping timers now\n");
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
-        struct us_socket_context *context = loop_data->iterator;
+        struct us_socket_context_t *context = loop_data->iterator;
 
         //printf("Sweeping context: %ld\n", context);
 
         for (context->iterator = context->head; context->iterator; ) {
 
-            struct us_socket *s = context->iterator;
+            struct us_socket_t *s = context->iterator;
 
             // this shouldn't count down if already at 0!
             if (s->timeout && --(s->timeout) == 0) {
@@ -106,10 +106,10 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
 void us_internal_free_closed_sockets(struct us_loop_t *loop) {
     // free all closed sockets (maybe we want to reverse this order?)
     if (loop->data.closed_head) {
-        for (struct us_socket *s = loop->data.closed_head; s; ) {
-            struct us_socket *next = s->next;
+        for (struct us_socket_t *s = loop->data.closed_head; s; ) {
+            struct us_socket_t *next = s->next;
             //printf("Freeing a closed poll now\n");
-            us_poll_free((struct us_poll *) s, loop);
+            us_poll_free((struct us_poll_t *) s, loop);
             s = next;
         }
         loop->data.closed_head = 0;
@@ -135,7 +135,7 @@ void us_internal_loop_post(struct us_loop_t *loop) {
     loop->data.post_cb(loop);
 }
 
-void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
+void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events) {
     //printf("us_internal_dispatch_ready_poll, poll: %ld, error: %d\n", p, error);
 
     switch (us_internal_poll_type(p)) {
@@ -148,7 +148,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     case POLL_TYPE_SEMI_SOCKET: {
             // is this a listen socket or connect socket?
             if (us_poll_events(p) == LIBUS_SOCKET_WRITABLE) {
-                struct us_socket *s = (struct us_socket *) p;
+                struct us_socket_t *s = (struct us_socket_t *) p;
 
                 us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
 
@@ -160,7 +160,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                 s->context->on_open(s, 1, 0, 0);
             } else {
-                struct us_listen_socket *listen_socket = (struct us_listen_socket *) p;
+                struct us_listen_socket_t *listen_socket = (struct us_listen_socket_t *) p;
                 struct bsd_addr_t addr;
 
                 LIBUS_SOCKET_DESCRIPTOR client_fd = bsd_accept_socket(us_poll_fd(p), &addr);
@@ -172,11 +172,11 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     // stop timer if any
 
                     do {
-                        struct us_poll *p = us_create_poll(us_socket_get_context(&listen_socket->s)->loop, 0, sizeof(struct us_socket) - sizeof(struct us_poll) + listen_socket->socket_ext_size);
+                        struct us_poll_t *p = us_create_poll(us_socket_context(0, &listen_socket->s)->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + listen_socket->socket_ext_size);
                         us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
                         us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
 
-                        struct us_socket *s = (struct us_socket *) p;
+                        struct us_socket_t *s = (struct us_socket_t *) p;
 
                         // this is shared!
                         s->context = listen_socket->s.context;
@@ -196,11 +196,11 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
     case POLL_TYPE_SOCKET_SHUT_DOWN:
     case POLL_TYPE_SOCKET: {
             // any use of p after this point should be invalid
-            struct us_socket *s = (struct us_socket *) p;
+            struct us_socket_t *s = (struct us_socket_t *) p;
 
             // epollerr epollhup
             if (error) {
-                s = us_socket_close(s);
+                s = us_socket_close(0, s);
                 return;
             }
 
@@ -210,13 +210,13 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
                 s = s->context->on_writable(s);
 
-                if (us_socket_is_closed(s)) {
+                if (us_socket_is_closed(0, s)) {
                     return;
                 }
 
                 // if we shut down then do this for sure!
-                if (!s->context->loop->data.last_write_failed || us_socket_is_shut_down(s)) {
-                    us_poll_change(&s->p, us_socket_get_context(s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
+                if (!s->context->loop->data.last_write_failed || us_socket_is_shut_down(0, s)) {
+                    us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
                 }
             }
 
@@ -233,15 +233,15 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
                     s = s->context->on_data(s, s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, length);
                 } else if (!length) {
                     // is_shut_down is better name now that we do not wait for writing finished
-                    if (us_socket_is_shut_down(s)) {
-                        s = us_socket_close(s);
+                    if (us_socket_is_shut_down(0, s)) {
+                        s = us_socket_close(0, s);
                     } else {
-                        us_poll_change(&s->p, us_socket_get_context(s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
+                        us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
                         // for HTTP and other similar high-level protocols a close is needed
                         s = s->context->on_end(s);
                     }
                 } else if (length == LIBUS_SOCKET_ERROR && !bsd_would_block()) {
-                    s = us_socket_close(s);
+                    s = us_socket_close(0, s);
                 }
 
                 // here we need is_closed and free or queue up the poll for removal in next loop iteration
@@ -254,7 +254,7 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 
 // sets up the sweep timer
 void us_loop_integrate(struct us_loop_t *loop) {
-    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+    us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer_t *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 }
 
 void *us_loop_ext(struct us_loop_t *loop) {

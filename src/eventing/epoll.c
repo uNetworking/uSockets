@@ -46,7 +46,7 @@ void us_loop_run(struct us_loop_t *loop) {
         us_internal_loop_pre(loop);
         loop->num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
         for (loop->fd_iterator = 0; loop->fd_iterator < loop->num_fd_ready; loop->fd_iterator++) {
-            struct us_poll *poll = (struct us_poll *) loop->ready_events[loop->fd_iterator].data.ptr;
+            struct us_poll_t *poll = (struct us_poll_t *) loop->ready_events[loop->fd_iterator].data.ptr;
             us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
         }
         us_internal_loop_post(loop);
@@ -54,17 +54,17 @@ void us_loop_run(struct us_loop_t *loop) {
 }
 
 // poll
-struct us_poll *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     if (!fallthrough) {
         loop->num_polls++;
     }
-    return malloc(sizeof(struct us_poll) + ext_size);
+    return malloc(sizeof(struct us_poll_t) + ext_size);
 }
 
-struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop_t *loop, unsigned int ext_size) {
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
 
-    struct us_poll *new_p = realloc(p, sizeof(struct us_poll) + ext_size);
+    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p && events) {
         // forcefully update poll by stripping away already set events
         new_p->state.poll_type = us_internal_poll_type(new_p);
@@ -83,25 +83,25 @@ struct us_poll *us_poll_resize(struct us_poll *p, struct us_loop_t *loop, unsign
     return new_p;
 }
 
-void us_poll_free(struct us_poll *p, struct us_loop_t *loop) {
+void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
     loop->num_polls--;
     free(p);
 }
 
-void *us_poll_ext(struct us_poll *p) {
+void *us_poll_ext(struct us_poll_t *p) {
     return p + 1;
 }
 
-void us_poll_init(struct us_poll *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) {
+void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) {
     p->state.fd = fd;
     p->state.poll_type = poll_type;
 }
 
-int us_poll_events(struct us_poll *p) {
+int us_poll_events(struct us_poll_t *p) {
     return ((p->state.poll_type & POLL_TYPE_POLLING_IN) ? LIBUS_SOCKET_READABLE : 0) | ((p->state.poll_type & POLL_TYPE_POLLING_OUT) ? LIBUS_SOCKET_WRITABLE : 0);
 }
 
-void us_poll_start(struct us_poll *p, struct us_loop_t *loop, int events) {
+void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     struct epoll_event event;
@@ -110,7 +110,7 @@ void us_poll_start(struct us_poll *p, struct us_loop_t *loop, int events) {
     epoll_ctl(loop->epfd, EPOLL_CTL_ADD, p->state.fd, &event);
 }
 
-void us_poll_change(struct us_poll *p, struct us_loop_t *loop, int events) {
+void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     if (us_poll_events(p) != events) {
 
         p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
@@ -122,25 +122,25 @@ void us_poll_change(struct us_poll *p, struct us_loop_t *loop, int events) {
     }
 }
 
-LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll *p) {
+LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
     return p->state.fd;
 }
 
 /* Returns any of listen socket, socket, shut down socket or callback */
-int us_internal_poll_type(struct us_poll *p) {
+int us_internal_poll_type(struct us_poll_t *p) {
     return p->state.poll_type & 3;
 }
 
-void us_internal_poll_set_type(struct us_poll *p, int poll_type) {
+void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
     p->state.poll_type = poll_type | (p->state.poll_type & 12);
 }
 
-void us_poll_stop(struct us_poll *p, struct us_loop_t *loop) {
+void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
     struct epoll_event event;
     epoll_ctl(loop->epfd, EPOLL_CTL_DEL, p->state.fd, &event);
 }
 
-unsigned int us_internal_accept_poll_event(struct us_poll *p) {
+unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
     int fd = us_poll_fd(p);
     uint64_t buf;
     int read_length = read(fd, &buf, 8);
@@ -148,32 +148,32 @@ unsigned int us_internal_accept_poll_event(struct us_poll *p) {
 }
 
 // timer
-struct us_timer *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
+struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
     us_poll_init(p, timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC), POLL_TYPE_CALLBACK);
 
     struct us_internal_callback *cb = (struct us_internal_callback *) p;
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
 
-    return (struct us_timer *) cb;
+    return (struct us_timer_t *) cb;
 }
 
-void *us_timer_ext(struct us_timer *timer) {
+void *us_timer_ext(struct us_timer_t *timer) {
     return ((struct us_internal_callback *) timer) + 1;
 }
 
-void us_timer_close(struct us_timer *timer) {
+void us_timer_close(struct us_timer_t *timer) {
     struct us_internal_callback *cb = (struct us_internal_callback *) timer;
 
     us_poll_stop(&cb->p, cb->loop);
     close(us_poll_fd(&cb->p));
 
     /* (regular) sockets are the only polls which are not freed immediately */
-    us_poll_free((struct us_poll *) timer, cb->loop);
+    us_poll_free((struct us_poll_t *) timer, cb->loop);
 }
 
-void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, int repeat_ms) {
+void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
     internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
@@ -183,11 +183,11 @@ void us_timer_set(struct us_timer *t, void (*cb)(struct us_timer *t), int ms, in
         {ms / 1000, ms % 1000000}
     };
 
-    timerfd_settime(us_poll_fd((struct us_poll *) t), 0, &timer_spec, NULL);
-    us_poll_start((struct us_poll *) t, internal_cb->loop, LIBUS_SOCKET_READABLE);
+    timerfd_settime(us_poll_fd((struct us_poll_t *) t), 0, &timer_spec, NULL);
+    us_poll_start((struct us_poll_t *) t, internal_cb->loop, LIBUS_SOCKET_READABLE);
 }
 
-struct us_loop_t *us_timer_loop(struct us_timer *t) {
+struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
     struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
     return internal_cb->loop;
@@ -195,7 +195,7 @@ struct us_loop_t *us_timer_loop(struct us_timer *t) {
 
 // async (internal only)
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
+    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
     us_poll_init(p, eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC), POLL_TYPE_CALLBACK);
 
     struct us_internal_callback *cb = (struct us_internal_callback *) p;
@@ -213,7 +213,7 @@ void us_internal_async_close(struct us_internal_async *a) {
     close(us_poll_fd(&cb->p));
 
     /* (regular) sockets are the only polls which are not freed immediately */
-    us_poll_free((struct us_poll *) a, cb->loop);
+    us_poll_free((struct us_poll_t *) a, cb->loop);
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
@@ -221,12 +221,12 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
 
     internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
 
-    us_poll_start((struct us_poll *) a, internal_cb->loop, LIBUS_SOCKET_READABLE);
+    us_poll_start((struct us_poll_t *) a, internal_cb->loop, LIBUS_SOCKET_READABLE);
 }
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
     uint64_t one = 1;
-    int written = write(us_poll_fd((struct us_poll *) a), &one, 8);
+    int written = write(us_poll_fd((struct us_poll_t *) a), &one, 8);
 }
 
 #endif

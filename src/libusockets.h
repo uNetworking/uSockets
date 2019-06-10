@@ -52,19 +52,17 @@ enum {
 };
 
 /* Library types publicly available */
-struct us_socket;
-struct us_timer;
-struct us_socket_context;
+struct us_socket_t;
+struct us_timer_t;
+struct us_socket_context_t;
 struct us_loop_t;
-struct us_ssl_socket_context;
-struct us_ssl_socket;
+struct us_poll_t;
 
 /* These are public interfaces sorted by subject */
 #include "interfaces/timer.h"
 #include "interfaces/context.h"
 #include "interfaces/loop.h"
 #include "interfaces/poll.h"
-#include "interfaces/ssl.h"
 #include "interfaces/socket.h"
 
 #ifdef __cplusplus

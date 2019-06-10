@@ -29,16 +29,16 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
 void us_internal_async_wakeup(struct us_internal_async *a);
 
 struct us_loop_data {
-    struct us_timer *sweep_timer;
+    struct us_timer_t *sweep_timer;
     struct us_internal_async *wakeup_async;
     int last_write_failed;
-    struct us_socket_context *head;
-    struct us_socket_context *iterator;
+    struct us_socket_context_t *head;
+    struct us_socket_context_t *iterator;
     char *recv_buf;
     void *ssl_data;
     void (*pre_cb)(struct us_loop_t *);
     void (*post_cb)(struct us_loop_t *);
-    struct us_socket *closed_head;
+    struct us_socket_t *closed_head;
     // we use this to ease the separation between ssl and tcp
     // it doesn't matter if this flips, but it never will
     // it increases by 1 every loop pre

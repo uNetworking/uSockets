@@ -34,7 +34,7 @@ struct us_loop_t {
     uv_check_t *uv_check;
 };
 
-struct us_poll {
+struct us_poll_t {
     // this one needs to be a pointer to support resize
     uv_poll_t uv_p;
     LIBUS_SOCKET_DESCRIPTOR fd;

@@ -1,6 +1,6 @@
 /* This example, or test, is a moron test where the library is being hammered in all the possible ways randomly over time */
 
-#include <libusockets_new.h>
+#include <libusockets.h>
 const int SSL = 1;
 
 #include <stdio.h>
@@ -10,8 +10,8 @@ const int SSL = 1;
 
 // todo: properly put all of these in various ext data so to test them!
 int opened_connections, closed_connections, operations_done;
-struct us_new_socket_context_t *http_context, *websocket_context;
-struct us_listen_socket *listen_socket;
+struct us_socket_context_t *http_context, *websocket_context;
+struct us_listen_socket_t *listen_socket;
 
 // put in loop ext data
 void *long_buffer;
@@ -38,8 +38,8 @@ struct web_socket {
 };
 
 /* This checks the ext data state according to callbacks */
-void assume_state(struct us_new_socket_t *s, int is_http) {
-    struct http_socket *hs = (struct http_socket *) us_new_socket_ext(SSL, s);
+void assume_state(struct us_socket_t *s, int is_http) {
+    struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
 
     if (hs->pad_invariant != pad_should_always_be || hs->post_pad_invariant != pad_should_always_be) {
         printf("ERROR: Pad invariant is not correct!\n");
@@ -66,22 +66,22 @@ struct http_context {
 
 // todo: it would be nice to randomly select socket instead of
 // using the one responsible for the event
-struct us_new_socket_t *perform_random_operation(struct us_new_socket_t *s) {
+struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
     switch (rand() % 5) {
         case 0: {
             // close
-            return us_new_socket_close(SSL, s);
+            return us_socket_close(SSL, s);
         }
         case 1: {
             // adoption cannot happen if closed!
-            if (!us_new_socket_is_closed(SSL, s)) {
+            if (!us_socket_is_closed(SSL, s)) {
                 if (rand() % 2) {
-                    s = us_new_socket_context_adopt_socket(SSL, websocket_context, s, sizeof(struct web_socket));
-                    struct http_socket *hs = (struct http_socket *) us_new_socket_ext(SSL, s);
+                    s = us_socket_context_adopt_socket(SSL, websocket_context, s, sizeof(struct web_socket));
+                    struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
                     hs->is_http = 0;
                 } else {
-                    s = us_new_socket_context_adopt_socket(SSL, http_context, s, sizeof(struct http_socket));
-                    struct http_socket *hs = (struct http_socket *) us_new_socket_ext(SSL, s);
+                    s = us_socket_context_adopt_socket(SSL, http_context, s, sizeof(struct http_socket));
+                    struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
                     hs->is_http = 1;
                 }
             }
@@ -90,18 +90,18 @@ struct us_new_socket_t *perform_random_operation(struct us_new_socket_t *s) {
         }
         case 2: {
             // write
-            us_new_socket_write(SSL, s, (char *) long_buffer, rand() % long_length, 0);
+            us_socket_write(SSL, s, (char *) long_buffer, rand() % long_length, 0);
         }
         break;
         case 3: {
             // shutdown
-            us_new_socket_shutdown(SSL, s);
+            us_socket_shutdown(SSL, s);
         }
         break;
         case 4: {
             // loop wakeup and timeout sweep
-            us_new_socket_timeout(SSL, s, 1);
-            us_wakeup_loop(us_new_socket_context_loop(SSL, us_new_socket_context(SSL, s)));
+            us_socket_timeout(SSL, s, 1);
+            us_wakeup_loop(us_socket_context_loop(SSL, us_socket_context(SSL, s)));
         }
         break;
     }
@@ -127,65 +127,65 @@ void on_post(struct us_loop_t *loop) {
     // check if we did perform_random_operation
 }
 
-struct us_new_socket_t *on_web_socket_writable(struct us_new_socket_t *s) {
+struct us_socket_t *on_web_socket_writable(struct us_socket_t *s) {
     printf("on_web_socket_writable\n");
     assume_state(s, 0);
 
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_http_socket_writable(struct us_new_socket_t *s) {
+struct us_socket_t *on_http_socket_writable(struct us_socket_t *s) {
     printf("on_http_socket_writable\n");
     assume_state(s, 1);
 
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_web_socket_close(struct us_new_socket_t *s) {
+struct us_socket_t *on_web_socket_close(struct us_socket_t *s) {
     assume_state(s, 0);
 
     closed_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
     if (closed_connections == 10000) {
-        us_listen_socket_close(listen_socket);
+        us_listen_socket_close(SSL, listen_socket);
     } else {
         return perform_random_operation(s);
     }
     return s;
 }
 
-struct us_new_socket_t *on_http_socket_close(struct us_new_socket_t *s) {
+struct us_socket_t *on_http_socket_close(struct us_socket_t *s) {
     assume_state(s, 1);
 
     closed_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
     if (closed_connections == 10000) {
-        us_listen_socket_close(listen_socket);
+        us_listen_socket_close(SSL, listen_socket);
     } else {
         return perform_random_operation(s);
     }
     return s;
 }
 
-struct us_new_socket_t *on_web_socket_end(struct us_new_socket_t *s) {
+struct us_socket_t *on_web_socket_end(struct us_socket_t *s) {
     assume_state(s, 0);
 
     // we need to close on shutdown
-    s = us_new_socket_close(SSL, s);
+    s = us_socket_close(SSL, s);
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_http_socket_end(struct us_new_socket_t *s) {
+struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
     assume_state(s, 1);
 
     // we need to close on shutdown
-    s = us_new_socket_close(SSL, s);
+    s = us_socket_close(SSL, s);
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_web_socket_data(struct us_new_socket_t *s, char *data, int length) {
+struct us_socket_t *on_web_socket_data(struct us_socket_t *s, char *data, int length) {
     assume_state(s, 0);
 
     if (length == 0) {
@@ -197,7 +197,7 @@ struct us_new_socket_t *on_web_socket_data(struct us_new_socket_t *s, char *data
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_http_socket_data(struct us_new_socket_t *s, char *data, int length) {
+struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int length) {
     assume_state(s, 1);
 
     if (length == 0) {
@@ -209,14 +209,14 @@ struct us_new_socket_t *on_http_socket_data(struct us_new_socket_t *s, char *dat
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_web_socket_open(struct us_new_socket_t *s, int is_client, char *ip, int ip_length) {
+struct us_socket_t *on_web_socket_open(struct us_socket_t *s, int is_client, char *ip, int ip_length) {
     // fail here, this can never happen!
     printf("ERROR: on_web_socket_open called!\n");
     exit(-2);
 }
 
-struct us_new_socket_t *on_http_socket_open(struct us_new_socket_t *s, int is_client, char *ip, int ip_length) {
-    struct http_socket *hs = (struct http_socket *) us_new_socket_ext(SSL, s);
+struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, char *ip, int ip_length) {
+    struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
     hs->is_http = 1;
     hs->pad_invariant = pad_should_always_be;
     hs->post_pad_invariant = pad_should_always_be;
@@ -227,19 +227,19 @@ struct us_new_socket_t *on_http_socket_open(struct us_new_socket_t *s, int is_cl
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
     if (is_client && opened_connections < 10000) {
-        us_new_socket_context_connect(SSL, http_context, "localhost", 3000, 0, sizeof(struct http_socket));
+        us_socket_context_connect(SSL, http_context, "localhost", 3000, 0, sizeof(struct http_socket));
     }
 
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_web_socket_timeout(struct us_new_socket_t *s) {
+struct us_socket_t *on_web_socket_timeout(struct us_socket_t *s) {
     assume_state(s, 0);
 
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_http_socket_timeout(struct us_new_socket_t *s) {
+struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
     assume_state(s, 1);
 
     return perform_random_operation(s);
@@ -259,42 +259,42 @@ int main() {
 
 
     // these are ignored for non-SSL
-    struct us_new_socket_context_options_t options = {};
+    struct us_socket_context_options_t options = {};
     options.key_file_name = "/home/alexhultman/uWebSockets.js/misc/key.pem";
     options.cert_file_name = "/home/alexhultman/uWebSockets.js/misc/cert.pem";
     options.passphrase = "1234";
 
-    http_context = us_new_create_socket_context(SSL, loop, sizeof(struct http_context), options);
+    http_context = us_create_socket_context(SSL, loop, sizeof(struct http_context), options);
 
 
-    us_new_socket_context_on_open(SSL, http_context, on_http_socket_open);
-    us_new_socket_context_on_data(SSL, http_context, on_http_socket_data);
-    us_new_socket_context_on_writable(SSL, http_context, on_http_socket_writable);
-    us_new_socket_context_on_close(SSL, http_context, on_http_socket_close);
-    us_new_socket_context_on_timeout(SSL, http_context, on_http_socket_timeout);
-    us_new_socket_context_on_end(SSL, http_context, on_http_socket_end);
+    us_socket_context_on_open(SSL, http_context, on_http_socket_open);
+    us_socket_context_on_data(SSL, http_context, on_http_socket_data);
+    us_socket_context_on_writable(SSL, http_context, on_http_socket_writable);
+    us_socket_context_on_close(SSL, http_context, on_http_socket_close);
+    us_socket_context_on_timeout(SSL, http_context, on_http_socket_timeout);
+    us_socket_context_on_end(SSL, http_context, on_http_socket_end);
 
-    websocket_context = us_new_create_child_socket_context(SSL, http_context, sizeof(struct http_context));
+    websocket_context = us_create_child_socket_context(SSL, http_context, sizeof(struct http_context));
 
-    us_new_socket_context_on_open(SSL, websocket_context, on_web_socket_open);
-    us_new_socket_context_on_data(SSL, websocket_context, on_web_socket_data);
-    us_new_socket_context_on_writable(SSL, websocket_context, on_web_socket_writable);
-    us_new_socket_context_on_close(SSL, websocket_context, on_web_socket_close);
-    us_new_socket_context_on_timeout(SSL, websocket_context, on_web_socket_timeout);
-    us_new_socket_context_on_end(SSL, websocket_context, on_web_socket_end);
+    us_socket_context_on_open(SSL, websocket_context, on_web_socket_open);
+    us_socket_context_on_data(SSL, websocket_context, on_web_socket_data);
+    us_socket_context_on_writable(SSL, websocket_context, on_web_socket_writable);
+    us_socket_context_on_close(SSL, websocket_context, on_web_socket_close);
+    us_socket_context_on_timeout(SSL, websocket_context, on_web_socket_timeout);
+    us_socket_context_on_end(SSL, websocket_context, on_web_socket_end);
 
-    listen_socket = us_new_socket_context_listen(SSL, http_context, 0, 3000, 0, sizeof(struct http_socket));
+    listen_socket = us_socket_context_listen(SSL, http_context, 0, 3000, 0, sizeof(struct http_socket));
 
     if (listen_socket) {
         printf("Running hammer test\n");
-        us_new_socket_context_connect(SSL, http_context, "localhost", 3000, 0, sizeof(struct http_socket));
+        us_socket_context_connect(SSL, http_context, "localhost", 3000, 0, sizeof(struct http_socket));
         us_loop_run(loop);
     } else {
         printf("Cannot listen to port 3000!\n");
     }
 
-    us_new_socket_context_free(SSL, websocket_context);
-    us_new_socket_context_free(SSL, http_context);
+    us_socket_context_free(SSL, websocket_context);
+    us_socket_context_free(SSL, http_context);
     us_loop_free(loop);
     free(long_buffer);
     printf("Done, shutting down now\n");

@@ -38,7 +38,7 @@ struct us_loop_t {
     struct epoll_event ready_events[1024];
 };
 
-struct us_poll {
+struct us_poll_t {
     struct {
         int fd : 28;
         unsigned int poll_type : 4;

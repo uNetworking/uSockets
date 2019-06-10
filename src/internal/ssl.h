@@ -17,6 +17,8 @@
 
 /* Public interfaces for SSL sockets and contexts */
 
+// this file now becomes internal!
+
 #ifndef LIBUS_NO_SSL
 
 /* An options structure where set options are non-null. Used to initialize an SSL socket context */
