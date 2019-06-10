@@ -44,7 +44,7 @@ inline static struct us_new_socket_t *us_new_socket_context_connect(const int ss
 #endif
 }
 
-inline static struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
+inline static struct us_new_socket_context_t *us_new_create_socket_context(const int ssl, struct us_loop_t *loop, int socket_context_ext_size, struct us_new_socket_context_options_t options) {
 #ifdef LIBUS_NO_SSL
     return (struct us_new_socket_context_t *) us_create_socket_context(loop, socket_context_ext_size);
 #else
@@ -97,7 +97,7 @@ inline static struct us_listen_socket *us_new_socket_context_listen(const int ss
 #endif
 }
 
-inline static struct us_loop *us_new_socket_context_loop(const int ssl, struct us_new_socket_context_t *c) {
+inline static struct us_loop_t *us_new_socket_context_loop(const int ssl, struct us_new_socket_context_t *c) {
 #ifdef LIBUS_NO_SSL
     return us_socket_context_loop((struct us_socket_context *) c);
 #else

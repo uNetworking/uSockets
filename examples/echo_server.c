@@ -19,17 +19,17 @@ struct echo_context {
 };
 
 /* Loop wakeup handler */
-void on_wakeup(struct us_loop *loop) {
+void on_wakeup(struct us_loop_t *loop) {
 
 }
 
 /* Loop pre iteration handler */
-void on_pre(struct us_loop *loop) {
+void on_pre(struct us_loop_t *loop) {
 
 }
 
 /* Loop post iteration handler */
-void on_post(struct us_loop *loop) {
+void on_post(struct us_loop_t *loop) {
 
 }
 
@@ -98,7 +98,7 @@ struct us_new_socket_t *on_echo_socket_data(struct us_new_socket_t *s, char *dat
 }
 
 /* Socket opened handler */
-struct us_new_socket_t *on_echo_socket_open(struct us_new_socket_t *s, int is_client) {
+struct us_new_socket_t *on_echo_socket_open(struct us_new_socket_t *s, int is_client, char *ip, int ip_length) {
 	struct echo_socket *es = (struct echo_socket *) us_new_socket_ext(SSL, s);
 
 	/* Initialize the new socket's extension */
@@ -121,7 +121,7 @@ struct us_new_socket_t *on_echo_socket_timeout(struct us_new_socket_t *s) {
 
 int main() {
 	/* The event loop */
-	struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
+	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
 	/* Socket context */
 	struct us_new_socket_context_options_t options = {};

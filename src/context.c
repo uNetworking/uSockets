@@ -24,7 +24,7 @@ int default_ignore_data_handler(struct us_socket *s) {
 }
 
 // put this in loop.c?
-struct us_socket_context *us_create_socket_context(struct us_loop *loop, int context_ext_size) {
+struct us_socket_context *us_create_socket_context(struct us_loop_t *loop, int context_ext_size) {
     struct us_socket_context *context = malloc(sizeof(struct us_socket_context) + context_ext_size);
 
     // us_socket_context_init(loop)
@@ -188,6 +188,6 @@ void *us_socket_context_ext(struct us_socket_context *context) {
     return context + 1;
 }
 
-struct us_loop *us_socket_context_loop(struct us_socket_context *context) {
+struct us_loop_t *us_socket_context_loop(struct us_socket_context *context) {
     return context->loop;
 }

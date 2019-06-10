@@ -29,7 +29,7 @@ struct us_ssl_socket_context_options {
 };
 
 /* See us_create_socket_context. SSL variant taking SSL options structure */
-WIN32_EXPORT struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options);
+WIN32_EXPORT struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_ssl_socket_context_options options);
 
 /* */
 WIN32_EXPORT void us_ssl_socket_context_free(struct us_ssl_socket_context *context);
@@ -80,6 +80,6 @@ WIN32_EXPORT struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_
  * parent socket context for some shared resources. Child socket contexts should be used together with socket adoptions and nothing else. */
 WIN32_EXPORT struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context, int context_ext_size);
 
-WIN32_EXPORT struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context);
+WIN32_EXPORT struct us_loop_t *us_ssl_socket_context_loop(struct us_ssl_socket_context *context);
 
 #endif

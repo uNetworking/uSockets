@@ -108,22 +108,22 @@ struct us_new_socket_t *perform_random_operation(struct us_new_socket_t *s) {
     return s;
 }
 
-void on_wakeup(struct us_loop *loop) {
+void on_wakeup(struct us_loop_t *loop) {
     // note: we expose internal functions to trigger a timeout sweep to find bugs
-    extern void us_internal_timer_sweep(struct us_loop *loop);
+    extern void us_internal_timer_sweep(struct us_loop_t *loop);
     us_internal_timer_sweep(loop);
 }
 
 // maybe use thse to count spurious wakeups?
 // that is, if we get tons of pre/post over and over without any events
 // that would point towards 100% cpu usage kind of bugs
-void on_pre(struct us_loop *loop) {
+void on_pre(struct us_loop_t *loop) {
     printf("PRE\n");
 
     // reset a boolean here
 }
 
-void on_post(struct us_loop *loop) {
+void on_post(struct us_loop_t *loop) {
     // check if we did perform_random_operation
 }
 
@@ -209,13 +209,13 @@ struct us_new_socket_t *on_http_socket_data(struct us_new_socket_t *s, char *dat
     return perform_random_operation(s);
 }
 
-struct us_new_socket_t *on_web_socket_open(struct us_new_socket_t *s, int is_client) {
+struct us_new_socket_t *on_web_socket_open(struct us_new_socket_t *s, int is_client, char *ip, int ip_length) {
     // fail here, this can never happen!
     printf("ERROR: on_web_socket_open called!\n");
     exit(-2);
 }
 
-struct us_new_socket_t *on_http_socket_open(struct us_new_socket_t *s, int is_client) {
+struct us_new_socket_t *on_http_socket_open(struct us_new_socket_t *s, int is_client, char *ip, int ip_length) {
     struct http_socket *hs = (struct http_socket *) us_new_socket_ext(SSL, s);
     hs->is_http = 1;
     hs->pad_invariant = pad_should_always_be;
@@ -249,7 +249,7 @@ int main() {
     srand(time(0));
     long_buffer = calloc(long_length, 1);
 
-    struct us_loop *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
+    struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     // us_loop_on_wakeup()
     // us_loop_on_pre()

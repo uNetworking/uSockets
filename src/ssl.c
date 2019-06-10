@@ -135,7 +135,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
 struct us_ssl_socket *ssl_on_open(struct us_ssl_socket *s, int is_client, char *ip, int ip_length) {
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
-    struct us_loop *loop = us_socket_context_loop(&context->sc);
+    struct us_loop_t *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     s->ssl = SSL_new(context->ssl_context);
@@ -175,7 +175,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
     // note: this context can change when we adopt the socket!
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
-    struct us_loop *loop = us_socket_context_loop(&context->sc);
+    struct us_loop_t *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
@@ -283,7 +283,7 @@ struct us_ssl_socket *ssl_on_data(struct us_ssl_socket *s, void *data, int lengt
 }
 
 /* Lazily inits loop ssl data first time */
-void us_internal_init_loop_ssl_data(struct us_loop *loop) {
+void us_internal_init_loop_ssl_data(struct us_loop_t *loop) {
     if (!loop->data.ssl_data) {
         struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
 
@@ -311,7 +311,7 @@ void us_internal_init_loop_ssl_data(struct us_loop *loop) {
 }
 
 /* Called by loop free, clears any loop ssl data */
-void us_internal_free_loop_ssl_data(struct us_loop *loop) {
+void us_internal_free_loop_ssl_data(struct us_loop_t *loop) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     if (loop_ssl_data) {
@@ -339,7 +339,7 @@ int ssl_ignore_data(struct us_ssl_socket *s) {
 
     // this path is run for all ssl sockets that are in init and just got data event from polling
 
-    struct us_loop *loop = s->s.context->loop;
+    struct us_loop_t *loop = s->s.context->loop;
     struct loop_ssl_data *loop_ssl_data = loop->data.ssl_data;
 
     // reset handshake budget if new iteration
@@ -369,7 +369,7 @@ struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_s
     return child_context;
 }
 
-struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop *loop, int context_ext_size, struct us_ssl_socket_context_options options) {
+struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_ssl_socket_context_options options) {
 
     us_internal_init_loop_ssl_data(loop);
 
@@ -501,7 +501,7 @@ int us_ssl_socket_write(struct us_ssl_socket *s, const char *data, int length, i
 
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
 
-    struct us_loop *loop = us_socket_context_loop(&context->sc);
+    struct us_loop_t *loop = us_socket_context_loop(&context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     // it makes literally no sense to touch this here! it should start at 0 and ONLY be set and reset by the on_data function!
@@ -555,7 +555,7 @@ int us_ssl_socket_is_shut_down(struct us_ssl_socket *s) {
 void us_ssl_socket_shutdown(struct us_ssl_socket *s) {
     if (!us_socket_is_closed(&s->s) && !us_ssl_socket_is_shut_down(s)) {
         struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_socket_get_context(&s->s);
-        struct us_loop *loop = us_socket_context_loop(&context->sc);
+        struct us_loop_t *loop = us_socket_context_loop(&context->sc);
         struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
         // also makes no sense to touch this here!
@@ -594,7 +594,7 @@ struct us_ssl_socket *us_ssl_socket_context_adopt_socket(struct us_ssl_socket_co
     return (struct us_ssl_socket *) us_socket_context_adopt_socket(&context->sc, &s->s, sizeof(struct us_ssl_socket) - sizeof(struct us_socket) + ext_size);
 }
 
-struct us_loop *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
+struct us_loop_t *us_ssl_socket_context_loop(struct us_ssl_socket_context *context) {
     return context->sc.loop;
 }
 

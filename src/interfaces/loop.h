@@ -18,23 +18,23 @@
 /* Public interfaces for loops */
 
 /* Returns a new event loop with user data extension */
-WIN32_EXPORT struct us_loop *us_create_loop(int default_hint, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop), unsigned int ext_size);
+WIN32_EXPORT struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size);
 
-/* */
-WIN32_EXPORT void us_loop_free(struct us_loop *loop);
+/* Frees the loop immediately */
+WIN32_EXPORT void us_loop_free(struct us_loop_t *loop);
 
 /* Returns the loop user data extension */
-WIN32_EXPORT void *us_loop_ext(struct us_loop *loop);
+WIN32_EXPORT void *us_loop_ext(struct us_loop_t *loop);
 
 /* Blocks the calling thread and drives the event loop until no more non-fallthrough polls are scheduled */
-WIN32_EXPORT void us_loop_run(struct us_loop *loop);
+WIN32_EXPORT void us_loop_run(struct us_loop_t *loop);
 
 /* Signals the loop from any thread to wake up and execute its wakeup handler from the loop's own running thread.
  * This is the only fully thread-safe function and serves as the basis for thread safety */
-WIN32_EXPORT void us_wakeup_loop(struct us_loop *loop);
+WIN32_EXPORT void us_wakeup_loop(struct us_loop_t *loop);
 
 /* Hook up timers in existing loop */
-WIN32_EXPORT void us_loop_integrate(struct us_loop *loop);
+WIN32_EXPORT void us_loop_integrate(struct us_loop_t *loop);
 
 /* Returns the loop iteration number */
-WIN32_EXPORT long long us_loop_iteration_number(struct us_loop *loop);
+WIN32_EXPORT long long us_loop_iteration_number(struct us_loop_t *loop);

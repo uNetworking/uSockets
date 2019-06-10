@@ -18,7 +18,7 @@
 /* Public interfaces for contexts */
 
 /* A socket context holds shared callbacks and user data extension for associated sockets */
-WIN32_EXPORT struct us_socket_context *us_create_socket_context(struct us_loop *loop, int ext_size);
+WIN32_EXPORT struct us_socket_context *us_create_socket_context(struct us_loop_t *loop, int ext_size);
 
 /* Delete resources allocated at creation time. */
 WIN32_EXPORT void us_socket_context_free(struct us_socket_context *context);
@@ -46,7 +46,7 @@ WIN32_EXPORT void us_listen_socket_close(struct us_listen_socket *ls);
 WIN32_EXPORT struct us_socket *us_socket_context_connect(struct us_socket_context *context, const char *host, int port, int options, int socket_ext_size);
 
 /* Returns the loop for this socket context. */
-WIN32_EXPORT struct us_loop *us_socket_context_loop(struct us_socket_context *context);
+WIN32_EXPORT struct us_loop_t *us_socket_context_loop(struct us_socket_context *context);
 
 /* Invalidates passed socket, returning a new resized socket which belongs to a different socket context.
  * Used mainly for "socket upgrades" such as when transitioning from HTTP to WebSocket. */

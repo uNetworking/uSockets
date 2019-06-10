@@ -19,7 +19,7 @@
 #include "internal/common.h"
 #include <stdlib.h>
 
-void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct us_loop *loop), void (*pre_cb)(struct us_loop *loop), void (*post_cb)(struct us_loop *loop)) {
+void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop)) {
     loop->data.sweep_timer = us_create_timer(loop, 1, 0);
     loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
     loop->data.ssl_data = 0;
@@ -38,7 +38,7 @@ void us_internal_loop_data_init(struct us_loop *loop, void (*wakeup_cb)(struct u
     us_internal_async_set(loop->data.wakeup_async, (void (*)(struct us_internal_async *)) wakeup_cb);
 }
 
-void us_internal_loop_data_free(struct us_loop *loop) {
+void us_internal_loop_data_free(struct us_loop_t *loop) {
     // we need to hook into the SSL layer here to free stuff
 #ifndef LIBUS_NO_SSL
     us_internal_free_loop_ssl_data(loop);
@@ -50,11 +50,11 @@ void us_internal_loop_data_free(struct us_loop *loop) {
     us_internal_async_close(loop->data.wakeup_async);
 }
 
-void us_wakeup_loop(struct us_loop *loop) {
+void us_wakeup_loop(struct us_loop_t *loop) {
     us_internal_async_wakeup(loop->data.wakeup_async);
 }
 
-void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *context) {
+void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context *context) {
     context->next = loop->data.head;
     context->prev = 0;
     if (loop->data.head) {
@@ -63,7 +63,7 @@ void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *conte
     loop->data.head = context;
 }
 
-void us_internal_timer_sweep(struct us_loop *loop) {
+void us_internal_timer_sweep(struct us_loop_t *loop) {
 
     // we need loop->socket_iterator
     // and loop->context_iterator
@@ -103,7 +103,7 @@ void us_internal_timer_sweep(struct us_loop *loop) {
 }
 
 // this one also works with the linked list
-void us_internal_free_closed_sockets(struct us_loop *loop) {
+void us_internal_free_closed_sockets(struct us_loop_t *loop) {
     // free all closed sockets (maybe we want to reverse this order?)
     if (loop->data.closed_head) {
         for (struct us_socket *s = loop->data.closed_head; s; ) {
@@ -120,17 +120,17 @@ void sweep_timer_cb(struct us_internal_callback *cb) {
     us_internal_timer_sweep(cb->loop);
 }
 
-long long us_loop_iteration_number(struct us_loop *loop) {
+long long us_loop_iteration_number(struct us_loop_t *loop) {
     return loop->data.iteration_nr;
 }
 
 // called by epoll or libuv event loops (they decide what makes up these)
-void us_internal_loop_pre(struct us_loop *loop) {
+void us_internal_loop_pre(struct us_loop_t *loop) {
     loop->data.iteration_nr++;
     loop->data.pre_cb(loop);
 }
 
-void us_internal_loop_post(struct us_loop *loop) {
+void us_internal_loop_post(struct us_loop_t *loop) {
     us_internal_free_closed_sockets(loop);
     loop->data.post_cb(loop);
 }
@@ -253,10 +253,10 @@ void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events) {
 }
 
 // sets up the sweep timer
-void us_loop_integrate(struct us_loop *loop) {
+void us_loop_integrate(struct us_loop_t *loop) {
     us_timer_set(loop->data.sweep_timer, (void (*)(struct us_timer *)) sweep_timer_cb, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
 }
 
-void *us_loop_ext(struct us_loop *loop) {
+void *us_loop_ext(struct us_loop_t *loop) {
     return loop + 1;
 }

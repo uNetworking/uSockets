@@ -19,16 +19,16 @@ struct http_context {
 };
 
 /* We don't need any of these */
-void on_wakeup(struct us_loop *loop) {
+void on_wakeup(struct us_loop_t *loop) {
 
 }
 
-void on_pre(struct us_loop *loop) {
+void on_pre(struct us_loop_t *loop) {
 
 }
 
 /* This is not HTTP POST, it is merely an event emitted post loop iteration */
-void on_post(struct us_loop *loop) {
+void on_post(struct us_loop_t *loop) {
 
 }
 
@@ -68,7 +68,7 @@ struct us_new_socket_t *on_http_socket_data(struct us_new_socket_t *s, char *dat
 	return s;
 }
 
-struct us_new_socket_t *on_http_socket_open(struct us_new_socket_t *s, int is_client) {
+struct us_new_socket_t *on_http_socket_open(struct us_new_socket_t *s, int is_client, char *ip, int ip_length) {
 	struct http_socket *http_socket = (struct http_socket *) us_new_socket_ext(SSL, s);
 
 	/* Reset offset */
@@ -89,7 +89,7 @@ struct us_new_socket_t *on_http_socket_timeout(struct us_new_socket_t *s) {
 
 int main() {
 	/* Create the event loop */
-	struct us_loop *loop = us_create_loop(1, on_wakeup, on_pre, on_post, 0);
+	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
 	/* Create a socket context for HTTP */
 	struct us_new_socket_context_options_t options = {};
@@ -102,7 +102,7 @@ int main() {
 
 	/* Generate the shared response */
 	const char body[] = "<html><body><h1>Why hello there!</h1></body></html>";
-	
+
 	struct http_context *http_context_ext = (struct http_context *) us_new_socket_context_ext(SSL, http_context);
 	http_context_ext->response = (char *) malloc(128 + sizeof(body) - 1);
 	http_context_ext->length = snprintf(http_context_ext->response, 128 + sizeof(body) - 1, "HTTP/1.1 200 OK\r\nContent-Length: %ld\r\n\r\n%s", sizeof(body) - 1, body);

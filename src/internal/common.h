@@ -43,17 +43,17 @@ void us_internal_poll_set_type(struct us_poll *p, int poll_type);
 void us_internal_init_socket(struct us_socket *s);
 
 void us_internal_dispatch_ready_poll(struct us_poll *p, int error, int events);
-void us_internal_timer_sweep(struct us_loop *loop);
-void us_internal_free_closed_sockets(struct us_loop *loop);
+void us_internal_timer_sweep(struct us_loop_t *loop);
+void us_internal_free_closed_sockets(struct us_loop_t *loop);
 unsigned int us_internal_accept_poll_event(struct us_poll *p);
 
-void us_internal_init_loop_ssl_data(struct us_loop *loop);
-void us_internal_free_loop_ssl_data(struct us_loop *loop);
+void us_internal_init_loop_ssl_data(struct us_loop_t *loop);
+void us_internal_free_loop_ssl_data(struct us_loop_t *loop);
 
 void us_internal_socket_context_link(struct us_socket_context *context, struct us_socket *s);
 void us_internal_socket_context_unlink(struct us_socket_context *context, struct us_socket *s);
 
-void us_internal_loop_link(struct us_loop *loop, struct us_socket_context *context);
+void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context *context);
 
 struct us_socket {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_poll p;
@@ -68,7 +68,7 @@ struct us_listen_socket {
 };
 
 struct us_socket_context {
-    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop *loop;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_t *loop;
     //unsigned short timeout;
     struct us_socket *head;
     struct us_socket *iterator;
@@ -86,7 +86,7 @@ struct us_socket_context {
 
 struct us_internal_callback {
     struct us_poll p;
-    struct us_loop *loop;
+    struct us_loop_t *loop;
     int cb_expects_the_loop;
     void (*cb)(struct us_internal_callback *cb);
 };

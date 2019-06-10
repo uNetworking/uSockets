@@ -24,7 +24,7 @@
 #define LIBUS_SOCKET_READABLE UV_READABLE
 #define LIBUS_SOCKET_WRITABLE UV_WRITABLE
 
-struct us_loop {
+struct us_loop_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
 
     uv_loop_t *uv_loop;

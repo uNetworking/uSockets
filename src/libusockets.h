@@ -55,7 +55,7 @@ enum {
 struct us_socket;
 struct us_timer;
 struct us_socket_context;
-struct us_loop;
+struct us_loop_t;
 struct us_ssl_socket_context;
 struct us_ssl_socket;
 

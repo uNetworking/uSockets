@@ -26,7 +26,7 @@
 #define LIBUS_SOCKET_READABLE EPOLLIN
 #define LIBUS_SOCKET_WRITABLE EPOLLOUT
 
-struct us_loop {
+struct us_loop_t {
     // common data
     alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
 
