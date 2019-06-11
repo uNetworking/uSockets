@@ -26,6 +26,8 @@
 #include "internal/eventing/libuv.h"
 #endif
 
+#include "internal/ssl.h"
+
 enum {
     /* Two first bits */
     POLL_TYPE_SOCKET = 0,
