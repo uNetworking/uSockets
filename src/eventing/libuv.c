@@ -136,7 +136,7 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     us_internal_loop_data_init(loop, wakeup_cb, pre_cb, post_cb);
 
     // if we do not own this loop, we need to integrate and set up timer
-    if (default_hint) {
+    if (hint) {
         us_loop_integrate(loop);
     }
 
