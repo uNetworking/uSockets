@@ -359,7 +359,7 @@ int ssl_ignore_data(struct us_ssl_socket *s) {
 
 /* Per-context functions */
 struct us_ssl_socket_context *us_create_child_ssl_socket_context(struct us_ssl_socket_context *context, int context_ext_size) {
-    struct us_socket_context_options_t options = {};
+    struct us_socket_context_options_t options = {0};
 
     // varför anropar denna inte rätt underliggande funktion?
     struct us_ssl_socket_context *child_context = (struct us_ssl_socket_context *) us_create_socket_context(0, context->sc.loop, sizeof(struct us_ssl_socket_context) + context_ext_size, options);
@@ -375,7 +375,7 @@ struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop_t *loo
 
     us_internal_init_loop_ssl_data(loop);
 
-    struct us_socket_context_options_t no_options = {};
+    struct us_socket_context_options_t no_options = {0};
 
     struct us_ssl_socket_context *context = (struct us_ssl_socket_context *) us_create_socket_context(0, loop, sizeof(struct us_ssl_socket_context) + context_ext_size, no_options);
 
