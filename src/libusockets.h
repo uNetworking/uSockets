@@ -71,7 +71,7 @@ struct us_poll_t;
 
 /* Decide what eventing system to use */
 #if !defined(LIBUS_USE_EPOLL) && !defined(LIBUS_USE_LIBUV)
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 #define LIBUS_USE_LIBUV
 #else
 #define LIBUS_USE_EPOLL

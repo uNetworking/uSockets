@@ -1,11 +1,36 @@
+# WITH_SSL=1 enables SSL support
+ifneq ($(WITH_SSL),1)
+	override CFLAGS += -DLIBUS_NO_SSL
+else
+	# With problems on macOS, make sure to pass needed LDFLAGS required to find these
+	override LDFLAGS += -lssl -lcrypto
+endif
+
+# WITH_LIBUV=1 builds with libuv as event-loop
+ifeq ($(WITH_LIBUV),1)
+	override CFLAGS += -DLIBUS_USE_LIBUV
+	override LDFLAGS += -luv
+else
+	# macOS requires it anyways
+	ifeq ($(shell uname -s), Darwin)
+		override LDFLAGS += -luv
+	endif
+endif
+
+override CFLAGS += -std=c11 -Isrc
+override LDFLAGS += uSockets.a
+
+# By default we build the uSockets.a static library
 default:
-	for f in examples/*.c; do gcc -flto -std=c11 -DLIBUS_NO_SSL -O3 -o $$(basename "$$f" ".c") -Isrc src/*.c src/eventing/*.c "$$f"; done
+	rm -f *.o
+	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c
+	$(AR) rvs uSockets.a *.o
 
-libuv:
-	for f in examples/*.c; do gcc -flto -std=c11 -DLIBUS_NO_SSL -DLIBUS_USE_LIBUV -O3 -o $$(basename "$$f" ".c") -Isrc src/*.c src/eventing/*.c -luv "$$f"; done
+# Builds all examples
+.PHONY: examples
+examples: default
+	for f in examples/*.c; do $(CC) -flto -O3 $(CFLAGS) -o $$(basename "$$f" ".c") "$$f" $(LDFLAGS); done
 
-ssl:
-	for f in examples/*.c; do gcc -flto -std=c11 -O3 -o $$(basename "$$f" ".c") -Isrc src/*.c src/eventing/*.c -lssl -lcrypto "$$f"; done
-
-libuv_ssl:
-	for f in examples/*.c; do gcc -flto -std=c11 -DLIBUS_USE_LIBUV -O3 -o $$(basename "$$f" ".c") -Isrc src/*.c src/eventing/*.c -luv -lssl -lcrypto "$$f"; done
+clean:
+	rm -f *.o
+	rm -f *.a
