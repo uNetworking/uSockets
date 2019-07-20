@@ -18,8 +18,6 @@
 #ifndef LOOP_H
 #define LOOP_H
 
-// we need to define us_internal_async here still!
-
 struct us_internal_async;
 struct us_loop_t;
 
@@ -39,9 +37,7 @@ struct us_loop_data {
     void (*pre_cb)(struct us_loop_t *);
     void (*post_cb)(struct us_loop_t *);
     struct us_socket_t *closed_head;
-    // we use this to ease the separation between ssl and tcp
-    // it doesn't matter if this flips, but it never will
-    // it increases by 1 every loop pre
+    /* We do not care if this flips or not, it doesn't matter */
     long long iteration_nr;
 };
 

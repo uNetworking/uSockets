@@ -38,7 +38,6 @@ static void check_cb(uv_check_t *p) {
 }
 
 static void close_cb_free(uv_handle_t *h) {
-    //printf("close_cb_free\n");
     free(h->data);
 }
 
@@ -107,10 +106,6 @@ void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
 }
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
-    /*uv_os_fd_t fd = LIBUS_SOCKET_ERROR;
-    uv_fileno((uv_handle_t *) &p->uv_p, &fd);
-    return (LIBUS_SOCKET_DESCRIPTOR) fd;*/
-
     return p->fd;
 }
 
@@ -145,8 +140,6 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
 
 // based on if this was default loop or not
 void us_loop_free(struct us_loop_t *loop) {
-    //printf("us_loop_free\n");
-
     // ref and close down prepare and check
     uv_ref((uv_handle_t *) loop->uv_pre);
     uv_prepare_stop(loop->uv_pre);
@@ -181,7 +174,7 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
     return malloc(sizeof(struct us_poll_t) + ext_size);
 }
 
-// this one is broken, see us_poll
+// this one is broken, us_poll needs to hold a pointer to uv_poll_t for it to work (bad anyways)
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
 
     // do not support it yet

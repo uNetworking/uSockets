@@ -20,7 +20,7 @@
 #include <stdlib.h>
 
 void us_internal_init_socket(struct us_socket_t *s) {
-    // shared nodelay here?
+    /* Todo: start using this to set nodelay, etc */
 }
 
 /* Shared with SSL */
@@ -35,7 +35,6 @@ void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *le
 }
 
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return us_ssl_socket_write((struct us_ssl_socket *) s, data, length, msg_more);
@@ -47,7 +46,6 @@ int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length
     }
 
     int written = bsd_send(us_poll_fd(&s->p), data, length, msg_more);
-
     if (written != length) {
         s->context->loop->data.last_write_failed = 1;
         us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
@@ -56,9 +54,7 @@ int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length
     return written < 0 ? 0 : written;
 }
 
-/* This is an experimentation for new SSL-routing */
 void *us_socket_ext(int ssl, struct us_socket_t *s) {
-    /* We route this call to SSL if so? */
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return us_ssl_socket_ext((struct us_ssl_socket *) s);
@@ -90,10 +86,7 @@ void us_socket_flush(int ssl, struct us_socket_t *s) {
     }
 }
 
-// if anything, close should return null and people should handle that!
-// including us really, however I guess libuv requires it to stick around?
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return (struct us_socket_t *) us_ssl_socket_close((struct us_ssl_socket *) s);
@@ -105,14 +98,11 @@ struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
         us_poll_stop((struct us_poll_t *) s, s->context->loop);
         bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
 
-        // link this socket to the close-list and let it be deleted after this iteration
+        /* Link this socket to the close-list and let it be deleted after this iteration */
         s->next = s->context->loop->data.closed_head;
         s->context->loop->data.closed_head = s;
 
-        // signal closed socket by having prev = next
-        //s->prev = s->next;
-
-        // signal socket closed by having prev = context
+        /* Any socket with prev = context is marked as closed */
         s->prev = (struct us_socket_t *) s->context;
 
         return s->context->on_close(s);
@@ -131,7 +121,6 @@ int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
 }
 
 void us_socket_shutdown(int ssl, struct us_socket_t *s) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_shutdown((struct us_ssl_socket *) s);
@@ -139,9 +128,9 @@ void us_socket_shutdown(int ssl, struct us_socket_t *s) {
     }
 #endif
 
-    // todo: should we emit on_close if calling shutdown on an already half-closed socket?
-    // we need more states in that case, we need to track RECEIVED_FIN
-    // so far, the app has to track this and call close as needed
+    /* Todo: should we emit on_close if calling shutdown on an already half-closed socket?
+     * We need more states in that case, we need to track RECEIVED_FIN
+     * so far, the app has to track this and call close as needed */
     if (!us_socket_is_closed(ssl, s) && !us_socket_is_shut_down(ssl, s)) {
         us_internal_poll_set_type(&s->p, POLL_TYPE_SOCKET_SHUT_DOWN);
         us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
@@ -149,11 +138,7 @@ void us_socket_shutdown(int ssl, struct us_socket_t *s) {
     }
 }
 
-/* Shared among SSL and non-SSL */
+/* Shared with SSL */
 int us_socket_is_closed(int ssl, struct us_socket_t *s) {
-    // this does not work as flag if only holding 1 single socket in a context
-    // we only trigger this bug in a separate context since it holds no listen socket!
-    //return s->prev == s->next;
-
     return s->prev == (struct us_socket_t *) s->context;
 }

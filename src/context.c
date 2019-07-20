@@ -25,7 +25,6 @@ int default_ignore_data_handler(struct us_socket_t *s) {
 
 // put this in loop.c?
 struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return (struct us_socket_context_t *) us_create_ssl_socket_context(loop, context_ext_size, options);
@@ -60,7 +59,6 @@ void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
 }
 
 struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_context_t *context, const char *host, int port, int options, int socket_ext_size) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return us_ssl_socket_context_listen((struct us_ssl_socket_context *) context, host, port, options, socket_ext_size);
@@ -99,13 +97,11 @@ void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
     us_poll_stop((struct us_poll_t *) &ls->s, ls->s.context->loop);
     bsd_close_socket(us_poll_fd((struct us_poll_t *) &ls->s));
 
-    /* let's just free it here */
+    /* Listen sockets have no complex callbacks using it, so we free it immediately here */
     us_poll_free((struct us_poll_t *) &ls->s, ls->s.context->loop);
 }
 
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context, const char *host, int port, int options, int socket_ext_size) {
-
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return (struct us_socket_t *) us_ssl_socket_context_connect((struct us_ssl_socket_context *) context, host, port, options, socket_ext_size);
@@ -113,58 +109,50 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
 #endif
 
     LIBUS_SOCKET_DESCRIPTOR connect_socket_fd = bsd_create_connect_socket(host, port, options);
-
     if (connect_socket_fd == LIBUS_SOCKET_ERROR) {
         return 0;
     }
 
-    // connect sockets are also listen sockets but with writable ready
+    /* Connect sockets are semi-sockets just like listen sockets */
     struct us_poll_t *p = us_create_poll(context->loop, 0, sizeof(struct us_socket_t) + socket_ext_size);
     us_poll_init(p, connect_socket_fd, POLL_TYPE_SEMI_SOCKET);
     us_poll_start(p, context->loop, LIBUS_SOCKET_WRITABLE);
 
     struct us_socket_t *connect_socket = (struct us_socket_t *) p;
 
+    /* Link it into context so that timeout fires properly */
     connect_socket->context = context;
-
-    // make sure to link this socket into its context!
     us_internal_socket_context_link(context, connect_socket);
 
     return connect_socket;
 }
 
-///////// hit ner klart
-
 struct us_socket_context_t *us_create_child_socket_context(int ssl, struct us_socket_context_t *context, int context_ext_size) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return (struct us_socket_context_t *) us_create_child_ssl_socket_context((struct us_ssl_socket_context *) context, context_ext_size);
     }
 #endif
 
-    // in the case of TCP, nothing is shared
-
-    struct us_socket_context_options_t options = {0}; // what happens with options?
-
+    /* For TCP we simply create a new context as nothing is shared */
+    struct us_socket_context_options_t options = {0};
     return us_create_socket_context(ssl, context->loop, context_ext_size, options);
 }
 
-// bug: this will set timeout to 0
+/* Note: This will set timeout to 0 */
 struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_context_t *context, struct us_socket_t *s, int ext_size) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return (struct us_socket_t *) us_ssl_socket_context_adopt_socket((struct us_ssl_socket_context *) context, (struct us_ssl_socket *) s, ext_size);
     }
 #endif
 
-    // if you do this while closed, it's your own problem
+    /* Cannot adopt a closed socket */
     if (us_socket_is_closed(ssl, s)) {
         return s;
     }
 
-    // this will update the iterator if in on_timeout
+    /* This properly updates the iterator if in on_timeout */
     us_internal_socket_context_unlink(s->context, s);
 
     struct us_socket_t *new_s = (struct us_socket_t *) us_poll_resize(&s->p, s->context->loop, sizeof(struct us_socket_t) + ext_size);
@@ -174,9 +162,8 @@ struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_con
     return new_s;
 }
 
-// check and update context->iterator against s!
 void us_internal_socket_context_unlink(struct us_socket_context_t *context, struct us_socket_t *s) {
-    // update iterator
+    /* We have to properly update the iterator used to sweep sockets for timeouts */
     if (s == context->iterator) {
         context->iterator = s->next;
     }
@@ -195,10 +182,9 @@ void us_internal_socket_context_unlink(struct us_socket_context_t *context, stru
     }
 }
 
-// also check iterator, etc
-// we always add in the top, which means we never modify any next
+/* We always add in the top, so we don't modify any s.next */
 void us_internal_socket_context_link(struct us_socket_context_t *context, struct us_socket_t *s) {
-    s->context = context; // this was added
+    s->context = context;
     s->timeout = 0; // this was needed? bug: do not reset timeout when adopting socket!
     s->next = context->head;
     s->prev = 0;
@@ -208,10 +194,7 @@ void us_internal_socket_context_link(struct us_socket_context_t *context, struct
     context->head = s;
 }
 
-// efter här klart
-
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length)) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_context_on_open((struct us_ssl_socket_context *) context, (struct us_ssl_socket * (*)(struct us_ssl_socket *, int,  char *, int)) on_open);
@@ -223,7 +206,6 @@ void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, str
 }
 
 void us_socket_context_on_close(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_close)(struct us_socket_t *s)) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_context_on_close((struct us_ssl_socket_context *) context, (struct us_ssl_socket * (*)(struct us_ssl_socket *)) on_close);
@@ -235,7 +217,6 @@ void us_socket_context_on_close(int ssl, struct us_socket_context_t *context, st
 }
 
 void us_socket_context_on_data(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_data)(struct us_socket_t *s, char *data, int length)) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_context_on_data((struct us_ssl_socket_context *) context, (struct us_ssl_socket * (*)(struct us_ssl_socket *, char *, int)) on_data);
@@ -247,7 +228,6 @@ void us_socket_context_on_data(int ssl, struct us_socket_context_t *context, str
 }
 
 void us_socket_context_on_writable(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_writable)(struct us_socket_t *s)) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_context_on_writable((struct us_ssl_socket_context *) context, (struct us_ssl_socket * (*)(struct us_ssl_socket *)) on_writable);
@@ -259,7 +239,6 @@ void us_socket_context_on_writable(int ssl, struct us_socket_context_t *context,
 }
 
 void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_timeout)(struct us_socket_t *)) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_context_on_timeout((struct us_ssl_socket_context *) context, (struct us_ssl_socket * (*)(struct us_ssl_socket *)) on_timeout);
@@ -271,7 +250,6 @@ void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context, 
 }
 
 void us_socket_context_on_end(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_end)(struct us_socket_t *)) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_ssl_socket_context_on_end((struct us_ssl_socket_context *) context, (struct us_ssl_socket * (*)(struct us_ssl_socket *)) on_end);
@@ -283,7 +261,6 @@ void us_socket_context_on_end(int ssl, struct us_socket_context_t *context, stru
 }
 
 void *us_socket_context_ext(int ssl, struct us_socket_context_t *context) {
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return us_ssl_socket_context_ext((struct us_ssl_socket_context *) context);
@@ -293,7 +270,7 @@ void *us_socket_context_ext(int ssl, struct us_socket_context_t *context) {
     return context + 1;
 }
 
-/* shared */
+/* Shared with SSL */
 struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *context) {
     return context->loop;
 }

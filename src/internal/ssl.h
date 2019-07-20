@@ -15,24 +15,11 @@
  * limitations under the License.
  */
 
-/* Public interfaces for SSL sockets and contexts */
-
-// this file now becomes internal!
-
 #ifndef LIBUS_NO_SSL
 
 // these should end in _t just like regular sockets!
 struct us_ssl_socket;
 struct us_ssl_socket_context;
-
-/* An options structure where set options are non-null. Used to initialize an SSL socket context */
-/*struct us_ssl_socket_context_options {
-    const char *key_file_name;
-    const char *cert_file_name;
-    const char *passphrase;
-    const char *dh_params_file_name;
-    int ssl_prefer_low_memory_usage;
-};*/
 
 /* See us_create_socket_context. SSL variant taking SSL options structure */
 WIN32_EXPORT struct us_ssl_socket_context *us_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options);
