@@ -69,10 +69,12 @@ struct us_poll_t;
 }
 #endif
 
-/* Decide what eventing system to use */
-#if !defined(LIBUS_USE_EPOLL) && !defined(LIBUS_USE_LIBUV)
-#if defined(_WIN32) || defined(__APPLE__)
+/* Decide what eventing system to use by default */
+#if !defined(LIBUS_USE_EPOLL) && !defined(LIBUS_USE_LIBUV) && !defined(LIBUS_USE_GCD)
+#if defined(_WIN32)
 #define LIBUS_USE_LIBUV
+#elif defined(__APPLE__)
+#define LIBUS_USE_GCD
 #else
 #define LIBUS_USE_EPOLL
 #endif

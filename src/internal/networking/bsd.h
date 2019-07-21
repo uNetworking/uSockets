@@ -56,6 +56,11 @@ static inline LIBUS_SOCKET_DESCRIPTOR apple_no_sigpipe(LIBUS_SOCKET_DESCRIPTOR f
     return fd;
 }
 
+static inline LIBUS_SOCKET_DESCRIPTOR bsd_set_nonblocking(LIBUS_SOCKET_DESCRIPTOR fd) {
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+    return fd;
+}
+
 static inline void bsd_socket_nodelay(LIBUS_SOCKET_DESCRIPTOR fd, int enabled) {
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *) &enabled, sizeof(enabled));
 }
@@ -77,7 +82,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, in
 
     LIBUS_SOCKET_DESCRIPTOR created_fd = socket(domain, type | flags, protocol);
 
-    return apple_no_sigpipe(created_fd);
+    return bsd_set_nonblocking(apple_no_sigpipe(created_fd));
 }
 
 static inline void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
@@ -144,11 +149,12 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR 
 #else
     // Windows, OS X
     accepted_fd = accept(fd, (struct sockaddr *) addr, &addr->len);
+
 #endif
 
     internal_finalize_bsd_addr(addr);
 
-    return apple_no_sigpipe(accepted_fd);
+    return bsd_set_nonblocking(apple_no_sigpipe(accepted_fd));
 }
 
 static inline int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, int flags) {

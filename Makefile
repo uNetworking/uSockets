@@ -10,11 +10,12 @@ endif
 ifeq ($(WITH_LIBUV),1)
 	override CFLAGS += -DLIBUS_USE_LIBUV
 	override LDFLAGS += -luv
-else
-	# macOS requires it anyways
-	ifeq ($(shell uname -s), Darwin)
-		override LDFLAGS += -luv
-	endif
+endif
+
+# WITH_GCD=1 builds with libdispatch as event-loop
+ifeq ($(WITH_GCD),1)
+	override CFLAGS += -DLIBUS_USE_GCD
+	# override LDFLAGS += -luv
 endif
 
 override CFLAGS += -std=c11 -Isrc

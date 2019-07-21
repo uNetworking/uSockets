@@ -22,8 +22,12 @@
 
 #ifdef LIBUS_USE_EPOLL
 #include "internal/eventing/epoll.h"
-#else
+#endif
+#ifdef LIBUS_USE_LIBUV
 #include "internal/eventing/libuv.h"
+#endif
+#ifdef LIBUS_USE_GCD
+#include "internal/eventing/gcd.h"
 #endif
 
 #include "internal/ssl.h"
