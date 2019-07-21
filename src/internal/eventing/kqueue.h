@@ -21,8 +21,8 @@
 #include "internal/loop.h"
 
 #include <sys/event.h>
-#define LIBUS_SOCKET_READABLE EVFILT_READ
-#define LIBUS_SOCKET_WRITABLE EVFILT_WRITE
+#define LIBUS_SOCKET_READABLE -EVFILT_READ
+#define LIBUS_SOCKET_WRITABLE -EVFILT_WRITE
 
 struct us_loop_t {
     // common data

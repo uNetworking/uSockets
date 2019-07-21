@@ -109,7 +109,7 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
     struct kevent event;
-    EV_SET(&event, p->state.fd, events, EV_ADD, 0, 0, p);
+    EV_SET(&event, p->state.fd, -events, EV_ADD, 0, 0, p);
     int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
 
     printf("us_poll_start: %d\n", ret);
@@ -121,7 +121,7 @@ void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
         p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
         struct kevent event;
-        EV_SET(&event, p->state.fd, events, EV_ADD, 0, 0, p);
+        EV_SET(&event, p->state.fd, -events, EV_ADD, 0, 0, p);
         int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
 
         printf("us_poll_change: %d\n", ret);
@@ -198,6 +198,9 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     us_poll_start((struct us_poll_t *) t, internal_cb->loop, LIBUS_SOCKET_READABLE);*/
 
 
+    /*struct kevent event;
+    EV_SET(&event, 13, 0, EVFILT_TIMER, 0, ms, p);
+    int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);*/
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
