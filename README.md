@@ -18,8 +18,12 @@ Designed in layers of abstraction where any one layer depends only on the previo
 
 ![](misc/layout.png)
 
+### Compilation
+Build example binaries using `make examples`. The static library itself builds with `make`. It is also possible to simply include the `src` folder in your project as it is standard C11. Defining LIBUS_NO_SSL (-DLIBUS_NO_SSL) will disable OpenSSL 1.1+ support/dependency. Build with environment variables set as shown below to configure for specific needs.
+
 ##### Available plugins
-* Compile with LIBUS_USE_EPOLL to run natively on Linux (the default).
-* Compile with LIBUS_USE_LIBUV to run on the libuv event-loop.
-* Compile with LIBUS_USE_OPENSSL to use OpenSSL 1.1+ for crypto (the default).
-* Compile with LIBUS_NO_SSL to leave the crypto layer unimplemented.
+* Build using `WITH_LIBUV=1 make [examples]` to use libuv as event-loop.
+* Build using `WITH_GCD=1 make [examples]` to use Grand Central Dispatch as event-loop (blends with Swift).
+* Build using `WITH_SSL=1 make [examples]` to enable and link OpenSSL 1.1+ support.
+
+The default event-loop is native epoll on Linux, native kqueue on macOS and finally libuv on Windows.
