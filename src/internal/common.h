@@ -29,6 +29,9 @@
 #ifdef LIBUS_USE_GCD
 #include "internal/eventing/gcd.h"
 #endif
+#ifdef LIBUS_USE_KQUEUE
+#include "internal/eventing/kqueue.h"
+#endif
 
 #include "internal/ssl.h"
 
