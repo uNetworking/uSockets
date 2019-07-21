@@ -133,13 +133,36 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
 }
 
 /* Timers */
+void gcd_timer_handler(void *t) {
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+
+    internal_cb->cb(t);
+}
+
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    printf("create timer\n");
-    return 0;
+    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(dispatch_source_t) + ext_size);
+
+    cb->loop = loop;
+    cb->cb_expects_the_loop = 0;
+
+    dispatch_source_t *gcd_timer = (dispatch_source_t *) (cb + 1);
+
+    *gcd_timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    dispatch_source_set_event_handler_f(*gcd_timer, gcd_timer_handler);
+    dispatch_set_context(*gcd_timer, cb);
+
+    if (fallthrough) {
+        //uv_unref((uv_handle_t *) uv_timer);
+    }
+
+    return (struct us_timer_t *) cb;
 }
 
 void *us_timer_ext(struct us_timer_t *timer) {
-    printf("timer ext\n");
+    //struct us_internal_callback *cb = (struct us_internal_callback *) timer;
+
+    //return (cb + 1);
+
     return 0;
 }
 
@@ -148,7 +171,14 @@ void us_timer_close(struct us_timer_t *t) {
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
+    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
 
+    internal_cb->cb = (void(*)(struct us_internal_callback *)) cb;
+
+    dispatch_source_t *gcd_timer = (dispatch_source_t *) (internal_cb + 1);
+    uint64_t nanos = (uint64_t)ms * 1000000;
+    dispatch_source_set_timer(*gcd_timer, 0, nanos, 0);
+    dispatch_activate(*gcd_timer);
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
