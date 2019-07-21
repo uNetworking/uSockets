@@ -179,8 +179,8 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
 
     struct itimerspec timer_spec = {
-        {repeat_ms / 1000, repeat_ms % 1000000},
-        {ms / 1000, ms % 1000000}
+        {repeat_ms / 1000, ((long)repeat_ms * 1000000) % 1000000000},
+        {ms / 1000, ((long)ms * 1000000) % 1000000000}
     };
 
     timerfd_settime(us_poll_fd((struct us_poll_t *) t), 0, &timer_spec, NULL);
