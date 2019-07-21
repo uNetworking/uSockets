@@ -1,5 +1,8 @@
+/* Incomplete Swift version of http_server example */
+
 import Foundation
 import CoreFoundation
+import uSockets
 
 /* Keep track of connections, for fun */
 var sockets = 0
