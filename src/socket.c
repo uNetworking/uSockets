@@ -16,14 +16,11 @@
  */
 
 #include "libusockets.h"
-#include "internal/common.h"
+#include "internal/internal.h"
 #include <stdlib.h>
 
-void us_internal_init_socket(struct us_socket_t *s) {
-    /* Todo: start using this to set nodelay, etc */
-}
-
 /* Shared with SSL */
+
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
     struct bsd_addr_t addr;
     if (bsd_socket_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
@@ -34,10 +31,35 @@ void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *le
     }
 }
 
+struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
+    return s->context;
+}
+
+void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
+    if (seconds) {
+        unsigned short timeout_sweeps = 0.5f + ((float) seconds) / ((float) LIBUS_TIMEOUT_GRANULARITY);
+        s->timeout = timeout_sweeps ? timeout_sweeps : 1;
+    } else {
+        s->timeout = 0;
+    }
+}
+
+void us_socket_flush(int ssl, struct us_socket_t *s) {
+    if (!us_socket_is_shut_down(0, s)) {
+        bsd_socket_flush(us_poll_fd((struct us_poll_t *) s));
+    }
+}
+
+int us_socket_is_closed(int ssl, struct us_socket_t *s) {
+    return s->prev == (struct us_socket_t *) s->context;
+}
+
+/* Not shared with SSL */
+
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        return us_ssl_socket_write((struct us_ssl_socket *) s, data, length, msg_more);
+        return us_internal_ssl_socket_write((struct us_internal_ssl_socket_t *) s, data, length, msg_more);
     }
 #endif
 
@@ -57,39 +79,17 @@ int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length
 void *us_socket_ext(int ssl, struct us_socket_t *s) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        return us_ssl_socket_ext((struct us_ssl_socket *) s);
+        return us_internal_ssl_socket_ext((struct us_internal_ssl_socket_t *) s);
     }
 #endif
 
     return s + 1;
 }
 
-/* Shared with SSL */
-struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
-    return s->context;
-}
-
-/* Shared with SSL */
-void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
-    if (seconds) {
-        unsigned short timeout_sweeps = 0.5f + ((float) seconds) / ((float) LIBUS_TIMEOUT_GRANULARITY);
-        s->timeout = timeout_sweeps ? timeout_sweeps : 1;
-    } else {
-        s->timeout = 0;
-    }
-}
-
-/* Shared with SSL */
-void us_socket_flush(int ssl, struct us_socket_t *s) {
-    if (!us_socket_is_shut_down(0, s)) {
-        bsd_socket_flush(us_poll_fd((struct us_poll_t *) s));
-    }
-}
-
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        return (struct us_socket_t *) us_ssl_socket_close((struct us_ssl_socket *) s);
+        return (struct us_socket_t *) us_internal_ssl_socket_close((struct us_internal_ssl_socket_t *) s);
     }
 #endif
 
@@ -113,7 +113,7 @@ struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
 int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        return us_ssl_socket_is_shut_down((struct us_ssl_socket *) s);
+        return us_internal_ssl_socket_is_shut_down((struct us_internal_ssl_socket_t *) s);
     }
 #endif
 
@@ -123,7 +123,7 @@ int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
 void us_socket_shutdown(int ssl, struct us_socket_t *s) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        us_ssl_socket_shutdown((struct us_ssl_socket *) s);
+        us_internal_ssl_socket_shutdown((struct us_internal_ssl_socket_t *) s);
         return;
     }
 #endif
@@ -136,9 +136,4 @@ void us_socket_shutdown(int ssl, struct us_socket_t *s) {
         us_poll_change(&s->p, s->context->loop, us_poll_events(&s->p) & LIBUS_SOCKET_READABLE);
         bsd_shutdown_socket(us_poll_fd((struct us_poll_t *) s));
     }
-}
-
-/* Shared with SSL */
-int us_socket_is_closed(int ssl, struct us_socket_t *s) {
-    return s->prev == (struct us_socket_t *) s->context;
 }

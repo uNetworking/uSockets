@@ -16,7 +16,7 @@
  */
 
 #include "libusockets.h"
-#include "internal/common.h"
+#include "internal/internal.h"
 #include <stdlib.h>
 
 #ifdef LIBUS_USE_LIBUV
@@ -42,14 +42,14 @@ static void close_cb_free(uv_handle_t *h) {
 }
 
 static void timer_cb(uv_timer_t *t) {
-    struct us_internal_callback *cb = t->data;
+    struct us_internal_callback_t *cb = t->data;
     cb->cb(cb);
 }
 
 static void async_cb(uv_async_t *a) {
-    struct us_internal_callback *cb = a->data;
+    struct us_internal_callback_t *cb = a->data;
     // internal asyncs give their loop, not themselves
-    cb->cb((struct us_internal_callback *) cb->loop);
+    cb->cb((struct us_internal_callback_t *) cb->loop);
 }
 
 // poll
@@ -190,7 +190,7 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
 
 // timer
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_timer_t) + ext_size);
+    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + sizeof(uv_timer_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
@@ -207,11 +207,11 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 }
 
 void *us_timer_ext(struct us_timer_t *timer) {
-    return ((struct us_internal_callback *) timer) + 1;
+    return ((struct us_internal_callback_t *) timer) + 1;
 }
 
 void us_timer_close(struct us_timer_t *t) {
-    struct us_internal_callback *cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *cb = (struct us_internal_callback_t *) t;
 
     uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
 
@@ -225,9 +225,9 @@ void us_timer_close(struct us_timer_t *t) {
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
 
-    internal_cb->cb = (void(*)(struct us_internal_callback *)) cb;
+    internal_cb->cb = (void(*)(struct us_internal_callback_t *)) cb;
 
     uv_timer_t *uv_timer = (uv_timer_t *) (internal_cb + 1);
     if (!ms) {
@@ -238,21 +238,21 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
 
     return internal_cb->loop;
 }
 
 // async (internal only)
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(uv_async_t) + ext_size);
+    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + sizeof(uv_async_t) + ext_size);
 
     cb->loop = loop;
     return (struct us_internal_async *) cb;
 }
 
 void us_internal_async_close(struct us_internal_async *a) {
-    struct us_internal_callback *cb = (struct us_internal_callback *) a;
+    struct us_internal_callback_t *cb = (struct us_internal_callback_t *) a;
 
     uv_async_t *uv_async = (uv_async_t *) (cb + 1);
 
@@ -264,9 +264,9 @@ void us_internal_async_close(struct us_internal_async *a) {
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) a;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
-    internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
+    internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
 
     uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
     uv_async_init(internal_cb->loop->uv_loop, uv_async, async_cb);
@@ -275,7 +275,7 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
 }
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) a;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
     uv_async_t *uv_async = (uv_async_t *) (internal_cb + 1);
     uv_async_send(uv_async);

@@ -18,21 +18,16 @@
 #ifndef GCD_H
 #define GCD_H
 
-#include "internal/loop.h"
+#include "internal/loop_data.h"
 
 #include <dispatch/dispatch.h>
 #define LIBUS_SOCKET_READABLE 1
 #define LIBUS_SOCKET_WRITABLE 2
 
 struct us_loop_t {
-    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
-
-    //uv_loop_t *uv_loop;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_internal_loop_data_t data;
 
     dispatch_queue_t gcd_queue;
-
-    //uv_prepare_t *uv_pre;
-    //uv_check_t *uv_check;
 };
 
 struct us_poll_t {

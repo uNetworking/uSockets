@@ -15,32 +15,22 @@
  * limitations under the License.
  */
 
-#ifndef KQUEUE_H
-#define KQUEUE_H
+#ifndef LOOP_DATA_H
+#define LOOP_DATA_H
 
-#include "internal/loop.h"
-
-#include <sys/event.h>
-#define LIBUS_SOCKET_READABLE -EVFILT_READ
-#define LIBUS_SOCKET_WRITABLE -EVFILT_WRITE
-
-struct us_loop_t {
-    // common data
-    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
-
-    // epoll extensions
-    int num_polls;
-    int num_fd_ready;
-    int fd_iterator;
-    int kqfd;
-    struct kevent ready_events[1024];
+struct us_internal_loop_data_t {
+    struct us_timer_t *sweep_timer;
+    struct us_internal_async *wakeup_async;
+    int last_write_failed;
+    struct us_socket_context_t *head;
+    struct us_socket_context_t *iterator;
+    char *recv_buf;
+    void *ssl_data;
+    void (*pre_cb)(struct us_loop_t *);
+    void (*post_cb)(struct us_loop_t *);
+    struct us_socket_t *closed_head;
+    /* We do not care if this flips or not, it doesn't matter */
+    long long iteration_nr;
 };
 
-struct us_poll_t {
-    struct {
-        int fd : 28;
-        unsigned int poll_type : 4;
-    } state;
-};
-
-#endif // KQUEUE_H
+#endif // LOOP_DATA_H

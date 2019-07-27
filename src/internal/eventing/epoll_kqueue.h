@@ -15,34 +15,42 @@
  * limitations under the License.
  */
 
-#ifndef EPOLL_H
-#define EPOLL_H
+#ifndef EPOLL_KQUEUE_H
+#define EPOLL_KQUEUE_H
 
-#include "internal/loop.h"
+#include "internal/loop_data.h"
 
+#ifdef LIBUS_USE_EPOLL
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
 #include <sys/eventfd.h>
 #define LIBUS_SOCKET_READABLE EPOLLIN
 #define LIBUS_SOCKET_WRITABLE EPOLLOUT
+#else
+#include <sys/event.h>
+#define LIBUS_SOCKET_READABLE -EVFILT_READ
+#define LIBUS_SOCKET_WRITABLE -EVFILT_WRITE
+#endif
 
 struct us_loop_t {
-    // common data
-    alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_data data;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_internal_loop_data_t data;
 
-    // epoll extensions
     int num_polls;
     int num_fd_ready;
     int fd_iterator;
+#ifdef LIBUS_USE_EPOLL
     int epfd;
+#else
+    int kqfd;
+#endif
     struct epoll_event ready_events[1024];
 };
 
 struct us_poll_t {
-    struct {
+    alignas(LIBUS_EXT_ALIGNMENT) struct {
         int fd : 28;
         unsigned int poll_type : 4;
     } state;
 };
 
-#endif // EPOLL_H
+#endif // EPOLL_KQUEUE_H

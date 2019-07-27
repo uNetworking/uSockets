@@ -16,7 +16,7 @@
  */
 
 #include "libusockets.h"
-#include "internal/common.h"
+#include "internal/internal.h"
 #include <stdlib.h>
 
 #ifdef LIBUS_USE_GCD
@@ -134,13 +134,13 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
 
 /* Timers */
 void gcd_timer_handler(void *t) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
 
     internal_cb->cb(t);
 }
 
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + sizeof(dispatch_source_t) + ext_size);
+    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + sizeof(dispatch_source_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
@@ -159,7 +159,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 }
 
 void *us_timer_ext(struct us_timer_t *timer) {
-    //struct us_internal_callback *cb = (struct us_internal_callback *) timer;
+    //struct us_internal_callback_t *cb = (struct us_internal_callback_t *) timer;
 
     //return (cb + 1);
 
@@ -171,9 +171,9 @@ void us_timer_close(struct us_timer_t *t) {
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
 
-    internal_cb->cb = (void(*)(struct us_internal_callback *)) cb;
+    internal_cb->cb = (void(*)(struct us_internal_callback_t *)) cb;
 
     dispatch_source_t *gcd_timer = (dispatch_source_t *) (internal_cb + 1);
     uint64_t nanos = (uint64_t)ms * 1000000;

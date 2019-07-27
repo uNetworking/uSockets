@@ -16,11 +16,12 @@
  */
 
 #include "libusockets.h"
-#include "internal/common.h"
+#include "internal/internal.h"
 #include <stdlib.h>
 
 /* The loop has 2 fallthrough polls */
-void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop)) {
+void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct us_loop_t *loop),
+    void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop)) {
     loop->data.sweep_timer = us_create_timer(loop, 1, 0);
     loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
     loop->data.ssl_data = 0;
@@ -62,7 +63,7 @@ void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context_t *c
 
 /* This functions should never run recursively */
 void us_internal_timer_sweep(struct us_loop_t *loop) {
-    struct us_loop_data *loop_data = &loop->data;
+    struct us_internal_loop_data_t *loop_data = &loop->data;
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
         struct us_socket_context_t *context = loop_data->iterator;
@@ -97,7 +98,7 @@ void us_internal_free_closed_sockets(struct us_loop_t *loop) {
     }
 }
 
-void sweep_timer_cb(struct us_internal_callback *cb) {
+void sweep_timer_cb(struct us_internal_callback_t *cb) {
     us_internal_timer_sweep(cb->loop);
 }
 
@@ -120,8 +121,8 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
     switch (us_internal_poll_type(p)) {
     case POLL_TYPE_CALLBACK: {
             us_internal_accept_poll_event(p);
-            struct us_internal_callback *cb = (struct us_internal_callback *) p;
-            cb->cb(cb->cb_expects_the_loop ? (struct us_internal_callback *) cb->loop : (struct us_internal_callback *) &cb->p);
+            struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
+            cb->cb(cb->cb_expects_the_loop ? (struct us_internal_callback_t *) cb->loop : (struct us_internal_callback_t *) &cb->p);
         }
         break;
     case POLL_TYPE_SEMI_SOCKET: {

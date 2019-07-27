@@ -16,7 +16,7 @@
  */
 
 #include "libusockets.h"
-#include "internal/common.h"
+#include "internal/internal.h"
 #include <stdlib.h>
 
 #ifdef LIBUS_USE_KQUEUE
@@ -65,7 +65,7 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
 
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     return p;
-    
+
     /*int events = us_poll_events(p);
 
     struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
@@ -169,7 +169,7 @@ unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
 
 // timer
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback *cb = malloc(sizeof(struct us_internal_callback) + ext_size);
+    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
@@ -184,11 +184,11 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 }
 
 void *us_timer_ext(struct us_timer_t *timer) {
-    return ((struct us_internal_callback *) timer) + 1;
+    return ((struct us_internal_callback_t *) timer) + 1;
 }
 
 void us_timer_close(struct us_timer_t *timer) {
-    struct us_internal_callback *cb = (struct us_internal_callback *) timer;
+    struct us_internal_callback_t *cb = (struct us_internal_callback_t *) timer;
 
     // kevent
 
@@ -197,9 +197,9 @@ void us_timer_close(struct us_timer_t *timer) {
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
 
-    internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
+    internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
 
     struct kevent event;
     EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD, 0, ms, internal_cb);
@@ -210,17 +210,17 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
-    struct us_internal_callback *internal_cb = (struct us_internal_callback *) t;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
 
     return internal_cb->loop;
 }
 
 // async (internal only)
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    /*struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback) + ext_size);
+    /*struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) + ext_size);
     us_poll_init(p, eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC), POLL_TYPE_CALLBACK);
 
-    struct us_internal_callback *cb = (struct us_internal_callback *) p;
+    struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
     cb->loop = loop;
     cb->cb_expects_the_loop = 1;
 
@@ -231,7 +231,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 
 // identical code as for timer, make it shared for "callback types"
 void us_internal_async_close(struct us_internal_async *a) {
-    /*struct us_internal_callback *cb = (struct us_internal_callback *) a;
+    /*struct us_internal_callback_t *cb = (struct us_internal_callback_t *) a;
 
     us_poll_stop(&cb->p, cb->loop);
     close(us_poll_fd(&cb->p));*/
@@ -241,9 +241,9 @@ void us_internal_async_close(struct us_internal_async *a) {
 }
 
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
-    /*struct us_internal_callback *internal_cb = (struct us_internal_callback *) a;
+    /*struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
-    internal_cb->cb = (void (*)(struct us_internal_callback *)) cb;
+    internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
 
     us_poll_start((struct us_poll_t *) a, internal_cb->loop, LIBUS_SOCKET_READABLE);*/
 }
