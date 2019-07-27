@@ -2,6 +2,9 @@
 
 This is the cross-platform async networking and eventing foundation library used by [µWebSockets](https://github.com/uNetworking/uWebSockets).
 
+##### Intel's Clear Linux performance hint
+uSockets is written in C, directly utilizing the kernel. As such, it matters greatly *which* kernel you run and *how* it was configured. My 8-year-old Asus N56VZ laptop can do 140k req/sec (on Ubuntu/Fedora) or 200k (on Clear Linux) on one single CPU-core. That's a huge difference in performance. Keep in mind that a Docker container do not carry a kernel!
+
 ### Key aspects
 
 * Built-in (optionally available) TLS support exposed with identical interface as for TCP.
