@@ -40,10 +40,11 @@ struct us_loop_t {
     int fd_iterator;
 #ifdef LIBUS_USE_EPOLL
     int epfd;
+    struct epoll_event ready_events[1024];
 #else
     int kqfd;
+    struct kevent ready_events[1024];
 #endif
-    struct epoll_event ready_events[1024];
 };
 
 struct us_poll_t {
