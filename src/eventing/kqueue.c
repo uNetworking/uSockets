@@ -160,11 +160,9 @@ void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
     printf("us_poll_stop: %d\n", ret);
 }
 
+/* Kqueue has no underlying FD for timers */
 unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
-    int fd = us_poll_fd(p);
-    uint64_t buf;
-    int read_length = read(fd, &buf, 8);
-    return buf;
+    return 0;
 }
 
 // timer
@@ -174,6 +172,8 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
 
+    /* Bug: us_internal_poll_set_type does not SET the type, it only CHANGES it */
+    cb->p.state.poll_type = 0;
     us_internal_poll_set_type((struct us_poll_t *) cb, POLL_TYPE_CALLBACK);
 
     if (fallthrough) {
@@ -206,7 +206,7 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     int ret = kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
 
     printf("set timer: %d\n", ret);
-    printf("timer poll type is: %d\n", us_internal_poll_type(cb));
+    //printf("timer poll type is: %d\n", us_internal_poll_type(cb));
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
