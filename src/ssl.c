@@ -357,7 +357,7 @@ int ssl_ignore_data(struct us_internal_ssl_socket_t *s) {
 }
 
 /* Per-context functions */
-struct us_internal_ssl_socket_context_t *us_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size) {
+struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size) {
     struct us_socket_context_options_t options = {0};
 
     struct us_internal_ssl_socket_context_t *child_context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, context->sc.loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
@@ -369,7 +369,7 @@ struct us_internal_ssl_socket_context_t *us_create_child_ssl_socket_context(stru
     return child_context;
 }
 
-struct us_internal_ssl_socket_context_t *us_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
+struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
 
     us_internal_init_loop_ssl_data(loop);
 
