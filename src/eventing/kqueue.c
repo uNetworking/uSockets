@@ -64,27 +64,27 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
 }
 
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
-    return p;
-
-    /*int events = us_poll_events(p);
+    int events = us_poll_events(p);
 
     struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p && events) {
-        // forcefully update poll by stripping away already set events
-        new_p->state.poll_type = us_internal_poll_type(new_p);
+        // NOT FOR KQUEUE! forcefully update poll by stripping away already set events
+        // new_p->state.poll_type = us_internal_poll_type(new_p);
+        us_poll_change(p, loop, /*events*/ 0);
         us_poll_change(new_p, loop, events);
+
     }
 
-    if (loop->ready_events[loop->fd_iterator].data.ptr != p) {
+    if (loop->ready_events[loop->fd_iterator].udata != p) {
         for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
-            if (loop->ready_events[i].data.ptr == p) {
-                loop->ready_events[i].data.ptr = new_p;
+            if (loop->ready_events[i].udata == p) {
+                loop->ready_events[i].udata = new_p;
                 break;
             }
         }
     }
 
-    return new_p;*/
+    return new_p;
 }
 
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
@@ -112,30 +112,29 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     EV_SET(&event, p->state.fd, -events, EV_ADD, 0, 0, p);
     int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
 
-    printf("us_poll_start: %d\n", ret);
+    //printf("us_poll_start: %d\n", ret);
 }
 
 void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
-    if (us_poll_events(p) != events) {
+    int old_events = us_poll_events(p);
+    if (old_events != events) {
 
-        struct kevent event;
+        struct kevent event[2];
+        int event_length = 0;
 
-        int ret;
+        /* Update read if changed */
+        if ((old_events & LIBUS_SOCKET_READABLE) != (events & LIBUS_SOCKET_READABLE)) {
+            EV_SET(&event[event_length++], p->state.fd, -LIBUS_SOCKET_READABLE, (events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, p);
+        }
 
-        // two syscalls to change?
+        /* Update write if changed */
+        if ((old_events & LIBUS_SOCKET_WRITABLE) != (events & LIBUS_SOCKET_WRITABLE)) {
+            EV_SET(&event[event_length++], p->state.fd, -LIBUS_SOCKET_WRITABLE, (events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, p);
+        }
 
-        EV_SET(&event, p->state.fd, -us_poll_events(p), EV_DELETE, 0, 0, p);
-        ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
-        printf("us_poll_change_delete: %d\n", ret);
+        int ret = kevent(loop->kqfd, event, event_length, NULL, 0, NULL);
 
-        p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
-
-
-
-        EV_SET(&event, p->state.fd, -events, EV_ADD, 0, 0, p);
-        ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
-
-        printf("us_poll_change: %d\n", ret);
+        //printf("us_poll_change: %d\n", ret);
     }
 }
 
@@ -153,11 +152,14 @@ void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
 }
 
 void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
-    struct kevent event;
-    EV_SET(&event, p->state.fd, 0, EV_DELETE, 0, 0, p);
-    int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
+    int old_events = us_poll_events(p);
+    if (old_events) {
+        struct kevent event;
+        EV_SET(&event, p->state.fd, -old_events, EV_DELETE, 0, 0, p);
+        int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
 
-    printf("us_poll_stop: %d\n", ret);
+        //printf("us_poll_stop: %d\n", ret);
+    }
 }
 
 /* Kqueue has no underlying FD for timers */
@@ -176,8 +178,8 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     cb->p.state.poll_type = 0;
     us_internal_poll_set_type((struct us_poll_t *) cb, POLL_TYPE_CALLBACK);
 
-    if (fallthrough) {
-        //uv_unref((uv_handle_t *) uv_timer);
+    if (!fallthrough) {
+        loop->num_polls++;
     }
 
     return (struct us_timer_t *) cb;
@@ -188,12 +190,14 @@ void *us_timer_ext(struct us_timer_t *timer) {
 }
 
 void us_timer_close(struct us_timer_t *timer) {
-    struct us_internal_callback_t *cb = (struct us_internal_callback_t *) timer;
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) timer;
 
-    // kevent
+    struct kevent event;
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_DELETE, 0, 0, internal_cb);
+    kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
 
     /* (regular) sockets are the only polls which are not freed immediately */
-    us_poll_free((struct us_poll_t *) timer, cb->loop);
+    us_poll_free((struct us_poll_t *) timer, internal_cb->loop);
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
@@ -201,12 +205,10 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 
     internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
 
+    /* Bug: repeat_ms must be the same as ms, or 0 */
     struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD, 0, ms, internal_cb);
-    int ret = kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
-
-    printf("set timer: %d\n", ret);
-    //printf("timer poll type is: %d\n", us_internal_poll_type(cb));
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER | (repeat_ms ? 0 : EV_ONESHOT), EV_ADD, 0, ms, internal_cb);
+    kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
