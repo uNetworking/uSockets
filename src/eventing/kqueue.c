@@ -49,7 +49,7 @@ void us_loop_run(struct us_loop_t *loop) {
 
         for (loop->fd_iterator = 0; loop->fd_iterator < loop->num_fd_ready; loop->fd_iterator++) {
             struct us_poll_t *poll = (struct us_poll_t *) loop->ready_events[loop->fd_iterator].udata;
-            us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].flags & (EV_EOF), loop->ready_events[loop->fd_iterator].flags);
+            us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].flags & (EV_EOF), -loop->ready_events[loop->fd_iterator].flags);
         }
         us_internal_loop_post(loop);
     }
@@ -118,6 +118,8 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
 void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     int old_events = us_poll_events(p);
     if (old_events != events) {
+
+        p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
         struct kevent event[2];
         int event_length = 0;
