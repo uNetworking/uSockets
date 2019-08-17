@@ -32,7 +32,11 @@
 /* Loop */
 void us_loop_free(struct us_loop_t *loop) {
     us_internal_loop_data_free(loop);
+#ifdef LIBUS_USE_EPOLL
     close(loop->epfd);
+#else
+    close(loop->kqfd);
+#endif
     free(loop);
 }
 
