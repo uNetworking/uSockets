@@ -73,8 +73,20 @@ int us_internal_poll_type(struct us_poll_t *p) {
     return p->state.poll_type & 3;
 }
 
+/* Bug: doesn't really SET, rather read and change, so needs to be inited first! */
 void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
     p->state.poll_type = poll_type | (p->state.poll_type & 12);
+}
+
+/* Timer */
+void *us_timer_ext(struct us_timer_t *timer) {
+    return ((struct us_internal_callback_t *) timer) + 1;
+}
+
+struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
+    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
+
+    return internal_cb->loop;
 }
 
 /* Loop */
@@ -195,7 +207,6 @@ void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
         kevent(loop->kqfd, event, event_length, NULL, 0, NULL);
 #endif
 
-
         /* We are not allowed to emit old events we no longer subscribe to,
          * so for simplicity we simply disable this poll's entry in the ready polls
          * vector if we are not the currently dispatched poll. In other words we postpone
@@ -250,7 +261,7 @@ unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
 #endif
 }
 
-// timer
+/* Timer */
 #ifdef LIBUS_USE_EPOLL
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) + ext_size);
@@ -280,10 +291,6 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     return (struct us_timer_t *) cb;
 }
 #endif
-
-void *us_timer_ext(struct us_timer_t *timer) {
-    return ((struct us_internal_callback_t *) timer) + 1;
-}
 
 #ifdef LIBUS_USE_EPOLL
 void us_timer_close(struct us_timer_t *timer) {
@@ -333,13 +340,7 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 }
 #endif
 
-struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
-    struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) t;
-
-    return internal_cb->loop;
-}
-
-// async (internal only)
+/* Async (internal helper for loop's wakeup feature) */
 #ifdef LIBUS_USE_EPOLL
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) + ext_size);
