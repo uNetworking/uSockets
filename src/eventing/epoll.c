@@ -37,8 +37,6 @@ void us_loop_free(struct us_loop_t *loop) {
     free(loop);
 }
 
-
-
 void us_loop_run(struct us_loop_t *loop) {
     us_loop_integrate(loop);
 
@@ -47,7 +45,10 @@ void us_loop_run(struct us_loop_t *loop) {
         loop->num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
         for (loop->fd_iterator = 0; loop->fd_iterator < loop->num_fd_ready; loop->fd_iterator++) {
             struct us_poll_t *poll = (struct us_poll_t *) loop->ready_events[loop->fd_iterator].data.ptr;
-            us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
+            /* Any ready poll marked with nullptr will be ignored */
+            if (poll) {
+                us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
+            }
         }
         us_internal_loop_post(loop);
     }
@@ -111,6 +112,7 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
 }
 
 void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
+
     if (us_poll_events(p) != events) {
 
         p->state.poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
@@ -119,6 +121,20 @@ void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
         event.events = events;
         event.data.ptr = p;
         epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
+
+        /* We are not allowed to emit old events we no longer subscribe to,
+         * so for simplicity we simply disable this poll's entry in the ready polls
+         * vector if we are not the currently dispatched poll. In other words we postpone
+         * any events until the next iteration to make sure they are entirely correct */
+        if (loop->ready_events[loop->fd_iterator].data.ptr != p) {
+            for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
+                if (loop->ready_events[i].data.ptr == p) {
+                    /* Mark us disabled for this iteration, just like we do for us_poll_stop */
+                    loop->ready_events[i].data.ptr = 0;
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -138,6 +154,18 @@ void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
 void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
     struct epoll_event event;
     epoll_ctl(loop->epfd, EPOLL_CTL_DEL, p->state.fd, &event);
+
+    /* If we are not currently the one dispatched poll, we need
+    to see if we are in the ready_polls vector and disable us if so */
+    if (loop->ready_events[loop->fd_iterator].data.ptr != p) {
+        for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
+            if (loop->ready_events[i].data.ptr == p) {
+                /* Mark us as disabled */
+                loop->ready_events[i].data.ptr = 0;
+                break;
+            }
+        }
+    }
 }
 
 unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
