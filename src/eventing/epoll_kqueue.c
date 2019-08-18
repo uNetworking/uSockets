@@ -143,14 +143,14 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
     struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p && events) {
 #ifdef LIBUS_USE_EPOLL
-        // forcefully update poll by stripping away already set events
+        /* Forcefully update poll by stripping away already set events */
         new_p->state.poll_type = us_internal_poll_type(new_p);
         us_poll_change(new_p, loop, events);
 #else
-        // NOT FOR KQUEUE! forcefully update poll by stripping away already set events
-        // new_p->state.poll_type = us_internal_poll_type(new_p);
-        us_poll_change(p, loop, /*events*/ 0);
-        us_poll_change(new_p, loop, events);
+        /* Forcefully update poll by resetting them with new_p as user data */
+        struct kevent event;
+        EV_SET(&event, new_p->state.fd, -events, EV_ADD, 0, 0, new_p);
+        kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
 #endif
 
     }
