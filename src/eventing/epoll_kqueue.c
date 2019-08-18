@@ -402,14 +402,6 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
-
-    struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_DELETE, 0, 0, 0);
-    int ret = kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
-
-    printf("us_internal_async_close: %d\n", ret);
-
-
     /* (regular) sockets are the only polls which are not freed immediately */
     us_poll_free((struct us_poll_t *) a, internal_cb->loop);
 }
@@ -418,24 +410,15 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
     internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
-
-    struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD, 0, 0, internal_cb);
-    int ret = kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
-
-    printf("us_internal_async_set: %d\n", ret);
-
-    //us_poll_start((struct us_poll_t *) a, internal_cb->loop, LIBUS_SOCKET_READABLE);
 }
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
+    /* In kqueue you really only need to add a triggered oneshot event */
     struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD, NOTE_TRIGGER, 0, internal_cb);
-    int ret = kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
-
-    printf("us_internal_async_wakeup: %d\n", ret);
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD | EV_ONESHOT, NOTE_TRIGGER, 0, internal_cb);
+    kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
 }
 #endif
 
