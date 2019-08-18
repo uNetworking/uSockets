@@ -28,8 +28,10 @@
 #define LIBUS_SOCKET_WRITABLE EPOLLOUT
 #else
 #include <sys/event.h>
-#define LIBUS_SOCKET_READABLE -EVFILT_READ
-#define LIBUS_SOCKET_WRITABLE -EVFILT_WRITE
+/* Kqueue's EVFILT_ is NOT a bitfield, you cannot OR together them.
+ * We therefore have our own bitfield we then translate in every call */
+#define LIBUS_SOCKET_READABLE 1
+#define LIBUS_SOCKET_WRITABLE 2
 #endif
 
 struct us_loop_t {

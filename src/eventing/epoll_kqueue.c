@@ -127,7 +127,8 @@ void us_loop_run(struct us_loop_t *loop) {
 #ifdef LIBUS_USE_EPOLL
                 us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
 #else
-                us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].flags & (EV_EOF), -loop->ready_events[loop->fd_iterator].flags);
+                /* We actually cannot know what filter triggered? Why do we even pass these along? libuv legacy! Remove it! */
+                us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].flags & (EV_ERROR | EV_EOF), 0);
 #endif
             }
         }
@@ -136,6 +137,26 @@ void us_loop_run(struct us_loop_t *loop) {
 }
 
 /* Poll */
+
+#ifdef LIBUS_USE_KQUEUE
+/* Helper function for setting or updating EVFILT_READ and EVFILT_WRITE */
+int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_data) {
+    struct kevent change_list[2];
+    int change_length = 0;
+
+    /* Do they differ in readable? */
+    if (new_events & LIBUS_SOCKET_READABLE != old_events & LIBUS_SOCKET_READABLE) {
+        EV_SET(&change_list[change_length++], fd, EVFILT_READ, new_events & LIBUS_SOCKET_READABLE ? EV_ADD : EV_DELETE, 0, 0, user_data);
+    }
+
+    /* Do they differ in writable? */
+    if (new_events & LIBUS_SOCKET_WRITABLE != old_events & LIBUS_SOCKET_WRITABLE) {
+        EV_SET(&change_list[change_length++], fd, EVFILT_WRITE, new_events & LIBUS_SOCKET_WRITABLE ? EV_ADD : EV_DELETE, 0, 0, user_data);
+    }
+
+    return kevent(kqfd, change_list, change_length, NULL, 0, NULL);
+}
+#endif
 
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
@@ -148,20 +169,18 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
         us_poll_change(new_p, loop, events);
 #else
         /* Forcefully update poll by resetting them with new_p as user data */
-        struct kevent event;
-        EV_SET(&event, new_p->state.fd, -events, EV_ADD, 0, 0, new_p);
-        kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
-#endif
+        kqueue_change(loop->kqfd, new_p->state.fd, 0, events, new_p);
 
-    }
-
-    if (GET_READY_POLL(loop, loop->fd_iterator) != p) {
-        for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
-            if (GET_READY_POLL(loop, i) == p) {
-                SET_READY_POLL(loop, i, new_p);
-                break;
+        if (GET_READY_POLL(loop, loop->fd_iterator) != p) {
+            for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
+                if (GET_READY_POLL(loop, i) == p) {
+                    SET_READY_POLL(loop, i, new_p);
+                    break;
+                }
             }
         }
+#endif
+
     }
 
     return new_p;
@@ -176,9 +195,7 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     event.data.ptr = p;
     epoll_ctl(loop->epfd, EPOLL_CTL_ADD, p->state.fd, &event);
 #else
-    struct kevent event;
-    EV_SET(&event, p->state.fd, -events, EV_ADD, 0, 0, p);
-    int ret = kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
+    kqueue_change(loop->kqfd, p->state.fd, 0, events, p);
 #endif
 }
 
@@ -195,20 +212,7 @@ void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
         event.data.ptr = p;
         epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
 #else
-        struct kevent event[2];
-        int event_length = 0;
-
-        /* Update read if changed */
-        if ((old_events & LIBUS_SOCKET_READABLE) != (events & LIBUS_SOCKET_READABLE)) {
-            EV_SET(&event[event_length++], p->state.fd, -LIBUS_SOCKET_READABLE, (events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, p);
-        }
-
-        /* Update write if changed */
-        if ((old_events & LIBUS_SOCKET_WRITABLE) != (events & LIBUS_SOCKET_WRITABLE)) {
-            EV_SET(&event[event_length++], p->state.fd, -LIBUS_SOCKET_WRITABLE, (events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, p);
-        }
-
-        kevent(loop->kqfd, event, event_length, NULL, 0, NULL);
+        kqueue_change(loop->kqfd, p->state.fd, old_events, events, p);
 #endif
 
         /* We are not allowed to emit old events we no longer subscribe to,
@@ -234,9 +238,7 @@ void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
 #else
     int old_events = us_poll_events(p);
     if (old_events) {
-        struct kevent event;
-        EV_SET(&event, p->state.fd, -old_events, EV_DELETE, 0, 0, p);
-        kevent(loop->kqfd, &event, 1, NULL, 0, NULL);
+        kqueue_change(loop->kqfd, p->state.fd, old_events, 0, NULL);
     }
 #endif
 
@@ -339,7 +341,7 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 
     /* Bug: repeat_ms must be the same as ms, or 0 */
     struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER | (repeat_ms ? 0 : EV_ONESHOT), EV_ADD, 0, ms, internal_cb);
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD | (repeat_ms ? 0 : EV_ONESHOT), 0, ms, internal_cb);
     kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
 }
 #endif
