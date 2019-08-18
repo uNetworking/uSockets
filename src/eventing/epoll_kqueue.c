@@ -170,7 +170,9 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
 #else
         /* Forcefully update poll by resetting them with new_p as user data */
         kqueue_change(loop->kqfd, new_p->state.fd, 0, events, new_p);
+#endif
 
+        /* This is needed for both epoll and kqueue, us_change_poll does not update the old poll */
         if (GET_READY_POLL(loop, loop->fd_iterator) != p) {
             for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
                 if (GET_READY_POLL(loop, i) == p) {
@@ -179,7 +181,6 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
                 }
             }
         }
-#endif
 
     }
 
