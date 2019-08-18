@@ -226,7 +226,7 @@ struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, ch
     opened_connections++;
     printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
 
-    if (is_client && opened_connections < 10000) {
+    if (is_client && opened_connections <= 10000 - 2) {
         us_socket_context_connect(SSL, http_context, "localhost", 3000, 0, sizeof(struct http_socket));
     }
 
