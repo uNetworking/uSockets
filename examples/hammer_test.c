@@ -91,23 +91,17 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
         case 2: {
             // write
             us_socket_write(SSL, s, (char *) long_buffer, rand() % long_length, 0);
-
-            return perform_random_operation(s);
         }
         break;
         case 3: {
             // shutdown
             us_socket_shutdown(SSL, s);
-
-            return perform_random_operation(s);
         }
         break;
         case 4: {
             // loop wakeup and timeout sweep
             us_socket_timeout(SSL, s, 1);
             us_wakeup_loop(us_socket_context_loop(SSL, us_socket_context(SSL, s)));
-
-            //return perform_random_operation(s);
         }
         break;
     }
