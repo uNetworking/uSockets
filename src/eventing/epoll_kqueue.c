@@ -224,7 +224,7 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     struct epoll_event event;
     event.events = events;
     event.data.ptr = p;
-    epoll_ctl(loop->epfd, EPOLL_CTL_ADD, p->state.fd, &event);
+    epoll_ctl(loop->fd, EPOLL_CTL_ADD, p->state.fd, &event);
 #else
     kqueue_change(loop->fd, p->state.fd, 0, events, p);
 #endif
