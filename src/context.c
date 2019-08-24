@@ -26,13 +26,21 @@ int default_ignore_data_handler(struct us_socket_t *s) {
 /* Shared with SSL */
 
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
-    us_internal_socket_context_unlink(ls->s.context, &ls->s);
+    /* us_listen_socket_t extends us_socket_t so we close in similar ways */
+    if (!us_socket_is_closed(0, &ls->s)) {
+        us_internal_socket_context_unlink(ls->s.context, &ls->s);
+        us_poll_stop((struct us_poll_t *) &ls->s, ls->s.context->loop);
+        bsd_close_socket(us_poll_fd((struct us_poll_t *) &ls->s));
 
-    us_poll_stop((struct us_poll_t *) &ls->s, ls->s.context->loop);
-    bsd_close_socket(us_poll_fd((struct us_poll_t *) &ls->s));
+        /* Link this socket to the close-list and let it be deleted after this iteration */
+        ls->s.next = ls->s.context->loop->data.closed_head;
+        ls->s.context->loop->data.closed_head = &ls->s;
 
-    /* Listen sockets have no complex callbacks using it, so we free it immediately here */
-    us_poll_free((struct us_poll_t *) &ls->s, ls->s.context->loop);
+        /* Any socket with prev = context is marked as closed */
+        ls->s.prev = (struct us_socket_t *) ls->s.context;
+    }
+
+    /* We cannot immediately free a listen socket as we can be inside an accept loop */
 }
 
 void us_internal_socket_context_unlink(struct us_socket_context_t *context, struct us_socket_t *s) {

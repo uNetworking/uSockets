@@ -167,6 +167,12 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                         us_internal_socket_context_link(listen_socket->s.context, s);
 
                         listen_socket->s.context->on_open(s, 0, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
+
+                        /* Exit accept loop if listen socket was closed in on_open handler */
+                        if (us_socket_is_closed(0, &listen_socket->s)) {
+                            break;
+                        }
+
                     } while ((client_fd = bsd_accept_socket(us_poll_fd(p), &addr)) != LIBUS_SOCKET_ERROR);
                 }
             }
