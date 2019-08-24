@@ -22,21 +22,17 @@
 #if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
 
 #ifdef LIBUS_USE_EPOLL
-#define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_events[index].data.ptr
-#define SET_READY_POLL(loop, index, poll) loop->ready_events[index].data.ptr = poll
+#define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_polls[index].data.ptr
+#define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].data.ptr = poll
 #else
-#define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_events[index].udata
-#define SET_READY_POLL(loop, index, poll) loop->ready_events[index].udata = poll
+#define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_polls[index].udata
+#define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].udata = poll
 #endif
 
 /* Loop */
 void us_loop_free(struct us_loop_t *loop) {
     us_internal_loop_data_free(loop);
-#ifdef LIBUS_USE_EPOLL
-    close(loop->epfd);
-#else
-    close(loop->kqfd);
-#endif
+    close(loop->fd);
     free(loop);
 }
 
@@ -99,9 +95,9 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     loop->num_polls = 0;
 
 #ifdef LIBUS_USE_EPOLL
-    loop->epfd = epoll_create1(EPOLL_CLOEXEC);
+    loop->fd = epoll_create1(EPOLL_CLOEXEC);
 #else
-    loop->kqfd = kqueue();
+    loop->fd = kqueue();
 #endif
 
     us_internal_loop_data_init(loop, wakeup_cb, pre_cb, post_cb);
@@ -111,28 +107,66 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
 void us_loop_run(struct us_loop_t *loop) {
     us_loop_integrate(loop);
 
+    /* While we have non-fallthrough polls we shouldn't fall through */
     while (loop->num_polls) {
+        /* Emit pre callback */
         us_internal_loop_pre(loop);
 
+        /* Fetch ready polls */
 #ifdef LIBUS_USE_EPOLL
-        loop->num_fd_ready = epoll_wait(loop->epfd, loop->ready_events, 1024, -1);
+        loop->num_ready_polls = epoll_wait(loop->fd, loop->ready_polls, 1024, -1);
 #else
-        loop->num_fd_ready = kevent(loop->kqfd, NULL, 0, loop->ready_events, 1024, NULL);
+        loop->num_ready_polls = kevent(loop->fd, NULL, 0, loop->ready_polls, 1024, NULL);
 #endif
 
-        for (loop->fd_iterator = 0; loop->fd_iterator < loop->num_fd_ready; loop->fd_iterator++) {
-            struct us_poll_t *poll = GET_READY_POLL(loop, loop->fd_iterator);
+        /* Iterate ready polls, dispatching them by type */
+        for (loop->current_ready_poll = 0; loop->current_ready_poll < loop->num_ready_polls; loop->current_ready_poll++) {
+            struct us_poll_t *poll = GET_READY_POLL(loop, loop->current_ready_poll);
             /* Any ready poll marked with nullptr will be ignored */
             if (poll) {
 #ifdef LIBUS_USE_EPOLL
-                us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].events & (EPOLLERR | EPOLLHUP), loop->ready_events[loop->fd_iterator].events);
+                int events = loop->ready_polls[loop->current_ready_poll].events;
+                int error = loop->ready_polls[loop->current_ready_poll].events & (EPOLLERR | EPOLLHUP);
 #else
-                /* We actually cannot know what filter triggered? Why do we even pass these along? libuv legacy! Remove it! */
-                us_internal_dispatch_ready_poll(poll, loop->ready_events[loop->fd_iterator].flags & (EV_ERROR | EV_EOF), 0);
+                /* EVFILT_READ, EVFILT_TIME, EVFILT_USER are all mapped to LIBUS_SOCKET_READABLE */
+                int events = LIBUS_SOCKET_READABLE;
+                if (loop->ready_polls[loop->current_ready_poll].filter == EVFILT_WRITE) {
+                    events = LIBUS_SOCKET_WRITABLE;
+                }
+                int error = loop->ready_polls[loop->current_ready_poll].flags & (EV_ERROR | EV_EOF);
 #endif
+                /* Always filter all polls by what they actually poll for (callback polls always poll for readable) */
+                events &= us_poll_events(poll);
+                if (events || error) {
+                    us_internal_dispatch_ready_poll(poll, error, events);
+                }
             }
         }
+        /* Emit post callback */
         us_internal_loop_post(loop);
+    }
+}
+
+void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct us_poll_t *old_poll, struct us_poll_t *new_poll, int old_events, int new_events) {
+#ifdef LIBUS_USE_EPOLL
+    /* Epoll only has one ready poll per poll */
+    int num_entries_possibly_remaining = 1;
+#else
+    /* Ready polls may contain same poll twice under kqueue, as one poll may hold two filters */
+    int num_entries_possibly_remaining = 2;//((old_events & LIBUS_SOCKET_READABLE) ? 1 : 0) + ((old_events & LIBUS_SOCKET_WRITABLE) ? 1 : 0);
+#endif
+
+    /* Todo: for kqueue if we track things in us_change_poll it is possible to have a fast path with no seeking in cases of:
+    * current poll being us AND we only poll for one thing */
+
+    for (int i = loop->current_ready_poll; i < loop->num_ready_polls && num_entries_possibly_remaining; i++) {
+        if (GET_READY_POLL(loop, i) == old_poll) {
+
+            // if new events does not contain the ready events of this poll then remove (no we filter that out later on)
+            SET_READY_POLL(loop, i, new_poll);
+
+            num_entries_possibly_remaining--;
+        }
     }
 }
 
@@ -145,16 +179,20 @@ int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_d
     int change_length = 0;
 
     /* Do they differ in readable? */
-    if (new_events & LIBUS_SOCKET_READABLE != old_events & LIBUS_SOCKET_READABLE) {
-        EV_SET(&change_list[change_length++], fd, EVFILT_READ, new_events & LIBUS_SOCKET_READABLE ? EV_ADD : EV_DELETE, 0, 0, user_data);
+    if ((new_events & LIBUS_SOCKET_READABLE) != (old_events & LIBUS_SOCKET_READABLE)) {
+        EV_SET(&change_list[change_length++], fd, EVFILT_READ, (new_events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, user_data);
     }
 
     /* Do they differ in writable? */
-    if (new_events & LIBUS_SOCKET_WRITABLE != old_events & LIBUS_SOCKET_WRITABLE) {
-        EV_SET(&change_list[change_length++], fd, EVFILT_WRITE, new_events & LIBUS_SOCKET_WRITABLE ? EV_ADD : EV_DELETE, 0, 0, user_data);
+    if ((new_events & LIBUS_SOCKET_WRITABLE) != (old_events & LIBUS_SOCKET_WRITABLE)) {
+        EV_SET(&change_list[change_length++], fd, EVFILT_WRITE, (new_events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, user_data);
     }
 
-    return kevent(kqfd, change_list, change_length, NULL, 0, NULL);
+    int ret = kevent(kqfd, change_list, change_length, NULL, 0, NULL);
+
+    // ret should be 0 in most cases (not guaranteed when removing async)
+
+    return ret;
 }
 #endif
 
@@ -164,24 +202,16 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
     struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p && events) {
 #ifdef LIBUS_USE_EPOLL
-        /* Forcefully update poll by stripping away already set events */
+        /* Hack: forcefully update poll by stripping away already set events */
         new_p->state.poll_type = us_internal_poll_type(new_p);
         us_poll_change(new_p, loop, events);
 #else
         /* Forcefully update poll by resetting them with new_p as user data */
-        kqueue_change(loop->kqfd, new_p->state.fd, 0, events, new_p);
+        kqueue_change(loop->fd, new_p->state.fd, 0, events, new_p);
 #endif
 
-        /* This is needed for both epoll and kqueue, us_change_poll does not update the old poll */
-        if (GET_READY_POLL(loop, loop->fd_iterator) != p) {
-            for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
-                if (GET_READY_POLL(loop, i) == p) {
-                    SET_READY_POLL(loop, i, new_p);
-                    break;
-                }
-            }
-        }
-
+        /* This is needed for epoll also (us_change_poll doesn't update the old poll) */
+        us_internal_loop_update_pending_ready_polls(loop, p, new_p, events, events);
     }
 
     return new_p;
@@ -196,12 +226,11 @@ void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     event.data.ptr = p;
     epoll_ctl(loop->epfd, EPOLL_CTL_ADD, p->state.fd, &event);
 #else
-    kqueue_change(loop->kqfd, p->state.fd, 0, events, p);
+    kqueue_change(loop->fd, p->state.fd, 0, events, p);
 #endif
 }
 
 void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
-
     int old_events = us_poll_events(p);
     if (old_events != events) {
 
@@ -211,49 +240,29 @@ void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
         struct epoll_event event;
         event.events = events;
         event.data.ptr = p;
-        epoll_ctl(loop->epfd, EPOLL_CTL_MOD, p->state.fd, &event);
+        epoll_ctl(loop->fd, EPOLL_CTL_MOD, p->state.fd, &event);
 #else
-        kqueue_change(loop->kqfd, p->state.fd, old_events, events, p);
+        kqueue_change(loop->fd, p->state.fd, old_events, events, p);
 #endif
-
-        /* We are not allowed to emit old events we no longer subscribe to,
-         * so for simplicity we simply disable this poll's entry in the ready polls
-         * vector if we are not the currently dispatched poll. In other words we postpone
-         * any events until the next iteration to make sure they are entirely correct */
-        if (GET_READY_POLL(loop, loop->fd_iterator) != p) {
-            for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
-                if (GET_READY_POLL(loop, i) == p) {
-                    /* Mark us disabled for this iteration, just like we do for us_poll_stop */
-                    SET_READY_POLL(loop, i, 0);
-                    break;
-                }
-            }
-        }
+        /* Set all removed events to null-polls in pending ready poll list */
+        //us_internal_loop_update_pending_ready_polls(loop, p, p, old_events, events);
     }
 }
 
 void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
+    int old_events = us_poll_events(p);
+    int new_events = 0;
 #ifdef LIBUS_USE_EPOLL
     struct epoll_event event;
-    epoll_ctl(loop->epfd, EPOLL_CTL_DEL, p->state.fd, &event);
+    epoll_ctl(loop->fd, EPOLL_CTL_DEL, p->state.fd, &event);
 #else
-    int old_events = us_poll_events(p);
     if (old_events) {
-        kqueue_change(loop->kqfd, p->state.fd, old_events, 0, NULL);
+        kqueue_change(loop->fd, p->state.fd, old_events, new_events, NULL);
     }
 #endif
 
-    /* If we are not currently the one dispatched poll, we need
-    to see if we are in the ready_polls vector and disable us if so */
-    if (GET_READY_POLL(loop, loop->fd_iterator) != p) {
-        for (int i = loop->fd_iterator; i < loop->num_fd_ready; i++) {
-            if (GET_READY_POLL(loop, i) == p) {
-                /* Mark us as disabled */
-                SET_READY_POLL(loop, i, 0);
-                break;
-            }
-        }
-    }
+    /* Disable any instance of us in the pending ready poll list */
+    us_internal_loop_update_pending_ready_polls(loop, p, 0, old_events, new_events);
 }
 
 unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
@@ -264,7 +273,7 @@ unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
     (void)read_length;
     return buf;
 #else
-    /* Kqueue has no underlying FD for timers */
+    /* Kqueue has no underlying FD for timers or user events */
     return 0;
 #endif
 }
@@ -289,7 +298,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     cb->cb_expects_the_loop = 0;
 
     /* Bug: us_internal_poll_set_type does not SET the type, it only CHANGES it */
-    cb->p.state.poll_type = 0;
+    cb->p.state.poll_type = POLL_TYPE_POLLING_IN;
     us_internal_poll_set_type((struct us_poll_t *) cb, POLL_TYPE_CALLBACK);
 
     if (!fallthrough) {
@@ -330,7 +339,7 @@ void us_timer_close(struct us_timer_t *timer) {
 
     struct kevent event;
     EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_DELETE, 0, 0, internal_cb);
-    kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
+    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
 
     /* (regular) sockets are the only polls which are not freed immediately */
     us_poll_free((struct us_poll_t *) timer, internal_cb->loop);
@@ -344,7 +353,7 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     /* Bug: repeat_ms must be the same as ms, or 0 */
     struct kevent event;
     EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD | (repeat_ms ? 0 : EV_ONESHOT), 0, ms, internal_cb);
-    kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
+    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
 }
 #endif
 
@@ -393,7 +402,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
     cb->cb_expects_the_loop = 1;
 
     /* Bug: us_internal_poll_set_type does not SET the type, it only CHANGES it */
-    cb->p.state.poll_type = 0;
+    cb->p.state.poll_type = POLL_TYPE_POLLING_IN;
     us_internal_poll_set_type((struct us_poll_t *) cb, POLL_TYPE_CALLBACK);
 
     if (!fallthrough) {
@@ -406,6 +415,11 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 // identical code as for timer, make it shared for "callback types"
 void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
+
+    /* Note: This will fail most of the time as there probably is no pending trigger */
+    struct kevent event;
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_DELETE, 0, 0, internal_cb);
+    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
 
     /* (regular) sockets are the only polls which are not freed immediately */
     us_poll_free((struct us_poll_t *) a, internal_cb->loop);
@@ -423,7 +437,7 @@ void us_internal_async_wakeup(struct us_internal_async *a) {
     /* In kqueue you really only need to add a triggered oneshot event */
     struct kevent event;
     EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD | EV_ONESHOT, NOTE_TRIGGER, 0, internal_cb);
-    kevent(internal_cb->loop->kqfd, &event, 1, NULL, 0, NULL);
+    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
 }
 #endif
 

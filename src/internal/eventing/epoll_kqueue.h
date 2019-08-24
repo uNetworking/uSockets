@@ -37,15 +37,23 @@
 struct us_loop_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_internal_loop_data_t data;
 
+    /* Number of non-fallthrough polls in the loop */
     int num_polls;
-    int num_fd_ready;
-    int fd_iterator;
+
+    /* Number of ready polls this iteration */
+    int num_ready_polls;
+
+    /* Current index in list of ready polls */
+    int current_ready_poll;
+
+    /* Loop's own file descriptor */
+    int fd;
+
+    /* The list of ready polls */
 #ifdef LIBUS_USE_EPOLL
-    int epfd;
-    struct epoll_event ready_events[1024];
+    struct epoll_event ready_polls[1024];
 #else
-    int kqfd;
-    struct kevent ready_events[1024];
+    struct kevent ready_polls[1024];
 #endif
 };
 
