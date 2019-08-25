@@ -42,9 +42,19 @@ void us_loop_free(struct us_loop_t *loop) {
     free(loop);
 }
 
+/* We don't actually need to include CoreFoundation as we only need one single function,
+ * It will be up to the user to link to CoreFoundation, however that should be automatic in most use cases */
+extern void CFRunLoopRun();
+
 void us_loop_run(struct us_loop_t *loop) {
     us_loop_integrate(loop);
-    dispatch_main();
+
+    /* We are absolutely not compatible with dispatch_main,
+     * However every real application should run with CoreFoundation,
+     * Foundation or Cocoa as the main loop, driving dispatch anyways */
+    CFRunLoopRun();
+
+    /* I guess "fallthrough" polls should be added to another run mode than the default one to fall through */
 }
 
 void gcd_read_handler(void *p) {
@@ -60,18 +70,23 @@ void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type
     p->poll_type = poll_type;
     p->fd = fd;
 
+    /* I guess these are already activated? */
     p->gcd_read = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, p->fd, 0, dispatch_get_main_queue());
     dispatch_set_context(p->gcd_read, p);
     dispatch_source_set_event_handler_f(p->gcd_read, gcd_read_handler);
-    //dispatch_activate(p->gcd_read);
+    dispatch_source_set_cancel_handler_f(p->gcd_read, gcd_read_handler);
 
     p->gcd_write = dispatch_source_create(DISPATCH_SOURCE_TYPE_WRITE, p->fd, 0, dispatch_get_main_queue());
     dispatch_set_context(p->gcd_write, p);
     dispatch_source_set_event_handler_f(p->gcd_write, gcd_write_handler);
-    //dispatch_activate(p->gcd_write);
+    dispatch_source_set_cancel_handler_f(p->gcd_write, gcd_write_handler);
 }
 
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
+    /* It is program error to release suspended filters */
+    us_poll_change(p, loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
+    dispatch_release(p->gcd_read);
+    dispatch_release(p->gcd_write);
     free(p);
 }
 
@@ -152,15 +167,19 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
     return poll;
 }
 
-// still broken!
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
-    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
-    if (p != new_p) {
-        // does not seem to set these in time!
-        dispatch_set_context(new_p->gcd_read, new_p);
-        dispatch_set_context(new_p->gcd_write, new_p);
+    int events = us_poll_events(p);
 
-        printf("Poll %p is now resized to poll %p\n", p, new_p);
+    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size + 1024);
+    if (p != new_p) {
+        /* It is a program error to release suspended filters */
+        us_poll_change(new_p, loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
+        dispatch_release(new_p->gcd_read);
+        dispatch_release(new_p->gcd_write);
+
+        /* Create and start new filters */
+        us_poll_init(new_p, us_poll_fd(new_p), us_internal_poll_type(new_p));
+        us_poll_start(new_p, loop, events);
     }
 
     return new_p;
