@@ -26,7 +26,7 @@ Build example binaries using `make examples`. The static library itself builds w
 
 ##### Available plugins
 * Build using `WITH_LIBUV=1 make [examples]` to use libuv as event-loop.
-* Build using `WITH_GCD=1 make [examples]` to use Grand Central Dispatch/CoreFoundation as event-loop.
+* Build using `WITH_GCD=1 make [examples]` to use Grand Central Dispatch/CoreFoundation as event-loop (slow).
 * Build using `WITH_SSL=1 make [examples]` to enable and link OpenSSL 1.1+ support.
 
 The default event-loop is native epoll on Linux, native kqueue on macOS and finally libuv on Windows.
