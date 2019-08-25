@@ -15,6 +15,7 @@ endif
 # WITH_GCD=1 builds with libdispatch as event-loop
 ifeq ($(WITH_GCD),1)
 	override CFLAGS += -DLIBUS_USE_GCD
+	override LDFLAGS += -framework CoreFoundation
 endif
 
 # WITH_ASAN builds with sanitizers
