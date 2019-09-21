@@ -44,3 +44,4 @@ swift_examples:
 clean:
 	rm -f *.o
 	rm -f *.a
+	rm -rf .certs

@@ -414,6 +414,19 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
         }
     }
 
+    if (options.ca_file_name) {
+        STACK_OF(X509_NAME) *ca_list;
+        ca_list = SSL_load_client_CA_file(options.ca_file_name);
+        if(ca_list == NULL) {
+            return 0;
+        }
+        SSL_CTX_set_client_CA_list(context->ssl_context, ca_list); 
+        if (SSL_CTX_load_verify_locations(context->ssl_context, options.ca_file_name, NULL) != 1) {
+            return 0;
+        } 
+        SSL_CTX_set_verify(context->ssl_context, SSL_VERIFY_PEER, NULL);
+    }
+
     if (options.dh_params_file_name) {
         /* Set up ephemeral DH parameters. */
         DH *dh_2048 = NULL;
