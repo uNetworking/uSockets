@@ -107,6 +107,7 @@ void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
     }
 #endif
 
+    us_internal_loop_unlink(context->loop, context);
     free(context);
 }
 

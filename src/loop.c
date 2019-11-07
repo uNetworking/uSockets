@@ -53,12 +53,28 @@ void us_wakeup_loop(struct us_loop_t *loop) {
 }
 
 void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context_t *context) {
+    /* Insert this context as the head of loop */
     context->next = loop->data.head;
     context->prev = 0;
     if (loop->data.head) {
         loop->data.head->prev = context;
     }
     loop->data.head = context;
+}
+
+/* Unlink is called before free */
+void us_internal_loop_unlink(struct us_loop_t *loop, struct us_socket_context_t *context) {
+    if (loop->data.head == context) {
+        loop->data.head = context->next;
+        if (loop->data.head) {
+            loop->data.head->prev = 0;
+        }
+    } else {
+        context->prev->next = context->next;
+        if (context->next) {
+            context->next->prev = context->prev;
+        }
+    }
 }
 
 /* This functions should never run recursively */
