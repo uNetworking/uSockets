@@ -93,6 +93,9 @@ struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
 struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
     struct us_loop_t *loop = (struct us_loop_t *) malloc(sizeof(struct us_loop_t) + ext_size);
     loop->num_polls = 0;
+    /* These could be accessed if we close a poll before starting the loop */
+    loop->num_ready_polls = 0;
+    loop->current_ready_poll = 0;
 
 #ifdef LIBUS_USE_EPOLL
     loop->fd = epoll_create1(EPOLL_CLOEXEC);
