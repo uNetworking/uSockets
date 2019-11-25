@@ -1,9 +1,17 @@
-# WITH_SSL=1 enables SSL support
-ifneq ($(WITH_SSL),1)
-	override CFLAGS += -DLIBUS_NO_SSL
-else
+# WITH_OPENSSL=1 enables OpenSSL 1.1+ support
+ifeq ($(WITH_OPENSSL),1)
+	override CFLAGS += -DLIBUS_USE_OPENSSL
 	# With problems on macOS, make sure to pass needed LDFLAGS required to find these
 	override LDFLAGS += -lssl -lcrypto
+else
+	# WITH_WOLFSSL=1 enables WolfSSL 4.2.0 support (mutually exclusive with OpenSSL)
+	ifeq ($(WITH_WOLFSSL),1)
+		# todo: change these
+		override CFLAGS += -DLIBUS_USE_WOLFSSL -I/usr/local/include
+		override LDFLAGS += -L/usr/local/lib -lwolfssl
+	else
+		override CFLAGS += -DLIBUS_NO_SSL
+	endif
 endif
 
 # WITH_LIBUV=1 builds with libuv as event-loop
@@ -30,7 +38,7 @@ override LDFLAGS += uSockets.a
 # By default we build the uSockets.a static library
 default:
 	rm -f *.o
-	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c
+	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
 	$(AR) rvs uSockets.a *.o
 
 # Builds all examples

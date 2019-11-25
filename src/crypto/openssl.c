@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#ifndef LIBUS_NO_SSL
+#ifdef LIBUS_USE_OPENSSL
 
 #include "libusockets.h"
 #include "internal/internal.h"
