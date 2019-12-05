@@ -81,7 +81,10 @@ struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *co
 
 /* Returns the deep copy, to be freed */
 const char *deep_str_copy(const char *src) {
-    const char *dst = malloc(strlen(src) + 1);
+    if (!src) {
+        return src;
+    }
+    char *dst = malloc(strlen(src) + 1);
     strcpy(dst, src);
     return dst;
 }
@@ -116,11 +119,11 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
     /* We also simply free every copied string here */
-    free(context->options.ca_file_name);
-    free(context->options.cert_file_name);
-    free(context->options.dh_params_file_name);
-    free(context->options.key_file_name);
-    free(context->options.passphrase);
+    free((void *) context->options.ca_file_name);
+    free((void *) context->options.cert_file_name);
+    free((void *) context->options.dh_params_file_name);
+    free((void *) context->options.key_file_name);
+    free((void *) context->options.passphrase);
 
 #ifndef LIBUS_NO_SSL
     if (ssl) {
