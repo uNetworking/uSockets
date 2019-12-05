@@ -113,6 +113,9 @@ struct us_socket_context_t {
     struct us_socket_t *(*on_socket_timeout)(struct us_socket_t *);
     struct us_socket_t *(*on_end)(struct us_socket_t *);
     int (*ignore_data)(struct us_socket_t *);
+
+    /* All contexts hold references to their own copied options */
+    struct us_socket_context_options_t options;
 };
 
 /* Internal SSL interface */
