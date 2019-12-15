@@ -263,6 +263,7 @@ int expect_peer_verify(const char *test_name, bool expect_data_exchanged,
     }
 
     printf("[[ OK ]]\n\n");
+    return 0;
 }
 
 int main() {
