@@ -28,6 +28,7 @@
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
+#include <stdio.h>
 #define SETSOCKOPT_PTR_TYPE const char *
 #define LIBUS_SOCKET_ERROR INVALID_SOCKET
 #else
@@ -206,7 +207,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     hints.ai_socktype = SOCK_STREAM;
 
     char port_string[16];
-    sprintf(port_string, "%d", port);
+    snprintf(port_string, 16, "%d", port);
 
     if (getaddrinfo(host, port_string, &hints, &result)) {
         return LIBUS_SOCKET_ERROR;
@@ -249,7 +250,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
 #endif
 
-    if (bind(listenFd, listenAddr->ai_addr, listenAddr->ai_addrlen) || listen(listenFd, 512)) {
+    if (bind(listenFd, listenAddr->ai_addr, (socklen_t) listenAddr->ai_addrlen) || listen(listenFd, 512)) {
         bsd_close_socket(listenFd);
         freeaddrinfo(result);
         return LIBUS_SOCKET_ERROR;
@@ -266,7 +267,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host
     hints.ai_socktype = SOCK_STREAM;
 
     char port_string[16];
-    sprintf(port_string, "%d", port);
+    snprintf(port_string, 16, "%d", port);
 
     if (getaddrinfo(host, port_string, &hints, &result) != 0) {
         return LIBUS_SOCKET_ERROR;
@@ -278,7 +279,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host
         return LIBUS_SOCKET_ERROR;
     }
 
-    connect(fd, result->ai_addr, result->ai_addrlen);
+    connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
     freeaddrinfo(result);
 
     return fd;

@@ -18,6 +18,7 @@
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 int default_ignore_data_handler(struct us_socket_t *s) {
     return 0;
@@ -84,8 +85,9 @@ const char *deep_str_copy(const char *src) {
     if (!src) {
         return src;
     }
-    char *dst = malloc(strlen(src) + 1);
-    strcpy(dst, src);
+    size_t len = strlen(src) + 1;
+    char *dst = malloc(len);
+    memcpy(dst, src, len);
     return dst;
 }
 

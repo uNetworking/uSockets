@@ -74,10 +74,10 @@ struct us_internal_ssl_socket_t {
 
 int passphrase_cb(char *buf, int size, int rwflag, void *u) {
     const char *passphrase = (const char *) u;
-    int passphrase_length = strlen(passphrase);
+    size_t passphrase_length = strlen(passphrase);
     memcpy(buf, passphrase, passphrase_length);
     // put null at end? no?
-    return passphrase_length;
+    return (int) passphrase_length;
 }
 
 int BIO_s_custom_create(BIO *bio) {
