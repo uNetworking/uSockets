@@ -159,6 +159,17 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR 
 
     internal_finalize_bsd_addr(addr);
 
+    // set buffers to smallest possible
+    int a = 128;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &a, sizeof(int)) == -1) {
+        fprintf(stderr, "Error setting socket opts: %s\n", strerror(errno));
+    }
+
+    a = 1024;
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &a, sizeof(int)) == -1) {
+        fprintf(stderr, "Error setting socket opts: %s\n", strerror(errno));
+    }
+
     return bsd_set_nonblocking(apple_no_sigpipe(accepted_fd));
 }
 
@@ -260,7 +271,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     return listenFd;
 }
 
-static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, int options) {
+static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *interface, int options) {
     struct addrinfo hints, *result;
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
@@ -277,6 +288,25 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host
     if (fd == LIBUS_SOCKET_ERROR) {
         freeaddrinfo(result);
         return LIBUS_SOCKET_ERROR;
+    }
+
+    // set buffers to smallest possible
+    int a = 128;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &a, sizeof(int)) == -1) {
+        fprintf(stderr, "Error setting socket opts: %s\n", strerror(errno));
+    }
+
+    a = 1024;
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &a, sizeof(int)) == -1) {
+        fprintf(stderr, "Error setting socket opts: %s\n", strerror(errno));
+    }
+
+    if (interface) {
+        /* Todo: actually error check these */
+        struct addrinfo *interface_result;
+        getaddrinfo(interface, NULL, NULL, &interface_result);
+        bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
+        freeaddrinfo(interface_result);
     }
 
     connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);

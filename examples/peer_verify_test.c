@@ -246,7 +246,7 @@ int expect_peer_verify(const char *test_name, bool expect_data_exchanged,
     us_socket_context_on_timeout(SSL, client_context, on_client_socket_timeout);
     us_socket_context_on_end(SSL, client_context, on_client_socket_end);
 
-    us_socket_context_connect(SSL, client_context, "127.0.0.1", port, 0, sizeof(struct socket_context));
+    us_socket_context_connect(SSL, client_context, "127.0.0.1", port, NULL, 0, sizeof(struct socket_context));
     us_loop_run(loop);
 
     us_socket_context_free(SSL, server_context);
