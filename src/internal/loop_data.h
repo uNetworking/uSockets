@@ -31,6 +31,15 @@ struct us_internal_loop_data_t {
     struct us_socket_t *closed_head;
     /* We do not care if this flips or not, it doesn't matter */
     long long iteration_nr;
+
+    // tillägg för userspace
+    //#ifndef USERSPACE
+        int packet_fd;
+        struct us_poll_t *packet_poll;
+
+    // loopen äger även netif och init
+    void *lwip_netif;
+    //#endif
 };
 
 #endif // LOOP_DATA_H

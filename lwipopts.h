@@ -1,0 +1,7 @@
+#define NO_SYS 1
+#define LWIP_SOCKET 0
+#define LWIP_NETCONN 0
+#define LWIP_TCP 1
+#define MEMP_NUM_TCP_PCB 1000000
+#define MEM_LIBC_MALLOC 1
+#define MEM_USE_POOLS 0

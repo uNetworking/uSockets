@@ -21,6 +21,9 @@
 /* We only have one networking implementation so far */
 #include "internal/networking/bsd.h"
 
+// denna används för user space
+#include "internal/networking/packet.h"
+
 /* We have many different eventing implementations */
 #if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
 #include "internal/eventing/epoll_kqueue.h"
@@ -78,7 +81,11 @@ void us_internal_socket_context_unlink(struct us_socket_context_t *context, stru
 
 /* Sockets are polls */
 struct us_socket_t {
+    // if bsd
     alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p;
+    // if packet
+    void *pcb;
+
     struct us_socket_context_t *context;
     struct us_socket_t *prev, *next;
     unsigned short timeout;

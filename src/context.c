@@ -145,6 +145,11 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
     }
 #endif
 
+    // I praktiken så har vi en helt egen implementation av socket context listen - typ som en overridad funktion
+    return us_internal_tcp_lwip_listen(context, host, port, options);
+
+
+    // denna är knuten till BSD-spåret där du skapar en listen socket
     LIBUS_SOCKET_DESCRIPTOR listen_socket_fd = bsd_create_listen_socket(host, port, options);
 
     if (listen_socket_fd == LIBUS_SOCKET_ERROR) {

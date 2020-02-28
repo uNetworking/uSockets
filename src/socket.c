@@ -19,9 +19,15 @@
 #include "internal/internal.h"
 #include <stdlib.h>
 
+// detta gränssnitt är rätt litet, kan ersättas fullt eller delvis av tcp.c
+
 /* Shared with SSL */
 
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
+
+    printf("Cannot get remote address!\n");
+    return;
+
     struct bsd_addr_t addr;
     if (bsd_socket_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
         *length = 0;
@@ -45,6 +51,9 @@ void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
 }
 
 void us_socket_flush(int ssl, struct us_socket_t *s) {
+    printf("Cannot flush!\n");
+    return;
+
     if (!us_socket_is_shut_down(0, s)) {
         bsd_socket_flush(us_poll_fd((struct us_poll_t *) s));
     }
@@ -57,6 +66,14 @@ int us_socket_is_closed(int ssl, struct us_socket_t *s) {
 /* Not shared with SSL */
 
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
+
+    printf("Writing TCP data of length: %d\n", length);
+
+    return us_internal_tcp_write(s, data, length);
+
+    return length;
+
+
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return us_internal_ssl_socket_write((struct us_internal_ssl_socket_t *) s, data, length, msg_more);
@@ -87,6 +104,9 @@ void *us_socket_ext(int ssl, struct us_socket_t *s) {
 }
 
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
+    printf("Cannot close socket!\n");
+    return s;
+
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return (struct us_socket_t *) us_internal_ssl_socket_close((struct us_internal_ssl_socket_t *) s);
@@ -111,6 +131,9 @@ struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
 }
 
 int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
+    printf("Socket is not shut down!\n");
+    return 0;
+
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         return us_internal_ssl_socket_is_shut_down((struct us_internal_ssl_socket_t *) s);
@@ -121,6 +144,10 @@ int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
 }
 
 void us_socket_shutdown(int ssl, struct us_socket_t *s) {
+
+    printf("Cannot shut down socket!\n");
+    return;
+
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_internal_ssl_socket_shutdown((struct us_internal_ssl_socket_t *) s);

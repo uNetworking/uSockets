@@ -14,6 +14,12 @@ else
 	endif
 endif
 
+# WITH_LWIP=1 builds with lwip as tcp implementation
+ifeq ($(WITH_LWIP),1)
+	override CFLAGS += -DLIBUS_USE_LWIP -pthread -I lwip/src/include -I lwip/contrib/ports/unix/port/include -I .
+	override CFLAGS += lwip/src/core/*.c lwip/src/core/ipv4/*.c lwip/contrib/ports/unix/port/sys_arch.c lwip/src/netif/ethernet.c lwip/src/api/tcpip.c
+endif
+
 # WITH_LIBUV=1 builds with libuv as event-loop
 ifeq ($(WITH_LIBUV),1)
 	override CFLAGS += -DLIBUS_USE_LIBUV

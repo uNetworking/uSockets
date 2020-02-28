@@ -19,6 +19,13 @@
 #include "internal/internal.h"
 #include <stdlib.h>
 
+void us_internal_tcp_check_timeouts();
+
+/* TCP timer callback */
+void tcp_timer_cb(struct us_timer_t *timer) {
+    us_internal_tcp_check_timeouts();
+}
+
 /* The loop has 2 fallthrough polls */
 void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct us_loop_t *loop),
     void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop)) {
@@ -35,6 +42,25 @@ void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct
 
     loop->data.wakeup_async = us_internal_create_async(loop, 1, 0);
     us_internal_async_set(loop->data.wakeup_async, (void (*)(struct us_internal_async *)) wakeup_cb);
+
+    // om userspace, skapa en packet socket här, loop->data.packet_fd
+    // med en poll för den
+
+    // ska använda networking/packet.h ist för bsd.h som wrapper av networking detaljer
+    loop->data.packet_fd = us_internal_get_packet_socket();
+    loop->data.packet_poll = us_create_poll(loop, 0, 8); // size of 1 pointer
+    us_poll_init(loop->data.packet_poll, loop->data.packet_fd, POLL_TYPE_SOCKET);
+    us_poll_start(loop->data.packet_poll, loop, LIBUS_SOCKET_READABLE);
+
+    loop->data.lwip_netif = us_internal_init_lwip(loop->data.packet_fd);
+
+    // copy the pointer to the netif to ext of poll
+    memcpy(us_poll_ext(loop->data.packet_poll), &loop->data.lwip_netif, 8);
+
+
+    // create a special timer here to tend to the tcp timer system every 250ms say
+    struct us_timer_t *tcp_timer = us_create_timer(loop, 0, 0);
+    us_timer_set(tcp_timer, tcp_timer_cb, 250, 250);
 }
 
 void us_internal_loop_data_free(struct us_loop_t *loop) {
@@ -46,6 +72,8 @@ void us_internal_loop_data_free(struct us_loop_t *loop) {
 
     us_timer_close(loop->data.sweep_timer);
     us_internal_async_close(loop->data.wakeup_async);
+
+    // om userspace, frigör packet socket och dess poll
 }
 
 void us_wakeup_loop(struct us_loop_t *loop) {
@@ -196,6 +224,14 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
         break;
     case POLL_TYPE_SOCKET_SHUT_DOWN:
     case POLL_TYPE_SOCKET: {
+
+            // if userspace we have a different callback here
+            void *usr;
+            memcpy(&usr, us_poll_ext(p), 8);
+            us_internal_handle_packet_socket(us_poll_fd(p), usr);
+            return;
+
+
             /* We should only use s, no p after this point */
             struct us_socket_t *s = (struct us_socket_t *) p;
 
