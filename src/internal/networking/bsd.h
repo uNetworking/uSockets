@@ -87,6 +87,17 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, in
 
     LIBUS_SOCKET_DESCRIPTOR created_fd = socket(domain, type | flags, protocol);
 
+    // set buffers to smallest possible
+    int a = 128;
+    if (setsockopt(created_fd, SOL_SOCKET, SO_RCVBUF, &a, sizeof(int)) == -1) {
+        fprintf(stderr, "Error setting socket opts: %s\n", strerror(errno));
+    }
+
+    a = 1024;
+    if (setsockopt(created_fd, SOL_SOCKET, SO_SNDBUF, &a, sizeof(int)) == -1) {
+        fprintf(stderr, "Error setting socket opts: %s\n", strerror(errno));
+    }
+
     return bsd_set_nonblocking(apple_no_sigpipe(created_fd));
 }
 
