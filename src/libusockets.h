@@ -27,6 +27,22 @@
 /* Guaranteed alignment of extension memory */
 #define LIBUS_EXT_ALIGNMENT 16
 
+
+/* Macros to make function arguments more human-readable */
+
+// uSockets: Don't use SSL.
+#define uS_NO_SSL false
+// uSockets: Use SSL.
+#define uS_WITH_SSL true
+// uSockets: Don't use a context extension.
+#define uS_NO_EXTENSION 0
+// uSockets: Use this context extension (passes sizeof).
+#define uS_WITH_EXTENSION(ext) sizeof(ext)
+// uSockets: Don't give the us_socket_context_options_t to the socket.
+#define uS_NO_SSL_OPTIONS 0
+// uSockets: Give the us_socket_context_options_t to the socket.
+#define uS_WITH_SSL_OPTIONS 1
+
 /* Define what a socket descriptor is based on platform */
 #ifdef _WIN32
 #define NOMINMAX
