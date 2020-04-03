@@ -150,7 +150,7 @@ struct us_listen_socket_t *us_internal_ssl_socket_context_listen(struct us_inter
     const char *host, int port, int options, int socket_ext_size);
 
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context,
-    const char *host, int port, int options, int socket_ext_size);
+    const char *host, int port, const char *interface, int options, int socket_ext_size);
 
 int us_internal_ssl_socket_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more);
 void us_internal_ssl_socket_timeout(struct us_internal_ssl_socket_t *s, unsigned int seconds);
