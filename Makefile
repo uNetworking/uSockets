@@ -1,3 +1,4 @@
+WITH_LTO := $(or $(WITH_LTO),-flto)
 # WITH_OPENSSL=1 enables OpenSSL 1.1+ support
 ifeq ($(WITH_OPENSSL),1)
 	override CFLAGS += -DLIBUS_USE_OPENSSL
@@ -38,13 +39,13 @@ override LDFLAGS += uSockets.a
 # By default we build the uSockets.a static library
 default:
 	rm -f *.o
-	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
+	$(CC) $(CFLAGS) $(WITH_LTO) -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
 	$(AR) rvs uSockets.a *.o
 
 # Builds all examples
 .PHONY: examples
 examples: default
-	for f in examples/*.c; do $(CC) -flto -O3 $(CFLAGS) -o $$(basename "$$f" ".c") "$$f" $(LDFLAGS); done
+	for f in examples/*.c; do $(CC) $(WITH_LTO) -O3 $(CFLAGS) -o $$(basename "$$f" ".c") "$$f" $(LDFLAGS); done
 
 swift_examples:
 	swiftc -O -I . examples/swift_http_server/main.swift uSockets.a -o swift_http_server
