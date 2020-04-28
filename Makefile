@@ -1,3 +1,14 @@
+DESTDIR ?=
+
+prefix ?= "/usr/local"
+exec_prefix	?=	"$(prefix)"
+libdir ?=	"$(exec_prefix)/lib"
+includedir?=	"$(exec_prefix)/include/uSockets"
+
+VERSION = 0.3.5
+LIBTARGET = libusockets.so
+
+
 # WITH_OPENSSL=1 enables OpenSSL 1.1+ support
 ifeq ($(WITH_OPENSSL),1)
 	override CFLAGS += -DLIBUS_USE_OPENSSL
@@ -35,8 +46,27 @@ endif
 override CFLAGS += -std=c11 -Isrc
 override LDFLAGS += uSockets.a
 
-# By default we build the uSockets.a static library
+# By default we build the libusockets.so shared library
 default:
+	rm -f *.o
+	$(CC) $(CFLAGS) $(CPPFLAGS) -fpic -c src/*.c src/eventing/*.c src/crypto/*.c
+	$(CC) -shared -Wl,-soname,libusockets.so -o $(LIBTARGET) *.o
+
+install: default
+	# install the folders needed  (making sure that the exist)
+	install -d "$(DESTDIR)$(libdir)" \
+	"$(DESTDIR)$(includedir)/internal/eventing" \
+	"$(DESTDIR)$(includedir)/internal/networking"
+	# install the library first, while making sure that the symlink is updated
+	install -m 755 $(LIBTARGET) "$(DESTDIR)$(libdir)/$(LIBTARGET).$(VERSION)"
+	@ cd "$(DESTDIR)$(libdir)" && ln -snf "$(LIBTARGET).$(VERSION)" "$(LIBTARGET)"
+	# we also install all the header files
+	install -m 644 src/*.h "$(DESTDIR)$(includedir)/"
+	install -m 644 src/internal/*.h "$(DESTDIR)$(includedir)/internal/"
+	install -m 644 src/internal/eventing/*.h "$(DESTDIR)$(includedir)/internal/eventing/"
+	install -m 644 src/internal/networking/*.h "$(DESTDIR)$(includedir)/internal/networking/"
+
+static:
 	rm -f *.o
 	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
 	$(AR) rvs uSockets.a *.o
@@ -52,4 +82,5 @@ swift_examples:
 clean:
 	rm -f *.o
 	rm -f *.a
+	rm -f *.so
 	rm -rf .certs
