@@ -242,8 +242,10 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     }
 #endif
 
+if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
     int enabled = 1;
     setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+}
 
 #ifdef IPV6_V6ONLY
     int disabled = 0;
