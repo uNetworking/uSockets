@@ -169,11 +169,11 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                     /* Todo: stop timer if any */
 
                     do {
-                        struct us_poll_t *p = us_create_poll(us_socket_context(0, &listen_socket->s)->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + listen_socket->socket_ext_size);
-                        us_poll_init(p, client_fd, POLL_TYPE_SOCKET);
-                        us_poll_start(p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
+                        struct us_poll_t *accepted_p = us_create_poll(us_socket_context(0, &listen_socket->s)->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + listen_socket->socket_ext_size);
+                        us_poll_init(accepted_p, client_fd, POLL_TYPE_SOCKET);
+                        us_poll_start(accepted_p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
 
-                        struct us_socket_t *s = (struct us_socket_t *) p;
+                        struct us_socket_t *s = (struct us_socket_t *) accepted_p;
 
                         s->context = listen_socket->s.context;
 
