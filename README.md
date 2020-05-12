@@ -2,6 +2,8 @@
 
 This is the cross-platform async networking and eventing foundation library used by [µWebSockets](https://github.com/uNetworking/uWebSockets).
 
+<a href="https://lgtm.com/projects/g/uNetworking/uSockets/context:cpp"><img alt="Language grade: C/C++" src="https://img.shields.io/lgtm/grade/cpp/g/uNetworking/uSockets.svg?logo=lgtm&logoWidth=18"/></a>
+
 ### Key aspects
 
 * Built-in (optionally available) TLS support exposed with identical interface as for TCP.
