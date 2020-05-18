@@ -369,7 +369,7 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     // options
     wolfSSL_CTX_set_read_ahead(context->ssl_context, 1);
     wolfSSL_CTX_set_mode(context->ssl_context, WOLFSSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    
+
     // this lowers performance a bit in benchmarks
     if (options.ssl_prefer_low_memory_usage) {
        //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
@@ -423,8 +423,8 @@ struct us_listen_socket_t *us_internal_ssl_socket_context_listen(struct us_inter
     return us_socket_context_listen(0, &context->sc, host, port, options, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
 }
 
-struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context, const char *host, int port, const char *interface, int options, int socket_ext_size) {
-    return (struct us_internal_ssl_socket_t *) us_socket_context_connect(0, &context->sc, host, port, interface, options, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
+struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {
+    return (struct us_internal_ssl_socket_t *) us_socket_context_connect(0, &context->sc, host, port, source_host, options, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
 }
 
 void us_internal_ssl_socket_context_on_open(struct us_internal_ssl_socket_context_t *context, struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *s, int is_client, char *ip, int ip_length)) {

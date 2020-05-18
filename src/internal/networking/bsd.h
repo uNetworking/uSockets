@@ -260,7 +260,7 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host,
     return listenFd;
 }
 
-static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *interface, int options) {
+static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options) {
     struct addrinfo hints, *result;
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
@@ -279,10 +279,10 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host
         return LIBUS_SOCKET_ERROR;
     }
 
-    if (interface) {
+    if (source_host) {
         /* Todo: actually error check these */
         struct addrinfo *interface_result;
-        getaddrinfo(interface, NULL, NULL, &interface_result);
+        getaddrinfo(source_host, NULL, NULL, &interface_result);
         bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
         freeaddrinfo(interface_result);
     }
