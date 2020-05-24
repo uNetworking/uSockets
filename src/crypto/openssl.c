@@ -103,7 +103,7 @@ int BIO_s_custom_write(BIO *bio, const char *data, int length) {
     int written = us_socket_write(0, loop_ssl_data->ssl_socket, data, length, loop_ssl_data->last_write_was_msg_more);
 
     if (!written) {
-        BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_WRITE);
+        BIO_set_flags(bio, BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_WRITE);
         return -1;
     }
 
@@ -118,7 +118,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     //printf("BIO_s_custom_read\n");
 
     if (!loop_ssl_data->ssl_read_input_length) {
-        BIO_set_flags(bio, BIO_get_flags(bio) | BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_READ);
+        BIO_set_flags(bio, BIO_FLAGS_SHOULD_RETRY | BIO_FLAGS_READ);
         return -1;
     }
 
