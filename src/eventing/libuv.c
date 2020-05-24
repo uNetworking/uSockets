@@ -207,7 +207,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 }
 
 void *us_timer_ext(struct us_timer_t *timer) {
-    return ((struct us_internal_callback_t *) timer) + 1;
+    return ((char *) timer) + sizeof(struct us_internal_callback_t) + sizeof(uv_timer_t);
 }
 
 void us_timer_close(struct us_timer_t *t) {
