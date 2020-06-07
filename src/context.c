@@ -103,7 +103,10 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        return (struct us_socket_context_t *) us_internal_create_ssl_socket_context(loop, context_ext_size, options);
+        struct us_socket_context_t *ssl_context = (struct us_socket_context_t *) us_internal_create_ssl_socket_context(loop, context_ext_size, options);
+
+        ssl_context->options = options;
+        return ssl_context;
     }
 #endif
 
@@ -120,19 +123,19 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 }
 
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
-    /* We also simply free every copied string here */
-    free((void *) context->options.ca_file_name);
-    free((void *) context->options.cert_file_name);
-    free((void *) context->options.dh_params_file_name);
-    free((void *) context->options.key_file_name);
-    free((void *) context->options.passphrase);
-
 #ifndef LIBUS_NO_SSL
     if (ssl) {
         us_internal_ssl_socket_context_free((struct us_internal_ssl_socket_context_t *) context);
         return;
     }
 #endif
+
+    /* We also simply free every copied string here */
+    free((void *) context->options.ca_file_name);
+    free((void *) context->options.cert_file_name);
+    free((void *) context->options.dh_params_file_name);
+    free((void *) context->options.key_file_name);
+    free((void *) context->options.passphrase);
 
     us_internal_loop_unlink(context->loop, context);
     free(context);
