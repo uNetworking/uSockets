@@ -56,6 +56,16 @@ int us_socket_is_closed(int ssl, struct us_socket_t *s) {
 
 /* Not shared with SSL */
 
+void *us_socket_get_native_handle(int ssl, struct us_socket_t *s) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return us_internal_ssl_socket_get_native_handle((struct us_internal_ssl_socket_t *) s);
+    }
+#endif
+
+    return (void *) (uintptr_t) us_poll_fd((struct us_poll_t *) s);
+}
+
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {

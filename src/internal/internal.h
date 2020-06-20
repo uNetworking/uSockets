@@ -121,6 +121,9 @@ struct us_socket_context_t {
 /* Internal SSL interface */
 #ifndef LIBUS_NO_SSL
 
+void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *s);
+void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_socket_context_t *context);
+
 struct us_internal_ssl_socket_context_t;
 struct us_internal_ssl_socket_t;
 

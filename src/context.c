@@ -93,6 +93,17 @@ const char *deep_str_copy(const char *src) {
 
 /* Not shared with SSL */
 
+void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return us_internal_ssl_socket_context_get_native_handle(context);
+    }
+#endif
+
+    /* There is no native handle for a non-SSL socket context */
+    return 0;
+}
+
 struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
     /* For ease of use we copy all passed strings here */
     options.ca_file_name = deep_str_copy(options.ca_file_name);

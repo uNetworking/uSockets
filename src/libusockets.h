@@ -87,6 +87,9 @@ struct us_socket_context_options_t {
     int ssl_prefer_low_memory_usage;
 };
 
+/* Returns the underlying SSL native handle, such as SSL_CTX or nullptr */
+WIN32_EXPORT void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context);
+
 /* A socket context holds shared callbacks and user data extension for associated sockets */
 WIN32_EXPORT struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop,
     int ext_size, struct us_socket_context_options_t options);
@@ -188,6 +191,10 @@ WIN32_EXPORT LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p);
 WIN32_EXPORT struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size);
 
 /* Public interfaces for sockets */
+
+/* Returns the underlying native handle for a socket, such as SSL or file descriptor.
+ * In the case of file descriptor, the value of pointer is fd. */
+WIN32_EXPORT void *us_socket_get_native_handle(int ssl, struct us_socket_t *s);
 
 /* Write up to length bytes of data. Returns actual bytes written.
  * Will call the on_writable callback of active socket context on failure to write everything off in one go.
