@@ -371,6 +371,10 @@ int ssl_ignore_data(struct us_internal_ssl_socket_t *s) {
 }
 
 /* Per-context functions */
+void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_socket_context_t *context) {
+    return context->ssl_context;
+}
+
 struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size) {
     struct us_socket_context_options_t options = {0};
 
@@ -519,6 +523,9 @@ void *us_internal_ssl_socket_context_ext(struct us_internal_ssl_socket_context_t
 }
 
 /* Per socket functions */
+void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *s) {
+    return s->ssl;
+}
 
 int us_internal_ssl_socket_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more) {
     if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
