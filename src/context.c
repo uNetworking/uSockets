@@ -96,7 +96,7 @@ const char *deep_str_copy(const char *src) {
 void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        return us_internal_ssl_socket_context_get_native_handle(context);
+        return us_internal_ssl_socket_context_get_native_handle((struct us_internal_ssl_socket_context_t *) context);
     }
 #endif
 
