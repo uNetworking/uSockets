@@ -30,3 +30,10 @@ Build example binaries using `make examples`. The static library itself builds w
 * Build using `WITH_WOLFSSL=1 make [examples]` to enable and link WolfSSL 2.4.0+ support for embedded use.
 
 The default event-loop is native epoll on Linux, native kqueue on macOS and finally libuv on Windows.
+
+##### A word on performance
+This library is opaque; there are function calls for everything - even simple things like accessing the "user data" of a socket. In other words, static linking and link-time-optimizations mean **everything** for performance. I've benchmarked dynamic linking vs. static, link-time optimized ones and found close to 100% performance difference.
+
+Also, the kernel you run makes a huge difference. Mitigations off, or a modern hardware-mitigated CPU makes all the difference and distros like Clear Linux have shown huge speedups compared to more "vanilla" kernels.
+
+Whatever you do, **never** ever link to uSockets dynamically.
