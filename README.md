@@ -32,8 +32,6 @@ Build example binaries using `make examples`. The static library itself builds w
 The default event-loop is native epoll on Linux, native kqueue on macOS and finally libuv on Windows.
 
 ##### A word on performance
-This library is opaque; there are function calls for everything - even simple things like accessing the "user data" of a socket. In other words, static linking and link-time-optimizations mean **everything** for performance. I've benchmarked dynamic linking vs. static, link-time optimized ones and found close to 100% performance difference.
+This library is opaque; there are function calls for everything - even simple things like accessing the "user data" of a socket. In other words, static linking and link-time-optimizations mean **everything** for performance. I've benchmarked dynamic linking vs. static, link-time optimization and found roughly a 60% performance difference.
 
-Also, the kernel you run makes a huge difference. Mitigations off, or a modern hardware-mitigated CPU makes all the difference and distros like Clear Linux have shown huge speedups compared to more "vanilla" kernels.
-
-Whatever you do, **never** ever link to uSockets dynamically.
+The kernel you run makes a huge difference. Linux wins, hands down. Mitigations off, or a modern hardware-mitigated CPU makes huge differences and distros like Clear Linux have shown significant speedups compared to more "vanilla" kernels.
