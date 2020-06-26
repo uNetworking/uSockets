@@ -70,7 +70,7 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
     switch (rand() % 5) {
         case 0: {
             // close
-            return us_socket_close(SSL, s);
+            return us_socket_close(SSL, s, 0, NULL);
         }
         case 1: {
             // adoption cannot happen if closed!
@@ -141,7 +141,7 @@ struct us_socket_t *on_http_socket_writable(struct us_socket_t *s) {
     return perform_random_operation(s);
 }
 
-struct us_socket_t *on_web_socket_close(struct us_socket_t *s) {
+struct us_socket_t *on_web_socket_close(struct us_socket_t *s, int code, void *reason) {
     assume_state(s, 0);
 
     closed_connections++;
@@ -155,7 +155,7 @@ struct us_socket_t *on_web_socket_close(struct us_socket_t *s) {
     return s;
 }
 
-struct us_socket_t *on_http_socket_close(struct us_socket_t *s) {
+struct us_socket_t *on_http_socket_close(struct us_socket_t *s, int code, void *reason) {
     assume_state(s, 1);
 
     closed_connections++;
@@ -173,7 +173,7 @@ struct us_socket_t *on_web_socket_end(struct us_socket_t *s) {
     assume_state(s, 0);
 
     // we need to close on shutdown
-    s = us_socket_close(SSL, s);
+    s = us_socket_close(SSL, s, 0, NULL);
     return perform_random_operation(s);
 }
 
@@ -181,7 +181,7 @@ struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
     assume_state(s, 1);
 
     // we need to close on shutdown
-    s = us_socket_close(SSL, s);
+    s = us_socket_close(SSL, s, 0, NULL);
     return perform_random_operation(s);
 }
 

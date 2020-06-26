@@ -54,6 +54,24 @@ int us_socket_is_closed(int ssl, struct us_socket_t *s) {
     return s->prev == (struct us_socket_t *) s->context;
 }
 
+struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason) {
+    if (!us_socket_is_closed(0, s)) {
+        us_internal_socket_context_unlink(s->context, s);
+        us_poll_stop((struct us_poll_t *) s, s->context->loop);
+        bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
+
+        /* Link this socket to the close-list and let it be deleted after this iteration */
+        s->next = s->context->loop->data.closed_head;
+        s->context->loop->data.closed_head = s;
+
+        /* Any socket with prev = context is marked as closed */
+        s->prev = (struct us_socket_t *) s->context;
+
+        return s->context->on_close(s, code, reason);
+    }
+    return s;
+}
+
 /* Not shared with SSL */
 
 void *us_socket_get_native_handle(int ssl, struct us_socket_t *s) {
@@ -94,30 +112,6 @@ void *us_socket_ext(int ssl, struct us_socket_t *s) {
 #endif
 
     return s + 1;
-}
-
-struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        return (struct us_socket_t *) us_internal_ssl_socket_close((struct us_internal_ssl_socket_t *) s);
-    }
-#endif
-
-    if (!us_socket_is_closed(0, s)) {
-        us_internal_socket_context_unlink(s->context, s);
-        us_poll_stop((struct us_poll_t *) s, s->context->loop);
-        bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
-
-        /* Link this socket to the close-list and let it be deleted after this iteration */
-        s->next = s->context->loop->data.closed_head;
-        s->context->loop->data.closed_head = s;
-
-        /* Any socket with prev = context is marked as closed */
-        s->prev = (struct us_socket_t *) s->context;
-
-        return s->context->on_close(s);
-    }
-    return s;
 }
 
 int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {

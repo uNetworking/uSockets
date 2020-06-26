@@ -102,7 +102,7 @@ struct us_socket_t *on_client_socket_writable(struct us_socket_t *s) {
     return s;
 }
 
-struct us_socket_t *on_server_socket_close(struct us_socket_t *s) {
+struct us_socket_t *on_server_socket_close(struct us_socket_t *s, int code, void *reason) {
     printf("on_server_socket_close\n");
 
     us_listen_socket_close(SSL, listen_socket);
@@ -110,7 +110,7 @@ struct us_socket_t *on_server_socket_close(struct us_socket_t *s) {
     return s;
 }
 
-struct us_socket_t *on_client_socket_close(struct us_socket_t *s) {
+struct us_socket_t *on_client_socket_close(struct us_socket_t *s, int code, void *reason) {
 
     printf("on_client_socket_close\n");
 
@@ -119,12 +119,12 @@ struct us_socket_t *on_client_socket_close(struct us_socket_t *s) {
 
 struct us_socket_t *on_server_socket_end(struct us_socket_t *s) {
 
-    return us_socket_close(SSL, s);
+    return us_socket_close(SSL, s, 0, NULL);
 }
 
 struct us_socket_t *on_client_socket_end(struct us_socket_t *s) {
 
-    return us_socket_close(SSL, s);
+    return us_socket_close(SSL, s, 0, NULL);
 }
 
 struct us_socket_t *on_server_socket_data(struct us_socket_t *s, char *data, int length) {
@@ -154,7 +154,7 @@ struct us_socket_t *on_client_socket_data(struct us_socket_t *s, char *data, int
 
     client_received_data = true;
 
-    return us_socket_close(SSL, s);
+    return us_socket_close(SSL, s, 0, NULL);
 }
 
 struct us_socket_t *on_server_socket_open(struct us_socket_t *s, int is_client, char *ip, int ip_length) {
@@ -267,8 +267,8 @@ int expect_peer_verify(const char *test_name, bool expect_data_exchanged,
 }
 
 int main() {
-   
-    expect_peer_verify("trusted client ca", true, 
+
+    expect_peer_verify("trusted client ca", true,
         (struct us_socket_context_options_t){
             .key_file_name = ".certs/valid_server_key.pem",
             .cert_file_name = ".certs/valid_server_crt.pem",
@@ -281,7 +281,7 @@ int main() {
         });
 
 
-    expect_peer_verify("untrusted client ca", false, 
+    expect_peer_verify("untrusted client ca", false,
         (struct us_socket_context_options_t){
             .key_file_name = ".certs/valid_server_key.pem",
             .cert_file_name = ".certs/valid_server_crt.pem",
@@ -293,7 +293,7 @@ int main() {
             .ca_file_name = ".certs/valid_ca_crt.pem"
         });
 
-    expect_peer_verify("trusted selfsigned client", true, 
+    expect_peer_verify("trusted selfsigned client", true,
         (struct us_socket_context_options_t){
             .key_file_name = ".certs/valid_server_key.pem",
             .cert_file_name = ".certs/valid_server_crt.pem",
@@ -305,7 +305,7 @@ int main() {
             .ca_file_name = ".certs/valid_ca_crt.pem"
         });
 
-    expect_peer_verify("untrusted selfsigned client", false, 
+    expect_peer_verify("untrusted selfsigned client", false,
         (struct us_socket_context_options_t){
             .key_file_name = ".certs/valid_server_key.pem",
             .cert_file_name = ".certs/valid_server_crt.pem",
@@ -317,7 +317,7 @@ int main() {
             .ca_file_name = ".certs/valid_ca_crt.pem"
         });
 
-    expect_peer_verify("peer verify disabled", true, 
+    expect_peer_verify("peer verify disabled", true,
         (struct us_socket_context_options_t){
             .key_file_name = ".certs/valid_server_key.pem",
             .cert_file_name = ".certs/valid_server_crt.pem"

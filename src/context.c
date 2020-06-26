@@ -105,18 +105,19 @@ void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *c
 }
 
 struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        /* This function will call us, again, with SSL = false and a bigger ext_size */
+        return (struct us_socket_context_t *) us_internal_create_ssl_socket_context(loop, context_ext_size, options);
+    }
+#endif
+
     /* For ease of use we copy all passed strings here */
     options.ca_file_name = deep_str_copy(options.ca_file_name);
     options.cert_file_name = deep_str_copy(options.cert_file_name);
     options.dh_params_file_name = deep_str_copy(options.dh_params_file_name);
     options.key_file_name = deep_str_copy(options.key_file_name);
     options.passphrase = deep_str_copy(options.passphrase);
-
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        return (struct us_socket_context_t *) us_internal_create_ssl_socket_context(loop, context_ext_size, options);
-    }
-#endif
 
     struct us_socket_context_t *context = malloc(sizeof(struct us_socket_context_t) + context_ext_size);
     context->loop = loop;
@@ -131,19 +132,20 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 }
 
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        /* This function will call us again with SSL=false */
+        us_internal_ssl_socket_context_free((struct us_internal_ssl_socket_context_t *) context);
+        return;
+    }
+#endif
+
     /* We also simply free every copied string here */
     free((void *) context->options.ca_file_name);
     free((void *) context->options.cert_file_name);
     free((void *) context->options.dh_params_file_name);
     free((void *) context->options.key_file_name);
     free((void *) context->options.passphrase);
-
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_free((struct us_internal_ssl_socket_context_t *) context);
-        return;
-    }
-#endif
 
     us_internal_loop_unlink(context->loop, context);
     free(context);
@@ -250,10 +252,10 @@ void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, str
     context->on_open = on_open;
 }
 
-void us_socket_context_on_close(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_close)(struct us_socket_t *s)) {
+void us_socket_context_on_close(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_close)(struct us_socket_t *s, int code, void *reason)) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        us_internal_ssl_socket_context_on_close((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *)) on_close);
+        us_internal_ssl_socket_context_on_close((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *, int code, void *reason)) on_close);
         return;
     }
 #endif

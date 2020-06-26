@@ -1,4 +1,4 @@
-# WITH_OPENSSL=1 enables OpenSSL 1.1+ support
+# WITH_OPENSSL=1 enables OpenSSL 1.1+ support or BoringSSL
 ifeq ($(WITH_OPENSSL),1)
 	override CFLAGS += -DLIBUS_USE_OPENSSL
 	# With problems on macOS, make sure to pass needed LDFLAGS required to find these
@@ -28,7 +28,7 @@ endif
 
 # WITH_ASAN builds with sanitizers
 ifeq ($(WITH_ASAN),1)
-	override CFLAGS += -fsanitize=address
+	override CFLAGS += -fsanitize=address -g
 	override LDFLAGS += -lasan
 endif
 

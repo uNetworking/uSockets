@@ -108,7 +108,7 @@ struct us_socket_context_t {
     struct us_socket_t *(*on_open)(struct us_socket_t *, int is_client, char *ip, int ip_length);
     struct us_socket_t *(*on_data)(struct us_socket_t *, char *data, int length);
     struct us_socket_t *(*on_writable)(struct us_socket_t *);
-    struct us_socket_t *(*on_close)(struct us_socket_t *);
+    struct us_socket_t *(*on_close)(struct us_socket_t *, int code, void *reason);
     //void (*on_timeout)(struct us_socket_context *);
     struct us_socket_t *(*on_socket_timeout)(struct us_socket_t *);
     struct us_socket_t *(*on_end)(struct us_socket_t *);
@@ -135,7 +135,7 @@ void us_internal_ssl_socket_context_on_open(struct us_internal_ssl_socket_contex
     struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *s, int is_client, char *ip, int ip_length));
 
 void us_internal_ssl_socket_context_on_close(struct us_internal_ssl_socket_context_t *context,
-    struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *s));
+    struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *s, int code, void *reason));
 
 void us_internal_ssl_socket_context_on_data(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *s, char *data, int length));
@@ -162,7 +162,7 @@ struct us_internal_ssl_socket_context_t *us_internal_ssl_socket_get_context(stru
 void *us_internal_ssl_socket_ext(struct us_internal_ssl_socket_t *s);
 int us_internal_ssl_socket_is_shut_down(struct us_internal_ssl_socket_t *s);
 void us_internal_ssl_socket_shutdown(struct us_internal_ssl_socket_t *s);
-struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s);
+
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_adopt_socket(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *s, int ext_size);
 

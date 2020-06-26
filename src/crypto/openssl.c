@@ -62,7 +62,7 @@ struct us_internal_ssl_socket_context_t {
     // här måste det vara!
     struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *, int is_client, char *ip, int ip_length);
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *, char *data, int length);
-    struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *);
+    struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *, int code, void *reason);
 };
 
 // same here, should or shouldn't it contain s?
@@ -155,19 +155,26 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     return (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
 }
 
-struct us_internal_ssl_socket_t *ssl_on_close(struct us_internal_ssl_socket_t *s) {
+/* This one is a helper; it is entirely shared with non-SSL so can be removed */
+struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
+    return (struct us_internal_ssl_socket_t *) us_socket_close(0, (struct us_socket_t *) s, code, reason);
+}
+
+struct us_internal_ssl_socket_t *ssl_on_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
     SSL_free(s->ssl);
 
-    return context->on_close(s);
+    return context->on_close(s, code, reason);
 }
 
 struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) {
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
     // whatever state we are in, a TCP FIN is always an answered shutdown
-    return us_internal_ssl_socket_close(s);
+
+    /* Todo: this should report CLEANLY SHUTDOWN as reason */
+    return us_internal_ssl_socket_close(s, 0, NULL);
 }
 
 // this whole function needs a complete clean-up
@@ -192,7 +199,8 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
             // two phase shutdown is complete here
             //printf("Two step SSL shutdown complete\n");
 
-            return us_internal_ssl_socket_close(s);
+            /* Todo: this should also report some kind of clean shutdown */
+            return us_internal_ssl_socket_close(s, 0, NULL);
         } else if (ret < 0) {
 
             int err = SSL_get_error(s->ssl, ret);
@@ -226,13 +234,13 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
                 }
 
                 // terminate connection here
-                return us_internal_ssl_socket_close(s);
+                return us_internal_ssl_socket_close(s, 0, NULL);
             } else {
                 // emit the data we have and exit
 
                 // assume we emptied the input buffer fully or error here as well!
                 if (loop_ssl_data->ssl_read_input_length) {
-                    return us_internal_ssl_socket_close(s);
+                    return us_internal_ssl_socket_close(s, 0, NULL);
                 }
 
                 // cannot emit zero length to app
@@ -287,7 +295,7 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
         //exit(-2);
 
         // not correct anyways!
-        s = us_internal_ssl_socket_close(s);
+        s = us_internal_ssl_socket_close(s, 0, NULL);
 
         //us_
     }
@@ -376,11 +384,11 @@ void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_so
 }
 
 struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size) {
+    /* Create a new non-SSL context */
     struct us_socket_context_options_t options = {0};
-
     struct us_internal_ssl_socket_context_t *child_context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, context->sc.loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
 
-    // I think this is the only thing being shared
+    /* The only thing we share is SSL_CTX */
     child_context->ssl_context = context->ssl_context;
     child_context->is_parent = 0;
 
@@ -388,33 +396,38 @@ struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_con
 }
 
 struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
-
+    /* If we haven't initialized the loop data yet, do so now */
     us_internal_init_loop_ssl_data(loop);
 
-    struct us_socket_context_options_t no_options = {0};
+    /* We begin by creating a non-SSL context, passing same options */
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
 
-    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, no_options);
+    /* Now update our options parameter since above function made a deep copy, and we want to use that copy below */
+    options = context->sc.options;
 
+    /* Then we extend its SSL parts */
     context->ssl_context = SSL_CTX_new(TLS_method());
     context->is_parent = 1;
-    // only parent ssl contexts may need to ignore data
+
+    /* We, as parent context, may ignore data */
     context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
 
-    // options
+    /* Default options we rely on */
     SSL_CTX_set_read_ahead(context->ssl_context, 1);
     SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
 
-    // this lowers performance a bit in benchmarks
+    /* Security options; we as application developers should not have to care about these! */
+    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
+    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_TLSv1);
+
+    /* The following are helpers. You may easily implement whatever you want by using the native handle directly */
+
+    /* Important option for lowering memory usage, but lowers performance slightly */
     if (options.ssl_prefer_low_memory_usage) {
        SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
     }
 
-    //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
-    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
-    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_TLSv1);
-
-    // these are going to be extended
     if (options.passphrase) {
         SSL_CTX_set_default_passwd_cb_userdata(context->ssl_context, (void *) options.passphrase);
         SSL_CTX_set_default_passwd_cb(context->ssl_context, passphrase_cb);
@@ -496,8 +509,8 @@ void us_internal_ssl_socket_context_on_open(struct us_internal_ssl_socket_contex
     context->on_open = on_open;
 }
 
-void us_internal_ssl_socket_context_on_close(struct us_internal_ssl_socket_context_t *context, struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *s)) {
-    us_socket_context_on_close(0, (struct us_socket_context_t *) context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_on_close);
+void us_internal_ssl_socket_context_on_close(struct us_internal_ssl_socket_context_t *context, struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *s, int code, void *reason)) {
+    us_socket_context_on_close(0, (struct us_socket_context_t *) context, (struct us_socket_t *(*)(struct us_socket_t *, int, void *)) ssl_on_close);
     context->on_close = on_close;
 }
 
@@ -622,10 +635,6 @@ void us_internal_ssl_socket_shutdown(struct us_internal_ssl_socket_t *s) {
             us_socket_shutdown(0, &s->s);
         }
     }
-}
-
-struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s) {
-    return (struct us_internal_ssl_socket_t *) us_socket_close(0, (struct us_socket_t *) s);
 }
 
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_adopt_socket(struct us_internal_ssl_socket_context_t *context, struct us_internal_ssl_socket_t *s, int ext_size) {

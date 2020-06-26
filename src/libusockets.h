@@ -101,7 +101,7 @@ WIN32_EXPORT void us_socket_context_free(int ssl, struct us_socket_context_t *co
 WIN32_EXPORT void us_socket_context_on_open(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length));
 WIN32_EXPORT void us_socket_context_on_close(int ssl, struct us_socket_context_t *context,
-    struct us_socket_t *(*on_close)(struct us_socket_t *s));
+    struct us_socket_t *(*on_close)(struct us_socket_t *s, int code, void *reason));
 WIN32_EXPORT void us_socket_context_on_data(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_data)(struct us_socket_t *s, char *data, int length));
 WIN32_EXPORT void us_socket_context_on_writable(int ssl, struct us_socket_context_t *context,
@@ -224,7 +224,7 @@ WIN32_EXPORT int us_socket_is_shut_down(int ssl, struct us_socket_t *s);
 WIN32_EXPORT int us_socket_is_closed(int ssl, struct us_socket_t *s);
 
 /* Immediately closes the socket */
-WIN32_EXPORT struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s);
+WIN32_EXPORT struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason);
 
 /* Copy remote (IP) address of socket, or fail with zero length. */
 WIN32_EXPORT void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);

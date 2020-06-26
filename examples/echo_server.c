@@ -57,7 +57,7 @@ struct us_socket_t *on_echo_socket_writable(struct us_socket_t *s) {
 }
 
 /* Socket closed handler */
-struct us_socket_t *on_echo_socket_close(struct us_socket_t *s) {
+struct us_socket_t *on_echo_socket_close(struct us_socket_t *s, int code, void *reason) {
 	struct echo_socket *es = (struct echo_socket *) us_socket_ext(SSL, s);
 
 	printf("Client disconnected\n");
@@ -70,7 +70,7 @@ struct us_socket_t *on_echo_socket_close(struct us_socket_t *s) {
 /* Socket half-closed handler */
 struct us_socket_t *on_echo_socket_end(struct us_socket_t *s) {
 	us_socket_shutdown(SSL, s);
-	return us_socket_close(SSL, s);
+	return us_socket_close(SSL, s, 0, NULL);
 }
 
 /* Socket data handler */
@@ -116,7 +116,7 @@ struct us_socket_t *on_echo_socket_open(struct us_socket_t *s, int is_client, ch
 /* Socket timeout handler */
 struct us_socket_t *on_echo_socket_timeout(struct us_socket_t *s) {
 	printf("Client was idle for too long\n");
-	return us_socket_close(SSL, s);
+	return us_socket_close(SSL, s, 0, NULL);
 }
 
 int main() {

@@ -201,7 +201,8 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
 
             /* Such as epollerr epollhup */
             if (error) {
-                s = us_socket_close(0, s);
+                /* Todo: decide what code we give here */
+                s = us_socket_close(0, s, 0, NULL);
                 return;
             }
 
@@ -235,14 +236,16 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                 } else if (!length) {
                     if (us_socket_is_shut_down(0, s)) {
                         /* We got FIN back after sending it */
-                        s = us_socket_close(0, s);
+                        /* Todo: We should give "CLEAN SHUTDOWN" as reason here */
+                        s = us_socket_close(0, s, 0, NULL);
                     } else {
                         /* We got FIN, so stop polling for readable */
                         us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
                         s = s->context->on_end(s);
                     }
                 } else if (length == LIBUS_SOCKET_ERROR && !bsd_would_block()) {
-                    s = us_socket_close(0, s);
+                    /* Todo: decide also here what kind of reason we should give */
+                    s = us_socket_close(0, s, 0, NULL);
                 }
             }
         }
