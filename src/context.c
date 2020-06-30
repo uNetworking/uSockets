@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int default_ignore_data_handler(struct us_socket_t *s) {
+int default_is_low_prio_handler(struct us_socket_t *s) {
     return 0;
 }
 
@@ -71,7 +71,6 @@ void us_internal_socket_context_unlink(struct us_socket_context_t *context, stru
 /* We always add in the top, so we don't modify any s.next */
 void us_internal_socket_context_link(struct us_socket_context_t *context, struct us_socket_t *s) {
     s->context = context;
-    s->timeout = 0;
     s->next = context->head;
     s->prev = 0;
     if (context->head) {
@@ -147,7 +146,7 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     context->head = 0;
     context->iterator = 0;
     context->next = 0;
-    context->ignore_data = default_ignore_data_handler;
+    context->is_low_prio = default_is_low_prio_handler;
 
     /* Begin at 0 */
     context->timestamp = 0;
@@ -195,6 +194,7 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
 
     ls->s.context = context;
     ls->s.timeout = 0;
+    ls->s.low_prio_state = 0;
     ls->s.next = 0;
     us_internal_socket_context_link(context, &ls->s);
 
@@ -224,6 +224,8 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
 
     /* Link it into context so that timeout fires properly */
     connect_socket->context = context;
+    connect_socket->timeout = 0;
+    connect_socket->low_prio_state = 0;
     us_internal_socket_context_link(context, connect_socket);
 
     return connect_socket;
@@ -254,12 +256,23 @@ struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_con
         return s;
     }
 
-    /* This properly updates the iterator if in on_timeout */
-    us_internal_socket_context_unlink(s->context, s);
+    if (s->low_prio_state != 1) {
+        /* This properly updates the iterator if in on_timeout */
+        us_internal_socket_context_unlink(s->context, s);
+    }
 
     struct us_socket_t *new_s = (struct us_socket_t *) us_poll_resize(&s->p, s->context->loop, sizeof(struct us_socket_t) + ext_size);
+    new_s->timeout = 0;
 
-    us_internal_socket_context_link(context, new_s);
+    if (new_s->low_prio_state == 1) {
+        /* update pointers in low-priority queue */
+        if (!new_s->prev) new_s->context->loop->data.low_prio_head = new_s;
+        else new_s->prev->next = new_s;
+
+        if (new_s->next) new_s->next->prev = new_s;
+    } else {
+        us_internal_socket_context_link(context, new_s);
+    }
 
     return new_s;
 }

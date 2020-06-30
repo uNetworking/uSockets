@@ -87,7 +87,8 @@ struct us_socket_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p;
     struct us_socket_context_t *context;
     struct us_socket_t *prev, *next;
-    unsigned short timeout;
+    unsigned short timeout : 14;
+    unsigned short low_prio_state : 2; /* 0 = not in low-prio queue, 1 = is in low-prio queue, 2 = was in low-prio queue in this iteration */
 };
 
 /* Internal callback types are polls just like sockets */
@@ -119,7 +120,7 @@ struct us_socket_context_t {
     struct us_socket_t *(*on_socket_timeout)(struct us_socket_t *);
     struct us_socket_t *(*on_end)(struct us_socket_t *);
     struct us_socket_t *(*on_connect_error)(struct us_socket_t *, int code);
-    int (*ignore_data)(struct us_socket_t *);
+    int (*is_low_prio)(struct us_socket_t *);
 };
 
 /* Internal SSL interface */

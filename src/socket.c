@@ -95,7 +95,19 @@ struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s) {
 /* Same as above but emits on_close */
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason) {
     if (!us_socket_is_closed(0, s)) {
-        us_internal_socket_context_unlink(s->context, s);
+        if (s->low_prio_state == 1) {
+            /* Unlink this socket from the low-priority queue */
+            if (!s->prev) s->context->loop->data.low_prio_head = s->next;
+            else s->prev->next = s->next;
+
+            if (s->next) s->next->prev = s->prev;
+
+            s->prev = 0;
+            s->next = 0;
+            s->low_prio_state = 0;
+        } else {
+            us_internal_socket_context_unlink(s->context, s);
+        }
         us_poll_stop((struct us_poll_t *) s, s->context->loop);
         bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
 
