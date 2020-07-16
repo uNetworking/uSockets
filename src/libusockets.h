@@ -33,9 +33,7 @@
 #include <winsock2.h>
 #define LIBUS_SOCKET_DESCRIPTOR SOCKET
 #define WIN32_EXPORT __declspec(dllexport)
-#define alignas(x) __declspec(align(x))
 #else
-#include <stdalign.h>
 #define LIBUS_SOCKET_DESCRIPTOR int
 #define WIN32_EXPORT
 #endif

@@ -18,6 +18,12 @@
 #ifndef INTERNAL_H
 #define INTERNAL_H
 
+#if defined(_MSC_VER)
+#define alignas(x) __declspec(align(x))
+#else
+#include <stdalign.h>
+#endif
+
 /* We only have one networking implementation so far */
 #include "internal/networking/bsd.h"
 
