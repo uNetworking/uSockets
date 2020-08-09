@@ -475,7 +475,10 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
             return 0;
         }
 
-        if (SSL_CTX_set_tmp_dh(context->ssl_context, dh_2048) != 1) {
+        const long set_tmp_dh = SSL_CTX_set_tmp_dh(context->ssl_context, dh_2048);
+        DH_free(dh_2048);
+
+        if (set_tmp_dh != 1) {
             return 0;
         }
 
