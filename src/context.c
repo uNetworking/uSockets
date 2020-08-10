@@ -93,6 +93,23 @@ const char *deep_str_copy(const char *src) {
 
 /* Not shared with SSL */
 
+// registering a cert for a domain
+void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *domain, const char *asn1, unsigned int asn1_length) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        us_internal_ssl_socket_context_add_server_name((struct us_internal_ssl_socket_context_t *) context, domain, asn1, asn1_length);
+    }
+#endif
+}
+
+void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *domain) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+
+    }
+#endif
+}
+
 void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {

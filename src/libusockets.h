@@ -87,6 +87,9 @@ struct us_socket_context_options_t {
     int ssl_prefer_low_memory_usage;
 };
 
+/* Adds SNI domain and cert in asn1 format */
+WIN32_EXPORT void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *domain, const char *asn1, unsigned int asn1_length);
+
 /* Returns the underlying SSL native handle, such as SSL_CTX or nullptr */
 WIN32_EXPORT void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context);
 
