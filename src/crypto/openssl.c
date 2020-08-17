@@ -395,52 +395,51 @@ struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_con
     return child_context;
 }
 
-struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
-    /* If we haven't initialized the loop data yet, do so now */
-    us_internal_init_loop_ssl_data(loop);
+// ett träd av labels separarade med .
+// * är wildcard
 
-    /* We begin by creating a non-SSL context, passing same options */
-    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
+// ha en lista till att börja med
 
-    /* Now update our options parameter since above function made a deep copy, and we want to use that copy below */
-    options = context->sc.options;
+// add ssl_ctx to a tree of labels as nodes
 
-    /* Then we extend its SSL parts */
-    context->ssl_context = SSL_CTX_new(TLS_method());
-    context->is_parent = 1;
+// SSL_CTX *match_context(hostname)
 
-    /* We, as parent context, may ignore data */
-    context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
+// add, remove, resolve
+
+/* Common function for creating a context from options */
+SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t options) {
+    /* Create the context */
+    SSL_CTX *ssl_context = SSL_CTX_new(TLS_method());
 
     /* Default options we rely on */
-    SSL_CTX_set_read_ahead(context->ssl_context, 1);
-    SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    //SSL_CTX_set_mode(context->ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
+    SSL_CTX_set_read_ahead(ssl_context, 1);
+    SSL_CTX_set_mode(ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    //SSL_CTX_set_mode(ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
 
     /* Security options; we as application developers should not have to care about these! */
-    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_SSLv3);
-    SSL_CTX_set_options(context->ssl_context, SSL_OP_NO_TLSv1);
+    SSL_CTX_set_options(ssl_context, SSL_OP_NO_SSLv3);
+    SSL_CTX_set_options(ssl_context, SSL_OP_NO_TLSv1);
 
     /* The following are helpers. You may easily implement whatever you want by using the native handle directly */
 
     /* Important option for lowering memory usage, but lowers performance slightly */
     if (options.ssl_prefer_low_memory_usage) {
-       SSL_CTX_set_mode(context->ssl_context, SSL_MODE_RELEASE_BUFFERS);
+       SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
     }
 
     if (options.passphrase) {
-        SSL_CTX_set_default_passwd_cb_userdata(context->ssl_context, (void *) options.passphrase);
-        SSL_CTX_set_default_passwd_cb(context->ssl_context, passphrase_cb);
+        SSL_CTX_set_default_passwd_cb_userdata(ssl_context, (void *) options.passphrase);
+        SSL_CTX_set_default_passwd_cb(ssl_context, passphrase_cb);
     }
 
     if (options.cert_file_name) {
-        if (SSL_CTX_use_certificate_chain_file(context->ssl_context, options.cert_file_name) != 1) {
+        if (SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1) {
             return 0;
         }
     }
 
     if (options.key_file_name) {
-        if (SSL_CTX_use_PrivateKey_file(context->ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+        if (SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
             return 0;
         }
     }
@@ -451,11 +450,11 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
         if(ca_list == NULL) {
             return 0;
         }
-        SSL_CTX_set_client_CA_list(context->ssl_context, ca_list);
-        if (SSL_CTX_load_verify_locations(context->ssl_context, options.ca_file_name, NULL) != 1) {
+        SSL_CTX_set_client_CA_list(ssl_context, ca_list);
+        if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
             return 0;
         }
-        SSL_CTX_set_verify(context->ssl_context, SSL_VERIFY_PEER, NULL);
+        SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
     }
 
     if (options.dh_params_file_name) {
@@ -475,15 +474,101 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
             return 0;
         }
 
-        if (SSL_CTX_set_tmp_dh(context->ssl_context, dh_2048) != 1) {
+        if (SSL_CTX_set_tmp_dh(ssl_context, dh_2048) != 1) {
             return 0;
         }
 
         /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
-        if (SSL_CTX_set_cipher_list(context->ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
+        if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
             return 0;
         }
     }
+
+    return ssl_context;
+}
+
+/* The most basic, shitty data structure for now */
+/* Store this one in the ext of the parent context */
+/* Or, per thread */
+struct server_name {
+    SSL_CTX *ssl_context;
+    const char *hostname_pattern;
+    struct server_name *next;
+};
+
+_Thread_local struct server_name *server_name_head = NULL;
+
+// should this one copy the strings of options? yes probably
+void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options) {
+
+    struct server_name *sn = (struct server_name *) malloc(sizeof(struct server_name));
+
+    sn->ssl_context = create_ssl_context_from_options(options);
+    sn->hostname_pattern = strdup(hostname_pattern);
+
+    sn->next = server_name_head;
+    server_name_head = sn;
+}
+
+void remove_context() {
+
+}
+
+/* Returns NULL or SSL_CTX */
+SSL_CTX *resolve_context(const char *hostname) {
+
+    for (struct server_name *sn = server_name_head; sn; sn = sn->next) {
+        /* Most basic match for now */
+        if (strcmp(hostname, sn->hostname_pattern) == 0) {
+            return sn->ssl_context;
+        }
+    }
+
+    return NULL;
+}
+
+int sni_cb(SSL *ssl, int *al, void *arg) {
+
+    if (ssl) {
+        const char *hostname = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+        if (hostname && hostname[0]) {
+            /* Try and resolve (match) required hostname with what we have registered */
+            SSL_CTX *resolved_ssl_context = resolve_context(hostname);
+            if (resolved_ssl_context) {
+                printf("Did find matching SNI context for hostname: <%s>!\n", hostname);
+                SSL_set_SSL_CTX(ssl, resolved_ssl_context);
+            } else {
+                /* Call a blocking callback notifying of missing context */
+            }
+
+        }
+
+        return SSL_TLSEXT_ERR_OK;
+    }
+
+    /* Can we even come here ever? */
+    return SSL_TLSEXT_ERR_NOACK;
+}
+
+struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
+    /* If we haven't initialized the loop data yet, do so now */
+    us_internal_init_loop_ssl_data(loop);
+
+    /* We begin by creating a non-SSL context, passing same options */
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
+
+    /* Now update our options parameter since above function made a deep copy, and we want to use that copy below */
+    options = context->sc.options;
+
+    /* Then we extend its SSL parts */
+    context->ssl_context = create_ssl_context_from_options(options);
+    context->is_parent = 1;
+
+    /* Parent contexts may use SNI */
+    SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+
+    /* We, as parent context, may ignore data */
+    context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
 
     return context;
 }

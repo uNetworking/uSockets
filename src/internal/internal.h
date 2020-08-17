@@ -130,6 +130,8 @@ struct us_socket_context_t {
 struct us_internal_ssl_socket_context_t;
 struct us_internal_ssl_socket_t;
 
+void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options);
+
 void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *s);
 void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_socket_context_t *context);
 
