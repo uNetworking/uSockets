@@ -50,6 +50,15 @@ struct loop_ssl_data {
     BIO_METHOD *shared_biom;
 };
 
+/* The most basic, shitty data structure for now */
+/* Store this one in the ext of the parent context */
+/* Or, per thread */
+struct server_name {
+    SSL_CTX *ssl_context;
+    const char *hostname_pattern;
+    struct server_name *next;
+};
+
 struct us_internal_ssl_socket_context_t {
     struct us_socket_context_t sc;
 
@@ -63,6 +72,11 @@ struct us_internal_ssl_socket_context_t {
     struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *, int is_client, char *ip, int ip_length);
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *, char *data, int length);
     struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *, int code, void *reason);
+
+    /* Called for missing SNI hostnames */
+    void (*on_server_name)(struct us_internal_ssl_socket_context_t *, const char *hostname);
+
+    struct server_name *server_name_head;
 };
 
 // same here, should or shouldn't it contain s?
@@ -487,17 +501,6 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
     return ssl_context;
 }
 
-/* The most basic, shitty data structure for now */
-/* Store this one in the ext of the parent context */
-/* Or, per thread */
-struct server_name {
-    SSL_CTX *ssl_context;
-    const char *hostname_pattern;
-    struct server_name *next;
-};
-
-_Thread_local struct server_name *server_name_head = NULL;
-
 // should this one copy the strings of options? yes probably
 void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options) {
 
@@ -506,19 +509,23 @@ void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socke
     sn->ssl_context = create_ssl_context_from_options(options);
     sn->hostname_pattern = strdup(hostname_pattern);
 
-    sn->next = server_name_head;
-    server_name_head = sn;
+    sn->next = context->server_name_head;
+    context->server_name_head = sn;
+}
+
+void us_internal_ssl_socket_context_on_server_name(struct us_internal_ssl_socket_context_t *context, void (*cb)(struct us_internal_ssl_socket_context_t *, const char *hostname)) {
+    context->on_server_name = cb;
 }
 
 void us_internal_ssl_socket_context_remove_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
 
-    struct server_name *last_sn = server_name_head;
-    for (struct server_name *sn = server_name_head; sn; sn = sn->next) {
+    struct server_name *last_sn = context->server_name_head;
+    for (struct server_name *sn = context->server_name_head; sn; sn = sn->next) {
         /* Most basic match for now */
         if (strcmp(hostname_pattern, sn->hostname_pattern) == 0) {
 
-            if (sn == server_name_head) {
-                server_name_head = sn->next;
+            if (sn == context->server_name_head) {
+                context->server_name_head = sn->next;
             } else {
                 last_sn->next = sn->next;
             }
@@ -537,27 +544,43 @@ void us_internal_ssl_socket_context_remove_server_name(struct us_internal_ssl_so
 }
 
 /* Returns NULL or SSL_CTX */
-SSL_CTX *resolve_context(const char *hostname) {
+SSL_CTX *resolve_context(struct us_internal_ssl_socket_context_t *context, const char *hostname) {
 
-    for (struct server_name *sn = server_name_head; sn; sn = sn->next) {
-        /* Most basic match for now */
-        if (strcmp(hostname, sn->hostname_pattern) == 0) {
-            return sn->ssl_context;
+    /* Give it two rounds */
+    for (int i = 0; i < 2; i++) {
+        for (struct server_name *sn = context->server_name_head; sn; sn = sn->next) {
+            /* Most basic match for now */
+            if (strcmp(hostname, sn->hostname_pattern) == 0) {
+                return sn->ssl_context;
+            }
         }
+
+        /* Exit second round */
+        if (i == 1) {
+            return NULL;
+        }
+
+        /* Call cb for missing server name, then go once more? */
+        if (!context->on_server_name) {
+            return NULL;
+        }
+
+        context->on_server_name(context, hostname);
     }
 
     return NULL;
 }
 
+// arg is context
 int sni_cb(SSL *ssl, int *al, void *arg) {
 
     if (ssl) {
         const char *hostname = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
         if (hostname && hostname[0]) {
             /* Try and resolve (match) required hostname with what we have registered */
-            SSL_CTX *resolved_ssl_context = resolve_context(hostname);
+            SSL_CTX *resolved_ssl_context = resolve_context((struct us_internal_ssl_socket_context_t *) arg, hostname);
             if (resolved_ssl_context) {
-                printf("Did find matching SNI context for hostname: <%s>!\n", hostname);
+                //printf("Did find matching SNI context for hostname: <%s>!\n", hostname);
                 SSL_set_SSL_CTX(ssl, resolved_ssl_context);
             } else {
                 /* Call a blocking callback notifying of missing context */
@@ -582,12 +605,17 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     /* Now update our options parameter since above function made a deep copy, and we want to use that copy below */
     options = context->sc.options;
 
+    /* I guess this is the only optional callback */
+    context->on_server_name = NULL;
+    context->server_name_head = NULL;
+
     /* Then we extend its SSL parts */
     context->ssl_context = create_ssl_context_from_options(options);
     context->is_parent = 1;
 
     /* Parent contexts may use SNI */
     SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+    SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
 
     /* We, as parent context, may ignore data */
     context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
