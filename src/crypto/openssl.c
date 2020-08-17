@@ -510,7 +510,29 @@ void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socke
     server_name_head = sn;
 }
 
-void remove_context() {
+void us_internal_ssl_socket_context_remove_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
+
+    struct server_name *last_sn = server_name_head;
+    for (struct server_name *sn = server_name_head; sn; sn = sn->next) {
+        /* Most basic match for now */
+        if (strcmp(hostname_pattern, sn->hostname_pattern) == 0) {
+
+            if (sn == server_name_head) {
+                server_name_head = sn->next;
+            } else {
+                last_sn->next = sn->next;
+            }
+
+            SSL_CTX_free(sn->ssl_context);
+            free((void *) sn->hostname_pattern);
+            /* TODO: free the copied object strings (they are not copied right now) */
+            free(sn);
+
+            return;
+        }
+
+        last_sn = sn;
+    }
 
 }
 

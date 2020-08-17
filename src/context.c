@@ -93,7 +93,7 @@ const char *deep_str_copy(const char *src) {
 
 /* Not shared with SSL */
 
-// registering a cert for a domain
+/* Add SNI context */
 void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
@@ -102,13 +102,16 @@ void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *cont
 #endif
 }
 
-void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *domain) {
+/* Remove SNI context */
+void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-
+        us_internal_ssl_socket_context_remove_server_name((struct us_internal_ssl_socket_context_t *) context, hostname_pattern);
     }
 #endif
 }
+
+/* Todo: get native context from SNI pattern */
 
 void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
