@@ -157,6 +157,11 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR 
 
 #endif
 
+    /* We cannot rely on addr since it is not initialized if failed */
+    if (accepted_fd == LIBUS_SOCKET_ERROR) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
     internal_finalize_bsd_addr(addr);
 
     return bsd_set_nonblocking(apple_no_sigpipe(accepted_fd));
@@ -280,11 +285,14 @@ static inline LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host
     }
 
     if (source_host) {
-        /* Todo: actually error check these */
         struct addrinfo *interface_result;
-        getaddrinfo(source_host, NULL, NULL, &interface_result);
-        bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
-        freeaddrinfo(interface_result);
+        if (!getaddrinfo(source_host, NULL, NULL, &interface_result)) {
+            int ret = bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
+            freeaddrinfo(interface_result);
+            if (ret == LIBUS_SOCKET_ERROR) {
+                return LIBUS_SOCKET_ERROR;
+            }
+        }
     }
 
     connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
