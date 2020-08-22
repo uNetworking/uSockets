@@ -488,7 +488,7 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
             return 0;
         }
 
-        const long set_tmp_dh = SSL_CTX_set_tmp_dh(context->ssl_context, dh_2048);
+        const long set_tmp_dh = SSL_CTX_set_tmp_dh(ssl_context, dh_2048);
         DH_free(dh_2048);
 
         if (set_tmp_dh != 1) {
