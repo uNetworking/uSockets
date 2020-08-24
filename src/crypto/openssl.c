@@ -19,6 +19,7 @@
 
 #include "libusockets.h"
 #include "internal/internal.h"
+#include <string.h>
 
 /* This module contains the entire OpenSSL implementation
  * of the SSL socket and socket context interfaces. */
