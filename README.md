@@ -2,7 +2,7 @@
 
 This is the cross-platform async networking and eventing foundation library used by [µWebSockets](https://github.com/uNetworking/uWebSockets).
 
-It is written in C11 and runs on Linux, macOS (FreeBSD) and Windows.
+It is written in C11 (with optional components in C++11) and runs on Linux, macOS, FreeBSD and Windows.
 
 <a href="https://github.com/uNetworking/uSockets/releases"><img src="https://img.shields.io/github/v/release/uNetworking/uSockets"></a> <a href="https://lgtm.com/projects/g/uNetworking/uSockets/context:cpp"><img alt="Language grade: C/C++" src="https://img.shields.io/lgtm/grade/cpp/g/uNetworking/uSockets.svg?logo=lgtm&logoWidth=18"/></a>
 
@@ -15,6 +15,7 @@ It is written in C11 and runs on Linux, macOS (FreeBSD) and Windows.
 * Low resolution timer system ideal for performant tracking of networking timeouts.
 * Minimal yet truly cross-platform, will not emit a billion different platform specific error codes.
 * Fully opaque library, inclusion will not completely pollute your global namespace.
+* Continuously fuzzed by Google's [OSS-Fuzz](https://github.com/google/oss-fuzz) with 95% code coverage (asan, ubsan and msan).
 
 ### Extensible
 
