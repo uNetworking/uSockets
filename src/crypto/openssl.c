@@ -449,12 +449,14 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
 
     if (options.cert_file_name) {
         if (SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
     }
 
     if (options.key_file_name) {
         if (SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
     }
@@ -463,10 +465,12 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
         STACK_OF(X509_NAME) *ca_list;
         ca_list = SSL_load_client_CA_file(options.ca_file_name);
         if(ca_list == NULL) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
         SSL_CTX_set_client_CA_list(ssl_context, ca_list);
         if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
         SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
@@ -482,10 +486,12 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
             dh_2048 = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
             fclose(paramfile);
         } else {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
 
         if (dh_2048 == NULL) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
 
@@ -493,11 +499,13 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
         DH_free(dh_2048);
 
         if (set_tmp_dh != 1) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
 
         /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
         if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
+            SSL_CTX_free(ssl_context);
             return 0;
         }
     }
@@ -617,14 +625,19 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     context->ssl_context = create_ssl_context_from_options(options);
     context->is_parent = 1;
 
-    /* Parent contexts may use SNI */
-    SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
-    SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
-
     /* We, as parent context, may ignore data */
     context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
 
-    return context;
+    /* Parent contexts may use SNI */
+    if (context->ssl_context) {
+      SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+      SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
+      return context;
+    }
+    else {
+      us_internal_ssl_socket_context_free(context);
+      return 0;
+    }
 }
 
 void us_internal_ssl_socket_context_free(struct us_internal_ssl_socket_context_t *context) {
