@@ -17,6 +17,13 @@
 
 #ifdef LIBUS_USE_OPENSSL
 
+/* These are in sni_tree.cpp */
+void *sni_new();
+void sni_free(void *sni, void(*cb)(void *));
+void sni_add(void *sni, const char *hostname, void *user);
+void *sni_remove(void *sni, const char *hostname);
+void *sni_find(void *sni, const char *hostname);
+
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <string.h>
@@ -51,15 +58,6 @@ struct loop_ssl_data {
     BIO_METHOD *shared_biom;
 };
 
-/* The most basic, shitty data structure for now */
-/* Store this one in the ext of the parent context */
-/* Or, per thread */
-struct server_name {
-    SSL_CTX *ssl_context;
-    const char *hostname_pattern;
-    struct server_name *next;
-};
-
 struct us_internal_ssl_socket_context_t {
     struct us_socket_context_t sc;
 
@@ -69,15 +67,16 @@ struct us_internal_ssl_socket_context_t {
     SSL_CTX *ssl_context;
     int is_parent;
 
-    // här måste det vara!
+    /* These decorate the base implementation */
     struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *, int is_client, char *ip, int ip_length);
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *, char *data, int length);
     struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *, int code, void *reason);
 
-    /* Called for missing SNI hostnames */
+    /* Called for missing SNI hostnames, if not NULL */
     void (*on_server_name)(struct us_internal_ssl_socket_context_t *, const char *hostname);
 
-    struct server_name *server_name_head;
+    /* Pointer to sni tree, created when the context is created and freed likewise when freed */
+    void *sni;
 };
 
 // same here, should or shouldn't it contain s?
@@ -410,30 +409,33 @@ struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_con
     return child_context;
 }
 
-// ett träd av labels separarade med .
-// * är wildcard
+/* Common function for creating a context from options.
+ * We must NOT free a SSL_CTX with only SSL_CTX_free! Also free any password */
+void free_ssl_context(SSL_CTX *ssl_context) {
+    if (!ssl_context) {
+        return;
+    }
 
-// ha en lista till att börja med
+    /* If we have set a password string, free it here */
+    void *password = SSL_CTX_get_default_passwd_cb_userdata(ssl_context);
+    /* OpenSSL returns NULL if we have no set password */
+    free(password);
 
-// add ssl_ctx to a tree of labels as nodes
+    SSL_CTX_free(ssl_context);
+}
 
-// SSL_CTX *match_context(hostname)
-
-// add, remove, resolve
-
-/* Common function for creating a context from options */
+/* This function should take any options and return SSL_CTX - which has to be free'd with
+ * our destructor function - free_ssl_context() */
 SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t options) {
     /* Create the context */
     SSL_CTX *ssl_context = SSL_CTX_new(TLS_method());
 
-    /* Default options we rely on */
+    /* Default options we rely on - changing these will break our logic */
     SSL_CTX_set_read_ahead(ssl_context, 1);
     SSL_CTX_set_mode(ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-    //SSL_CTX_set_mode(ssl_context, SSL_MODE_ENABLE_PARTIAL_WRITE);
 
-    /* Security options; we as application developers should not have to care about these! */
-    SSL_CTX_set_options(ssl_context, SSL_OP_NO_SSLv3);
-    SSL_CTX_set_options(ssl_context, SSL_OP_NO_TLSv1);
+    /* Anything below TLS 1.2 is disabled */
+    SSL_CTX_set_min_proto_version(ssl_context, TLS1_2_VERSION);
 
     /* The following are helpers. You may easily implement whatever you want by using the native handle directly */
 
@@ -443,19 +445,25 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
     }
 
     if (options.passphrase) {
-        SSL_CTX_set_default_passwd_cb_userdata(ssl_context, (void *) options.passphrase);
+        /* When freeing the CTX we need to check SSL_CTX_get_default_passwd_cb_userdata and
+         * free it if set */
+        SSL_CTX_set_default_passwd_cb_userdata(ssl_context, (void *) strdup(options.passphrase));
         SSL_CTX_set_default_passwd_cb(ssl_context, passphrase_cb);
     }
 
+    /* This one most probably do not need the cert_file_name string to be kept alive */
     if (options.cert_file_name) {
         if (SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
     }
 
+    /* Same as above - we can discard this string afterwards I suppose */
     if (options.key_file_name) {
         if (SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
     }
 
@@ -463,11 +471,13 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
         STACK_OF(X509_NAME) *ca_list;
         ca_list = SSL_load_client_CA_file(options.ca_file_name);
         if(ca_list == NULL) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
         SSL_CTX_set_client_CA_list(ssl_context, ca_list);
         if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
         SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
     }
@@ -482,39 +492,44 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
             dh_2048 = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
             fclose(paramfile);
         } else {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
 
         if (dh_2048 == NULL) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
 
         const long set_tmp_dh = SSL_CTX_set_tmp_dh(ssl_context, dh_2048);
         DH_free(dh_2048);
 
         if (set_tmp_dh != 1) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
 
         /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
         if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
-            return 0;
+            free_ssl_context(ssl_context);
+            return NULL;
         }
     }
 
+    /* This must be free'd with free_ssl_context, not SSL_CTX_free */
     return ssl_context;
 }
 
-// should this one copy the strings of options? yes probably
+/* Todo: return error on failure? */
 void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options) {
 
-    struct server_name *sn = (struct server_name *) malloc(sizeof(struct server_name));
+    /* Try and construct an SSL_CTX from options */
+    SSL_CTX *ssl_context = create_ssl_context_from_options(options);
 
-    sn->ssl_context = create_ssl_context_from_options(options);
-    sn->hostname_pattern = strdup(hostname_pattern);
-
-    sn->next = context->server_name_head;
-    context->server_name_head = sn;
+    /* We do not want to hold any nullptr's in our SNI tree */
+    if (ssl_context) {
+        sni_add(context->sni, hostname_pattern, ssl_context);
+    }
 }
 
 void us_internal_ssl_socket_context_on_server_name(struct us_internal_ssl_socket_context_t *context, void (*cb)(struct us_internal_ssl_socket_context_t *, const char *hostname)) {
@@ -523,56 +538,30 @@ void us_internal_ssl_socket_context_on_server_name(struct us_internal_ssl_socket
 
 void us_internal_ssl_socket_context_remove_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
 
-    struct server_name *last_sn = context->server_name_head;
-    for (struct server_name *sn = context->server_name_head; sn; sn = sn->next) {
-        /* Most basic match for now */
-        if (strcmp(hostname_pattern, sn->hostname_pattern) == 0) {
-
-            if (sn == context->server_name_head) {
-                context->server_name_head = sn->next;
-            } else {
-                last_sn->next = sn->next;
-            }
-
-            SSL_CTX_free(sn->ssl_context);
-            free((void *) sn->hostname_pattern);
-            /* TODO: free the copied object strings (they are not copied right now) */
-            free(sn);
-
-            return;
-        }
-
-        last_sn = sn;
-    }
-
+    /* The same thing must happen for sni_free, that's why we have a callback */
+    SSL_CTX *sni_node_ssl_context = (SSL_CTX *) sni_remove(context->sni, hostname_pattern);
+    free_ssl_context(sni_node_ssl_context);
 }
 
-/* Returns NULL or SSL_CTX */
+/* Returns NULL or SSL_CTX. May call missing server name callback */
 SSL_CTX *resolve_context(struct us_internal_ssl_socket_context_t *context, const char *hostname) {
 
-    /* Give it two rounds */
-    for (int i = 0; i < 2; i++) {
-        for (struct server_name *sn = context->server_name_head; sn; sn = sn->next) {
-            /* Most basic match for now */
-            if (strcmp(hostname, sn->hostname_pattern) == 0) {
-                return sn->ssl_context;
-            }
-        }
-
-        /* Exit second round */
-        if (i == 1) {
-            return NULL;
-        }
-
-        /* Call cb for missing server name, then go once more? */
+    /* Try once first */
+    void *user = sni_find(context->sni, hostname);
+    if (!user) {
+        /* Emit missing hostname then try again */
         if (!context->on_server_name) {
+            /* We have no callback registered, so fail */
             return NULL;
         }
 
         context->on_server_name(context, hostname);
+
+        /* Last try */
+        user = sni_find(context->sni, hostname);
     }
 
-    return NULL;
+    return user;
 }
 
 // arg is context
@@ -603,33 +592,52 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     /* If we haven't initialized the loop data yet, do so now */
     us_internal_init_loop_ssl_data(loop);
 
-    /* We begin by creating a non-SSL context, passing same options */
+    /* We begin by creating a non-SSL context, but with larger ext to hold our SSL stuff */
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
-
-    /* Now update our options parameter since above function made a deep copy, and we want to use that copy below */
-    options = context->sc.options;
 
     /* I guess this is the only optional callback */
     context->on_server_name = NULL;
-    context->server_name_head = NULL;
+
+    /* Also create the SNI tree */
+    context->sni = sni_new();
 
     /* Then we extend its SSL parts */
     context->ssl_context = create_ssl_context_from_options(options);
     context->is_parent = 1;
 
-    /* Parent contexts may use SNI */
-    SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
-    SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
-
     /* We, as parent context, may ignore data */
     context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
+
+    /* Parent contexts may use SNI */
+    if (context->ssl_context) {
+        SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+        SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
+    } else {
+        /* In case we could not create an SSL context, free and return NULL */
+
+        // free normal non-SSL context here
+
+        return NULL;
+    }
 
     return context;
 }
 
+/* Our destructor for hostnames, used below */
+void sni_hostname_destructor(void *user) {
+    printf("Destructing still existing hostname: %p\n", user);
+
+    free_ssl_context((SSL_CTX *) user);
+}
+
 void us_internal_ssl_socket_context_free(struct us_internal_ssl_socket_context_t *context) {
+    /* If we are parent then we need to free our OpenSSL context */
     if (context->is_parent) {
-        SSL_CTX_free(context->ssl_context);
+        free_ssl_context(context->ssl_context);
+
+        /* Here we need to register a temporary callback for all still-existing hostnames
+         * and their contexts. Only parents have an SNI tree */
+        sni_free(context->sni, sni_hostname_destructor);
     }
 
     us_socket_context_free(0, &context->sc);

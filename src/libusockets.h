@@ -84,7 +84,7 @@ struct us_socket_context_options_t {
     const char *passphrase;
     const char *dh_params_file_name;
     const char *ca_file_name;
-    int ssl_prefer_low_memory_usage;
+    int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
 
 /* Adds SNI domain and cert in asn1 format */
