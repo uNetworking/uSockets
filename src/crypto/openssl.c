@@ -589,36 +589,37 @@ int sni_cb(SSL *ssl, int *al, void *arg) {
 }
 
 struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
-    /* If we haven't initialized the loop data yet, do so now */
+    /* If we haven't initialized the loop data yet, do so .
+     * This is needed because loop data holds shared OpenSSL data and
+     * the function is also responsible for initializing OpenSSL */
     us_internal_init_loop_ssl_data(loop);
 
-    /* We begin by creating a non-SSL context, but with larger ext to hold our SSL stuff */
+    /* First of all we try and create the SSL context from options */
+    SSL_CTX *ssl_context = create_ssl_context_from_options(options);
+    if (!ssl_context) {
+        /* We simply fail early if we cannot even create the OpenSSL context */
+        return NULL;
+    }
+
+    /* Otherwise ee continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
 
     /* I guess this is the only optional callback */
     context->on_server_name = NULL;
 
-    /* Also create the SNI tree */
-    context->sni = sni_new();
-
     /* Then we extend its SSL parts */
-    context->ssl_context = create_ssl_context_from_options(options);
+    context->ssl_context = ssl_context;//create_ssl_context_from_options(options);
     context->is_parent = 1;
 
     /* We, as parent context, may ignore data */
     context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
 
     /* Parent contexts may use SNI */
-    if (context->ssl_context) {
-        SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
-        SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
-    } else {
-        /* In case we could not create an SSL context, free and return NULL */
+    SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+    SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
 
-        // free normal non-SSL context here
-
-        return NULL;
-    }
+    /* Also create the SNI tree */
+    context->sni = sni_new();
 
     return context;
 }

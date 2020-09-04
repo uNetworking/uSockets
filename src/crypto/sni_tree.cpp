@@ -31,6 +31,9 @@
 /* We only handle a maximum of 10 labels per hostname */
 #define MAX_LABELS 10
 
+// messed up if not per thread
+void (*sni_free_cb)(void *);
+
 struct sni_node {
     void *user;
     std::map<std::string_view, std::unique_ptr<sni_node>> children;
@@ -39,6 +42,9 @@ struct sni_node {
         for (auto &p : children) {
             /* The data of our string_views are managed by malloc */
             free((void *) p.first.data());
+
+            // also call destructor passed to sni_free
+            sni_free_cb(p.second.get()->user);
         }
     }
 };
@@ -97,7 +103,10 @@ extern "C" {
 
     void sni_free(void *sni, void (*cb)(void *)) {
 
+        printf("sni free called!\n");
+
         // for all remaining names, run callback
+        sni_free_cb = cb;
 
         delete (sni_node *) sni;
     }
