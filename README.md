@@ -2,7 +2,7 @@
 
 This is the cross-platform async networking and eventing foundation library used by [µWebSockets](https://github.com/uNetworking/uWebSockets).
 
-It is written in C11 (with optional components in C++11) and runs on Linux, macOS, FreeBSD and Windows.
+It runs on Linux, macOS, FreeBSD and Windows. Most is C11 while some optional parts are C++17.
 
 <a href="https://github.com/uNetworking/uSockets/releases"><img src="https://img.shields.io/github/v/release/uNetworking/uSockets"></a> <a href="https://lgtm.com/projects/g/uNetworking/uSockets/context:cpp"><img alt="Language grade: C/C++" src="https://img.shields.io/lgtm/grade/cpp/g/uNetworking/uSockets.svg?logo=lgtm&logoWidth=18"/></a>
 
