@@ -76,6 +76,10 @@ void *removeUser(struct sni_node *root, unsigned int label, std::string_view *la
     /* On the way back up, we may cull empty nodes with no children.
      * This ends up being where we remove all nodes */
     if (it->second.get()->children.empty() && it->second.get()->user == nullptr) {
+
+        /* The data of our string_views are managed by malloc */
+        free((void *) it->first.data());
+
         /* This can only happen with user set to null, otherwise we use sni_free_cb which is unset by sni_remove */
         root->children.erase(it);
     }
