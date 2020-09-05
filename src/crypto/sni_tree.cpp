@@ -31,11 +31,12 @@
 /* We only handle a maximum of 10 labels per hostname */
 #define MAX_LABELS 10
 
-// messed up if not per thread
-void (*sni_free_cb)(void *);
+/* This cannot be shared */
+thread_local void (*sni_free_cb)(void *);
 
 struct sni_node {
-    void *user;
+    /* Empty nodes must always hold null */
+    void *user = nullptr;
     std::map<std::string_view, std::unique_ptr<sni_node>> children;
 
     ~sni_node() {
@@ -43,7 +44,7 @@ struct sni_node {
             /* The data of our string_views are managed by malloc */
             free((void *) p.first.data());
 
-            // also call destructor passed to sni_free
+            /* Call destructor passed to sni_free */
             sni_free_cb(p.second.get()->user);
         }
     }
@@ -102,16 +103,14 @@ extern "C" {
     }
 
     void sni_free(void *sni, void (*cb)(void *)) {
-
-        printf("sni free called!\n");
-
-        // for all remaining names, run callback
+        /* We want to run this callback for every remaining name */
         sni_free_cb = cb;
 
         delete (sni_node *) sni;
     }
 
-    void sni_add(void *sni, const char *hostname, void *user) {
+    /* Returns non-null if this name already exists */
+    int sni_add(void *sni, const char *hostname, void *user) {
         struct sni_node *root = (struct sni_node *) sni;
 
         /* Traverse all labels in hostname */
@@ -133,7 +132,14 @@ extern "C" {
             root = it->second.get();
         }
 
+        /* We must never add multiple contexts for the same name, as that would overwrite and leak */
+        if (root->user) {
+            return 1;
+        }
+
         root->user = user;
+
+        return 0;
     }
 
     /* Removes the exact match. Wildcards are treated as the verbatim asterisk char, not as an actual wildcard */

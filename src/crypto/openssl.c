@@ -20,7 +20,7 @@
 /* These are in sni_tree.cpp */
 void *sni_new();
 void sni_free(void *sni, void(*cb)(void *));
-void sni_add(void *sni, const char *hostname, void *user);
+int sni_add(void *sni, const char *hostname, void *user);
 void *sni_remove(void *sni, const char *hostname);
 void *sni_find(void *sni, const char *hostname);
 
@@ -528,7 +528,10 @@ void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socke
 
     /* We do not want to hold any nullptr's in our SNI tree */
     if (ssl_context) {
-        sni_add(context->sni, hostname_pattern, ssl_context);
+        if (sni_add(context->sni, hostname_pattern, ssl_context)) {
+            /* If we already had that name, ignore */
+            free_ssl_context(ssl_context);
+        }
     }
 }
 
@@ -626,8 +629,7 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
 
 /* Our destructor for hostnames, used below */
 void sni_hostname_destructor(void *user) {
-    printf("Destructing still existing hostname: %p\n", user);
-
+    /* Some nodes hold null, so this one must ignore this case */
     free_ssl_context((SSL_CTX *) user);
 }
 
