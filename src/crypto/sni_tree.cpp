@@ -44,29 +44,43 @@ struct sni_node {
             /* The data of our string_views are managed by malloc */
             free((void *) p.first.data());
 
-            /* Call destructor passed to sni_free */
-            sni_free_cb(p.second.get()->user);
+            /* Call destructor passed to sni_free only if we hold data.
+             * This is important since sni_remove does not have sni_free_cb set */
+            if (p.second.get()->user) {
+                sni_free_cb(p.second.get()->user);
+            }
         }
     }
 };
 
-
+// this can only delete ONE single node, but may cull "empty nodes with null as data"
 void *removeUser(struct sni_node *root, unsigned int label, std::string_view *labels, unsigned int numLabels) {
 
-    /* If we are in the bottom, try and remove us */
+    /* If we are in the bottom (past bottom by one), there is nothing to remove */
     if (label == numLabels) {
-
-        // always return the success or not
+        void *user = root->user;
+        /* Mark us for culling on the way up */
+        root->user = nullptr;
+        return user;
     }
 
+    /* Is this label a child of root? */
+    auto it = root->children.find(labels[label]);
+    if (it == root->children.end()) {
+        /* We cannot continue */
+        return nullptr;
+    }
 
-    // if this succeeds
-    //return removeUser();
+    void *removedUser = removeUser(it->second.get(), label + 1, labels, numLabels);
 
+    /* On the way back up, we may cull empty nodes with no children.
+     * This ends up being where we remove all nodes */
+    if (it->second.get()->children.empty() && it->second.get()->user == nullptr) {
+        /* This can only happen with user set to null, otherwise we use sni_free_cb which is unset by sni_remove */
+        root->children.erase(it);
+    }
 
-    // then remove us here
-
-    return NULL;
+    return removedUser;
 }
 
 void *getUser(struct sni_node *root, unsigned int label, std::string_view *labels, unsigned int numLabels) {
