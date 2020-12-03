@@ -45,6 +45,7 @@ struct bsd_addr_t {
     socklen_t len;
     char *ip;
     int ip_length;
+    int port;
 };
 
 LIBUS_SOCKET_DESCRIPTOR apple_no_sigpipe(LIBUS_SOCKET_DESCRIPTOR fd);
@@ -58,11 +59,13 @@ void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd);
 
 void internal_finalize_bsd_addr(struct bsd_addr_t *addr);
 
-int bsd_socket_addr(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr);
+int bsd_local_addr(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr);
+int bsd_remote_addr(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr);
 
 char *bsd_addr_get_ip(struct bsd_addr_t *addr);
-
 int bsd_addr_get_ip_length(struct bsd_addr_t *addr);
+
+int bsd_addr_get_port(struct bsd_addr_t *addr);
 
 // called by dispatch_ready_poll
 LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr);

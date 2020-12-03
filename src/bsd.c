@@ -99,15 +99,27 @@ void internal_finalize_bsd_addr(struct bsd_addr_t *addr) {
     if (addr->mem.ss_family == AF_INET6) {
         addr->ip = (char *) &((struct sockaddr_in6 *) addr)->sin6_addr;
         addr->ip_length = sizeof(struct in6_addr);
+        addr->port = ntohs(((struct sockaddr_in6 *) addr)->sin6_port);
     } else if (addr->mem.ss_family == AF_INET) {
         addr->ip = (char *) &((struct sockaddr_in *) addr)->sin_addr;
         addr->ip_length = sizeof(struct in_addr);
+        addr->port = ntohs(((struct sockaddr_in *) addr)->sin_port);
     } else {
         addr->ip_length = 0;
+        addr->port = -1;
     }
 }
 
-int bsd_socket_addr(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr) {
+int bsd_local_addr(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr) {
+    addr->len = sizeof(addr->mem);
+    if (getsockname(fd, (struct sockaddr *) &addr->mem, &addr->len)) {
+        return -1;
+    }
+    internal_finalize_bsd_addr(addr);
+    return 0;
+}
+
+int bsd_remote_addr(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd_addr_t *addr) {
     addr->len = sizeof(addr->mem);
     if (getpeername(fd, (struct sockaddr *) &addr->mem, &addr->len)) {
         return -1;
@@ -122,6 +134,10 @@ char *bsd_addr_get_ip(struct bsd_addr_t *addr) {
 
 int bsd_addr_get_ip_length(struct bsd_addr_t *addr) {
     return addr->ip_length;
+}
+
+int bsd_addr_get_port(struct bsd_addr_t *addr) {
+    return addr->port;
 }
 
 // called by dispatch_ready_poll
@@ -220,17 +236,19 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
         return LIBUS_SOCKET_ERROR;
     }
 
-    /* Always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
+    if (port != 0) {
+      /* Otherwise, always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
 #if defined(__linux) && defined(SO_REUSEPORT)
-    if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
-        int optval = 1;
-        setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
-    }
+      if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
+          int optval = 1;
+          setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+      }
 #endif
 
-    int enabled = 1;
-    setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
-
+      int enabled = 1;
+      setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+    }
+    
 #ifdef IPV6_V6ONLY
     int disabled = 0;
     setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
