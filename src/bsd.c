@@ -221,7 +221,7 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
     }
 
     /* Always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
-#if defined(__linux) && defined(SO_REUSEPORT)
+#if (defined(__linux) || defined(__APPLE__)) && defined(SO_REUSEPORT)
     if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
         int optval = 1;
         setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
