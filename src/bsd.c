@@ -94,6 +94,14 @@ void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 #endif
 }
 
+void bsd_shutdown_socket_read(LIBUS_SOCKET_DESCRIPTOR fd) {
+#ifdef _WIN32
+    shutdown(fd, SD_RECEIVE);
+#else
+    shutdown(fd, SHUT_RD);
+#endif
+}
+
 void internal_finalize_bsd_addr(struct bsd_addr_t *addr) {
     // parse, so to speak, the address
     if (addr->mem.ss_family == AF_INET6) {

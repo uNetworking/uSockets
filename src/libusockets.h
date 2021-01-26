@@ -222,6 +222,11 @@ WIN32_EXPORT void us_socket_flush(int ssl, struct us_socket_t *s);
 /* Shuts down the connection by sending FIN and/or close_notify */
 WIN32_EXPORT void us_socket_shutdown(int ssl, struct us_socket_t *s);
 
+/* Shuts down the connection in terms of read, meaning next event loop
+ * iteration will catch the socket being closed. Can be used to defer closing
+ * to next event loop iteration. */
+WIN32_EXPORT void us_socket_shutdown_read(int ssl, struct us_socket_t *s);
+
 /* Returns whether the socket has been shut down or not */
 WIN32_EXPORT int us_socket_is_shut_down(int ssl, struct us_socket_t *s);
 
