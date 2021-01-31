@@ -26,6 +26,10 @@ int default_ignore_data_handler(struct us_socket_t *s) {
 
 /* Shared with SSL */
 
+unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context) {
+    return context->timestamp;
+}
+
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
     /* us_listen_socket_t extends us_socket_t so we close in similar ways */
     if (!us_socket_is_closed(0, &ls->s)) {
@@ -144,6 +148,9 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     context->iterator = 0;
     context->next = 0;
     context->ignore_data = default_ignore_data_handler;
+
+    /* Begin at 0 */
+    context->timestamp = 0;
 
     us_internal_loop_link(loop, context);
 

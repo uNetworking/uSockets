@@ -106,7 +106,7 @@ struct us_listen_socket_t {
 
 struct us_socket_context_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_t *loop;
-    //unsigned short timeout;
+    unsigned short timestamp;
     struct us_socket_t *head;
     struct us_socket_t *iterator;
     struct us_socket_context_t *prev, *next;

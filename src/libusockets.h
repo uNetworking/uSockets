@@ -87,6 +87,9 @@ struct us_socket_context_options_t {
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
 
+/* Return 15-bit timestamp for this context */
+WIN32_EXPORT unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context);
+
 /* Adds SNI domain and cert in asn1 format */
 WIN32_EXPORT void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options);
 WIN32_EXPORT void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern);

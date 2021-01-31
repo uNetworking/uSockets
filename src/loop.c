@@ -83,10 +83,17 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
         struct us_socket_context_t *context = loop_data->iterator;
+
+        /* Update this context's 15-bit timestamp */
+        context->timestamp = (context->timestamp + 1) & 0x7fff;
+
         for (context->iterator = context->head; context->iterator; ) {
 
             struct us_socket_t *s = context->iterator;
-            if (s->timeout && --(s->timeout) == 0) {
+            if ((s->timeout & 0x8000) && (s->timeout & 0x7fff) == context->timestamp) {
+
+                /* It has triggered so disable it */
+                s->timeout = 0;
 
                 context->on_socket_timeout(s);
 
