@@ -80,6 +80,7 @@ void us_internal_loop_unlink(struct us_loop_t *loop, struct us_socket_context_t 
 /* This functions should never run recursively */
 void us_internal_timer_sweep(struct us_loop_t *loop) {
     struct us_internal_loop_data_t *loop_data = &loop->data;
+    /* For all socket contexts in this loop */
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
         struct us_socket_context_t *context = loop_data->iterator;
@@ -87,24 +88,43 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
         /* Update this context's 15-bit timestamp */
         context->timestamp = (context->timestamp + 1) & 0x7fff;
 
-        for (context->iterator = context->head; context->iterator; ) {
+        /* Update our 16-bit full timestamp (the needle in the haystack) */
+        unsigned short needle = 0x8000 | context->timestamp;
 
-            struct us_socket_t *s = context->iterator;
-            if ((s->timeout & 0x8000) && (s->timeout & 0x7fff) == context->timestamp) {
+        /* Begin at head */
+        struct us_socket_t *s = context->head;
+        while (s) {
 
-                /* It has triggered so disable it */
-                s->timeout = 0;
-
-                context->on_socket_timeout(s);
-
-                /* Check for unlink / link */
-                if (s == context->iterator) {
-                    context->iterator = s->next;
+            /* Seek until end or timeout found (tightest loop) */
+            while (1) {
+                /* We only read from 1 random cache line here */
+                if (needle == s->timeout) {
+                    break;
                 }
+
+                /* Did we reach the end without a find? */
+                if ((s = s->next) == 0) {
+                    goto next_context;
+                }
+            }
+
+            /* Here we have a timeout to emit (slow path) */
+            s->timeout = 0;
+            context->iterator = s;
+
+            context->on_socket_timeout(s);
+
+            /* Check for unlink / link (if the event handler did not modify the chain, we step 1) */
+            if (s == context->iterator) {
+                s = s->next;
             } else {
-                context->iterator = s->next;
+                /* The iterator was changed by event handler */
+                s = context->iterator;
             }
         }
+        /* We always store a 0 to context->iterator here since we are no longer iterating this context */
+        next_context:
+        context->iterator = 0;
     }
 }
 
