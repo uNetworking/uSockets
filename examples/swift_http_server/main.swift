@@ -25,7 +25,7 @@ us_socket_context_on_end(0, context) { (s) -> OpaquePointer? in
     return s
 }
 
-us_socket_context_on_close(0, context) { (s) -> OpaquePointer? in
+us_socket_context_on_close(0, context) { (s, code, reason) -> OpaquePointer? in
     return s
 }
 
