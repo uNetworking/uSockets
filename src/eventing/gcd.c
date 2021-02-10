@@ -145,7 +145,7 @@ void *us_poll_ext(struct us_poll_t *p) {
 }
 
 unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
-    printf("us_internal_accept_poll_event\n");
+    //printf("us_internal_accept_poll_event\n");
     return 0;
 }
 
