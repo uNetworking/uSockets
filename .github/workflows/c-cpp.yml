@@ -7,7 +7,19 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  
+  build_macos:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build examples
+      run: make examples
+    - name: run test
+      run: ./hammer_test
+      
+  build_linux:
 
     runs-on: ubuntu-latest
 
