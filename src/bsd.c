@@ -1,5 +1,5 @@
 /*
- * Authored by Alex Hultman, 2018-2019.
+ * Authored by Alex Hultman, 2018-2021.
  * Intellectual property of third-party.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -91,6 +91,14 @@ void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
     shutdown(fd, SD_SEND);
 #else
     shutdown(fd, SHUT_WR);
+#endif
+}
+
+void bsd_shutdown_socket_read(LIBUS_SOCKET_DESCRIPTOR fd) {
+#ifdef _WIN32
+    shutdown(fd, SD_RECEIVE);
+#else
+    shutdown(fd, SHUT_RD);
 #endif
 }
 
@@ -237,14 +245,13 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
     }
 
     if (port != 0) {
-      /* Otherwise, always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
-#if defined(__linux) && defined(SO_REUSEPORT)
-      if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
-          int optval = 1;
-          setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
-      }
+        /* Otherwise, always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
+#if /*defined(__linux) &&*/ defined(SO_REUSEPORT)
+        if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
+            int optval = 1;
+            setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+        }
 #endif
-
       int enabled = 1;
       setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
     }

@@ -26,6 +26,10 @@ int default_ignore_data_handler(struct us_socket_t *s) {
 
 /* Shared with SSL */
 
+unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context) {
+    return context->timestamp;
+}
+
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
     /* us_listen_socket_t extends us_socket_t so we close in similar ways */
     if (!us_socket_is_closed(0, &ls->s)) {
@@ -144,6 +148,9 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     context->iterator = 0;
     context->next = 0;
     context->ignore_data = default_ignore_data_handler;
+
+    /* Begin at 0 */
+    context->timestamp = 0;
 
     us_internal_loop_link(loop, context);
 
@@ -321,6 +328,17 @@ void us_socket_context_on_end(int ssl, struct us_socket_context_t *context, stru
 #endif
 
     context->on_end = on_end;
+}
+
+void us_socket_context_on_connect_error(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_connect_error)(struct us_socket_t *s, int code)) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        us_internal_ssl_socket_context_on_connect_error((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *, int)) on_connect_error);
+        return;
+    }
+#endif
+    
+    context->on_connect_error = on_connect_error;
 }
 
 void *us_socket_context_ext(int ssl, struct us_socket_context_t *context) {

@@ -1,0 +1,57 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  
+  test_macos_libuv:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: install libuv
+      run: brew install libuv
+    - name: build examples
+      run: WITH_LIBUV=1 make examples
+    - name: run test
+      run: ./hammer_test
+
+  test_macos_kqueue:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build examples
+      run: make examples
+    - name: run test
+      run: ./hammer_test
+      
+  test_linux_libuv:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: install libuv
+      run: sudo apt install -y libuv1-dev
+    - name: build examples
+      run: WITH_LIBUV=1 make examples
+    - name: run test
+      run: ./hammer_test
+      
+  test_linux_epoll:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build examples
+      run: make examples
+    - name: run test
+      run: ./hammer_test

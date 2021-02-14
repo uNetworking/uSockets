@@ -56,6 +56,7 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, int protocol);
 
 void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd);
 void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd);
+void bsd_shutdown_socket_read(LIBUS_SOCKET_DESCRIPTOR fd);
 
 void internal_finalize_bsd_addr(struct bsd_addr_t *addr);
 

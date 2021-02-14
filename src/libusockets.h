@@ -87,6 +87,9 @@ struct us_socket_context_options_t {
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
 
+/* Return 15-bit timestamp for this context */
+WIN32_EXPORT unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context);
+
 /* Adds SNI domain and cert in asn1 format */
 WIN32_EXPORT void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options);
 WIN32_EXPORT void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern);
@@ -113,6 +116,9 @@ WIN32_EXPORT void us_socket_context_on_writable(int ssl, struct us_socket_contex
     struct us_socket_t *(*on_writable)(struct us_socket_t *s));
 WIN32_EXPORT void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_timeout)(struct us_socket_t *s));
+/* This one is only used for when a connecting socket fails in a late stage. */
+WIN32_EXPORT void us_socket_context_on_connect_error(int ssl, struct us_socket_context_t *context,
+    struct us_socket_t *(*on_connect_error)(struct us_socket_t *s, int code));
 
 /* Emitted when a socket has been half-closed */
 WIN32_EXPORT void us_socket_context_on_end(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_end)(struct us_socket_t *s));
@@ -127,9 +133,18 @@ WIN32_EXPORT struct us_listen_socket_t *us_socket_context_listen(int ssl, struct
 /* listen_socket.c/.h */
 WIN32_EXPORT void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
 
-/* Land in on_open or on_close or return null or return socket */
+/* Land in on_open or on_connection_error or return null or return socket */
 WIN32_EXPORT struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context,
     const char *host, int port, const char *source_host, int options, int socket_ext_size);
+
+/* Is this socket established? Can be used to check if a connecting socket has fired the on_open event yet.
+ * Can also be used to determine if a socket is a listen_socket or not, but you probably know that already. */
+WIN32_EXPORT int us_socket_is_established(int ssl, struct us_socket_t *s);
+
+/* Cancel a connecting socket. Can be used together with us_socket_timeout to limit connection times.
+ * Entirely destroys the socket - this function works like us_socket_close but does not trigger on_close event since
+ * you never got the on_open event first. */
+WIN32_EXPORT struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s);
 
 /* Returns the loop for this socket context. */
 WIN32_EXPORT struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *context);
@@ -221,6 +236,11 @@ WIN32_EXPORT void us_socket_flush(int ssl, struct us_socket_t *s);
 
 /* Shuts down the connection by sending FIN and/or close_notify */
 WIN32_EXPORT void us_socket_shutdown(int ssl, struct us_socket_t *s);
+
+/* Shuts down the connection in terms of read, meaning next event loop
+ * iteration will catch the socket being closed. Can be used to defer closing
+ * to next event loop iteration. */
+WIN32_EXPORT void us_socket_shutdown_read(int ssl, struct us_socket_t *s);
 
 /* Returns whether the socket has been shut down or not */
 WIN32_EXPORT int us_socket_is_shut_down(int ssl, struct us_socket_t *s);

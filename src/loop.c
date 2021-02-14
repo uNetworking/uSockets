@@ -1,5 +1,5 @@
 /*
- * Authored by Alex Hultman, 2018-2019.
+ * Authored by Alex Hultman, 2018-2021.
  * Intellectual property of third-party.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,24 +80,50 @@ void us_internal_loop_unlink(struct us_loop_t *loop, struct us_socket_context_t 
 /* This functions should never run recursively */
 void us_internal_timer_sweep(struct us_loop_t *loop) {
     struct us_internal_loop_data_t *loop_data = &loop->data;
+    /* For all socket contexts in this loop */
     for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
 
         struct us_socket_context_t *context = loop_data->iterator;
-        for (context->iterator = context->head; context->iterator; ) {
 
-            struct us_socket_t *s = context->iterator;
-            if (s->timeout && --(s->timeout) == 0) {
+        /* Update this context's 15-bit timestamp */
+        context->timestamp = (context->timestamp + 1) & 0x7fff;
 
-                context->on_socket_timeout(s);
+        /* Update our 16-bit full timestamp (the needle in the haystack) */
+        unsigned short needle = 0x8000 | context->timestamp;
 
-                /* Check for unlink / link */
-                if (s == context->iterator) {
-                    context->iterator = s->next;
+        /* Begin at head */
+        struct us_socket_t *s = context->head;
+        while (s) {
+            /* Seek until end or timeout found (tightest loop) */
+            while (1) {
+                /* We only read from 1 random cache line here */
+                if (needle == s->timeout) {
+                    break;
                 }
+
+                /* Did we reach the end without a find? */
+                if ((s = s->next) == 0) {
+                    goto next_context;
+                }
+            }
+
+            /* Here we have a timeout to emit (slow path) */
+            s->timeout = 0;
+            context->iterator = s;
+
+            context->on_socket_timeout(s);
+
+            /* Check for unlink / link (if the event handler did not modify the chain, we step 1) */
+            if (s == context->iterator) {
+                s = s->next;
             } else {
-                context->iterator = s->next;
+                /* The iterator was changed by event handler */
+                s = context->iterator;
             }
         }
+        /* We always store a 0 to context->iterator here since we are no longer iterating this context */
+        next_context:
+        context->iterator = 0;
     }
 }
 
@@ -150,15 +176,26 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
             if (us_poll_events(p) == LIBUS_SOCKET_WRITABLE) {
                 struct us_socket_t *s = (struct us_socket_t *) p;
 
-                us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
+                /* It is perfectly possible to come here with an error */
+                if (error) {
+                    /* Emit error, close without emitting on_close */
+                    s->context->on_connect_error(s, 0);
+                    us_socket_close_connecting(0, s);
+                } else {
+                    /* All sockets poll for readable */
+                    us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
 
-                /* We always use nodelay */
-                bsd_socket_nodelay(us_poll_fd(p), 1);
+                    /* We always use nodelay */
+                    bsd_socket_nodelay(us_poll_fd(p), 1);
 
-                /* We are now a proper socket */
-                us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
+                    /* We are now a proper socket */
+                    us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
 
-                s->context->on_open(s, 1, 0, 0);
+                    /* If we used a connection timeout we have to reset it here */
+                    us_socket_timeout(0, s, 0);
+
+                    s->context->on_open(s, 1, 0, 0);
+                }
             } else {
                 struct us_listen_socket_t *listen_socket = (struct us_listen_socket_t *) p;
                 struct bsd_addr_t addr;

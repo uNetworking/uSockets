@@ -1,5 +1,5 @@
 /*
- * Authored by Alex Hultman, 2018-2019.
+ * Authored by Alex Hultman, 2018-2021.
  * Intellectual property of third-party.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,10 +25,15 @@
 int us_socket_local_port(int ssl, struct us_socket_t *s) {
     struct bsd_addr_t addr;
     if (bsd_local_addr(us_poll_fd(&s->p), &addr)) {
-      return -1;
+        return -1;
     } else {
-      return bsd_addr_get_port(&addr);
+        return bsd_addr_get_port(&addr);
     }
+}
+
+void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
+    /* This syscall is idempotent so no extra check is needed */
+    bsd_shutdown_socket_read(us_poll_fd((struct us_poll_t *) s));
 }
 
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
@@ -47,8 +52,7 @@ struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
 
 void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
     if (seconds) {
-        unsigned short timeout_sweeps = (unsigned short) (0.5f + ((float) seconds) / ((float) LIBUS_TIMEOUT_GRANULARITY));
-        s->timeout = timeout_sweeps ? timeout_sweeps : 1;
+        s->timeout = 0x8000 | (s->context->timestamp + (seconds >> 2));
     } else {
         s->timeout = 0;
     }
@@ -64,6 +68,31 @@ int us_socket_is_closed(int ssl, struct us_socket_t *s) {
     return s->prev == (struct us_socket_t *) s->context;
 }
 
+int us_socket_is_established(int ssl, struct us_socket_t *s) {
+    /* Everything that is not POLL_TYPE_SEMI_SOCKET is established */
+    return us_internal_poll_type((struct us_poll_t *) s) != POLL_TYPE_SEMI_SOCKET;
+}
+
+/* Exactly the same as us_socket_close but does not emit on_close event */
+struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s) {
+    if (!us_socket_is_closed(0, s)) {
+        us_internal_socket_context_unlink(s->context, s);
+        us_poll_stop((struct us_poll_t *) s, s->context->loop);
+        bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
+
+        /* Link this socket to the close-list and let it be deleted after this iteration */
+        s->next = s->context->loop->data.closed_head;
+        s->context->loop->data.closed_head = s;
+
+        /* Any socket with prev = context is marked as closed */
+        s->prev = (struct us_socket_t *) s->context;
+
+        //return s->context->on_close(s, code, reason);
+    }
+    return s;
+}
+
+/* Same as above but emits on_close */
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason) {
     if (!us_socket_is_closed(0, s)) {
         us_internal_socket_context_unlink(s->context, s);
