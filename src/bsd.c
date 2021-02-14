@@ -252,8 +252,8 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
             setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
         }
 #endif
-      int enabled = 1;
-      setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+        int enabled = 1;
+        setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
     }
     
 #ifdef IPV6_V6ONLY
