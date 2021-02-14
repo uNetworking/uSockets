@@ -251,6 +251,9 @@ WIN32_EXPORT int us_socket_is_closed(int ssl, struct us_socket_t *s);
 /* Immediately closes the socket */
 WIN32_EXPORT struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason);
 
+/* Returns local port or -1 on failure. */
+WIN32_EXPORT int us_socket_local_port(int ssl, struct us_socket_t *s);
+
 /* Copy remote (IP) address of socket, or fail with zero length. */
 WIN32_EXPORT void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);
 

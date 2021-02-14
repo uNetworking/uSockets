@@ -22,6 +22,15 @@
 
 /* Shared with SSL */
 
+int us_socket_local_port(int ssl, struct us_socket_t *s) {
+    struct bsd_addr_t addr;
+    if (bsd_local_addr(us_poll_fd(&s->p), &addr)) {
+        return -1;
+    } else {
+        return bsd_addr_get_port(&addr);
+    }
+}
+
 void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
     /* This syscall is idempotent so no extra check is needed */
     bsd_shutdown_socket_read(us_poll_fd((struct us_poll_t *) s));
@@ -29,7 +38,7 @@ void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
 
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
     struct bsd_addr_t addr;
-    if (bsd_socket_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
+    if (bsd_remote_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
         *length = 0;
     } else {
         *length = bsd_addr_get_ip_length(&addr);
