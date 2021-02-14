@@ -262,6 +262,8 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
                     break;
                 }
 
+                context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+
                 s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
                 if (us_socket_is_closed(0, &s->s)) {
                     return s;
@@ -276,6 +278,8 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
 
         // at this point we might be full and need to emit the data to application and start over
         if (read == LIBUS_RECV_BUFFER_LENGTH) {
+
+            context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
             // emit data and restart
             s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
