@@ -12,9 +12,9 @@ const int SSL = 1;
 #define PBWIDTH 60
 
 void print_progress(double percentage) {
-    static int last_val;
+    static int last_val = -1;
     int val = (int) (percentage * 100);
-    if (last_val && val == last_val) {
+    if (last_val != -1 && val == last_val) {
         return;
     }
     last_val = val;
