@@ -8,7 +8,21 @@ on:
 
 jobs:
   
-  build_macos:
+  test_macos_libuv:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: install libuv
+      run: brew install libuv
+    - name: build examples
+      run: CFLAGS="-I /opt/homebrew/include" LDFLAGS="/opt/homebrew/lib" WITH_LIBUV=1 make examples
+    - name: run test
+      run: ./hammer_test:
+     
+  
+  test_macos_kqueue:
 
     runs-on: macos-latest
 
@@ -19,7 +33,7 @@ jobs:
     - name: run test
       run: ./hammer_test
       
-  build_linux:
+  test_linux_epoll:
 
     runs-on: ubuntu-latest
 
