@@ -19,9 +19,8 @@ jobs:
     - name: build examples
       run: CFLAGS="-I /opt/homebrew/include" LDFLAGS="/opt/homebrew/lib" WITH_LIBUV=1 make examples
     - name: run test
-      run: ./hammer_test:
-     
-  
+      run: ./hammer_test
+
   test_macos_kqueue:
 
     runs-on: macos-latest
