@@ -47,16 +47,16 @@ struct http_socket {
     double pad_invariant;
     int is_http;
     double post_pad_invariant;
-    char content[128];
     int is_client;
+    char content[128];
 };
 
 struct web_socket {
     double pad_invariant;
     int is_http;
     double post_pad_invariant;
-    char content[1024];
     int is_client;
+    char content[1024];
 };
 
 /* This checks the ext data state according to callbacks */
@@ -96,7 +96,7 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
         }
         case 1: {
             // adoption cannot happen if closed!
-            /*if (!us_socket_is_closed(SSL, s)) {
+            if (!us_socket_is_closed(SSL, s)) {
                 if (rand() % 2) {
                     s = us_socket_context_adopt_socket(SSL, websocket_context, s, sizeof(struct web_socket));
                     struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
@@ -108,7 +108,7 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
                 }
             }
 
-            return perform_random_operation(s);*/
+            return perform_random_operation(s);
         }
         case 2: {
             // write
@@ -166,8 +166,17 @@ struct us_socket_t *on_http_socket_writable(struct us_socket_t *s) {
 struct us_socket_t *on_web_socket_close(struct us_socket_t *s, int code, void *reason) {
     assume_state(s, 0);
 
-    closed_connections++;
+    struct web_socket *ws = (struct web_socket *) us_socket_ext(SSL, s);
 
+    if (ws->is_client) {
+        closed_clients++;
+    } else {
+        closed_servers++;
+    }
+
+    print_progress((double) closed_connections / 10000);
+
+    closed_connections++;
 
     if (closed_connections == 10000) {
         if (opened_clients != 5000) {
