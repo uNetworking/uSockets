@@ -21,7 +21,7 @@
 
 #ifdef LIBUS_USE_LIBUV
 
-// poll dispatch
+/* uv_poll_t->data always (except for most times after calling us_poll_stop) points to the us_poll_t */
 static void poll_cb(uv_poll_t *p, int status, int events) {
     us_internal_dispatch_ready_poll((struct us_poll_t *) p->data, status < 0, events);
 }
@@ -37,8 +37,19 @@ static void check_cb(uv_check_t *p) {
     us_internal_loop_post(loop);
 }
 
+/* Not used for polls, since polls need two frees */
 static void close_cb_free(uv_handle_t *h) {
     free(h->data);
+}
+
+/* This one is different for polls, since we need two frees here */
+static void close_cb_free_poll(uv_handle_t *h) {
+    /* It is only in case we called us_poll_stop then quickly us_poll_free that we enter this.
+     * Most of the time, actual freeing is done by us_poll_free. */
+    if (h->data) {
+        free(h->data);
+        free(h);
+    }
 }
 
 static void timer_cb(uv_timer_t *t) {
@@ -59,6 +70,10 @@ void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type
 }
 
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
+    /* The idea here is like so; in us_poll_stop we call uv_close after setting data of uv-poll to 0.
+     * This means that in close_cb_free we call free on 0 with does nothing, since us_poll_stop should
+     * not really free the poll. HOWEVER, if we then call us_poll_free while still closing the uv-poll,
+     * we simply change back the data to point to our structure so that we actually do free it like we should. */
     if (uv_is_closing((uv_handle_t *) p->uv_p)) {
         p->uv_p->data = p;
     } else {
@@ -85,11 +100,11 @@ void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
 void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
     uv_poll_stop(p->uv_p);
 
-    // close but not free is needed here
-    // we set this data to null only here, and it is to not free anything when the uv_close handler triggers
-    // we free things later, in our free list
+    /* We normally only want to close the poll here, not free it. But if we stop it, then quickly "free" it with
+     * us_poll_free, we postpone the actual freeing to close_cb_free_poll whenever it triggers.
+     * That's why we set data to null here, so that us_poll_free can reset it if needed */
     p->uv_p->data = 0;
-    uv_close((uv_handle_t *) p->uv_p, close_cb_free); // needed here
+    uv_close((uv_handle_t *) p->uv_p, close_cb_free_poll);
 }
 
 int us_poll_events(struct us_poll_t *p) {
@@ -184,9 +199,7 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
 
     struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
-    //if (p != new_p) {
-        new_p->uv_p->data = new_p;
-    //}
+    new_p->uv_p->data = new_p;
 
     return new_p;
 }
