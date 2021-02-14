@@ -70,6 +70,7 @@ struct us_internal_ssl_socket_context_t {
     /* These decorate the base implementation */
     struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *, int is_client, char *ip, int ip_length);
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *, char *data, int length);
+    struct us_internal_ssl_socket_t *(*on_writable)(struct us_internal_ssl_socket_t *);
     struct us_internal_ssl_socket_t *(*on_close)(struct us_internal_ssl_socket_t *, int code, void *reason);
 
     /* Called for missing SNI hostnames, if not NULL */
@@ -84,6 +85,7 @@ struct us_internal_ssl_socket_t {
     struct us_socket_t s;
     SSL *ssl;
     int ssl_write_wants_read; // we use this for now
+    int ssl_read_wants_write;
 };
 
 int passphrase_cb(char *buf, int size, int rwflag, void *u) {
@@ -155,6 +157,7 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
 
     s->ssl = SSL_new(context->ssl_context);
     s->ssl_write_wants_read = 0;
+    s->ssl_read_wants_write = 0;
     SSL_set_bio(s->ssl, loop_ssl_data->shared_rbio, loop_ssl_data->shared_wbio);
 
     BIO_up_ref(loop_ssl_data->shared_rbio);
@@ -183,7 +186,7 @@ struct us_internal_ssl_socket_t *ssl_on_close(struct us_internal_ssl_socket_t *s
 }
 
 struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) {
-    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    // struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
     // whatever state we are in, a TCP FIN is always an answered shutdown
 
@@ -252,6 +255,11 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
             } else {
                 // emit the data we have and exit
 
+                if (err == SSL_ERROR_WANT_WRITE) {
+                    // here we need to trigger writable event next ssl_read!
+                    s->ssl_read_wants_write = 1;
+                }
+
                 // assume we emptied the input buffer fully or error here as well!
                 if (loop_ssl_data->ssl_read_input_length) {
                     return us_internal_ssl_socket_close(s, 0, NULL);
@@ -317,6 +325,28 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
 
         //us_
     }
+
+    return s;
+}
+
+struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t *s) {
+
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+
+    // todo: cork here so that we efficiently output both from reading and from writing?
+
+    if (s->ssl_read_wants_write) {
+        s->ssl_read_wants_write = 0;
+
+        // make sure to update context before we call (context can change if the user adopts the socket!)
+        context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+
+        // if this one fails to write data, it sets ssl_read_wants_write again
+        s = (struct us_internal_ssl_socket_t *) context->sc.on_data(&s->s, 0, 0); // cast here!
+    }
+
+    // should this one come before we have read? should it come always? spurious on_writable is okay
+    s = context->on_writable(s);
 
     return s;
 }
@@ -674,7 +704,8 @@ void us_internal_ssl_socket_context_on_data(struct us_internal_ssl_socket_contex
 }
 
 void us_internal_ssl_socket_context_on_writable(struct us_internal_ssl_socket_context_t *context, struct us_internal_ssl_socket_t *(*on_writable)(struct us_internal_ssl_socket_t *s)) {
-    us_socket_context_on_writable(0, (struct us_socket_context_t *) context, (struct us_socket_t *(*)(struct us_socket_t *)) on_writable);
+    us_socket_context_on_writable(0, (struct us_socket_context_t *) context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_on_writable);
+    context->on_writable = on_writable;
 }
 
 void us_internal_ssl_socket_context_on_timeout(struct us_internal_ssl_socket_context_t *context, struct us_internal_ssl_socket_t *(*on_timeout)(struct us_internal_ssl_socket_t *s)) {
