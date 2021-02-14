@@ -360,7 +360,7 @@ struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
         /* Okay, so this is the listen_socket */
         static time_t last_time;
 
-        if (last_time && time(0) - last_time < 2) {
+        if (last_time && time(0) - last_time == 0) {
             printf("TIMER IS FIRING TOO FAST!!!\n");
             exit(1);
         }
@@ -368,7 +368,7 @@ struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
         last_time = time(0);
 
         print_progress((double) closed_connections / 10000);
-        us_socket_timeout(SSL, s, 4);
+        us_socket_timeout(SSL, s, 16);
         return s;
     }
 
@@ -431,8 +431,9 @@ int main() {
     listen_socket = us_socket_context_listen(SSL, http_context, "127.0.0.1", 3000, 0, sizeof(struct http_socket));
 
     /* We use the listen socket as a way to check so that timeout stamps don't
-     * deviate from wallclock time - they trigger a minimum of 2 seconds apart or the test fail */
-    us_socket_timeout(SSL, (struct us_socket_t *) listen_socket, 4);
+     * deviate from wallclock time - let's use 16 seconds and check that we have
+     * at least 1 second diff since last trigger (allows iteration lag of 15 seconds) */
+    us_socket_timeout(SSL, (struct us_socket_t *) listen_socket, 16);
 
     if (listen_socket) {
         printf("Running hammer test\n");
