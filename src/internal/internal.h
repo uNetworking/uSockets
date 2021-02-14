@@ -158,6 +158,9 @@ void us_internal_ssl_socket_context_on_timeout(struct us_internal_ssl_socket_con
 void us_internal_ssl_socket_context_on_end(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_end)(struct us_internal_ssl_socket_t *s));
 
+void us_internal_ssl_socket_context_on_connect_error(struct us_internal_ssl_socket_context_t *context,
+    struct us_internal_ssl_socket_t *(*on_connect_error)(struct us_internal_ssl_socket_t *s, int code));
+
 struct us_listen_socket_t *us_internal_ssl_socket_context_listen(struct us_internal_ssl_socket_context_t *context,
     const char *host, int port, int options, int socket_ext_size);
 
