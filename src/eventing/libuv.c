@@ -1,5 +1,5 @@
 /*
- * Authored by Alex Hultman, 2018-2019.
+ * Authored by Alex Hultman, 2018-2021.
  * Intellectual property of third-party.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@
 
 // poll dispatch
 static void poll_cb(uv_poll_t *p, int status, int events) {
-    us_internal_dispatch_ready_poll((struct us_poll_t *) p, status < 0, events);
+    us_internal_dispatch_ready_poll((struct us_poll_t *) p->data, status < 0, events);
 }
 
 static void prepare_cb(uv_prepare_t *p) {
@@ -59,9 +59,10 @@ void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type
 }
 
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
-    if (uv_is_closing((uv_handle_t *) &p->uv_p)) {
-        p->uv_p.data = p;
+    if (uv_is_closing((uv_handle_t *) p->uv_p)) {
+        p->uv_p->data = p;
     } else {
+        free(p->uv_p);
         free(p);
     }
 }
@@ -69,24 +70,26 @@ void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
 void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     p->poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
-    uv_poll_init_socket(loop->uv_loop, &p->uv_p, p->fd);
-    uv_poll_start(&p->uv_p, events, poll_cb);
+    uv_poll_init_socket(loop->uv_loop, p->uv_p, p->fd);
+    uv_poll_start(p->uv_p, events, poll_cb);
 }
 
 void us_poll_change(struct us_poll_t *p, struct us_loop_t *loop, int events) {
     if (us_poll_events(p) != events) {
         p->poll_type = us_internal_poll_type(p) | ((events & LIBUS_SOCKET_READABLE) ? POLL_TYPE_POLLING_IN : 0) | ((events & LIBUS_SOCKET_WRITABLE) ? POLL_TYPE_POLLING_OUT : 0);
 
-        uv_poll_start(&p->uv_p, events, poll_cb);
+        uv_poll_start(p->uv_p, events, poll_cb);
     }
 }
 
 void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
-    uv_poll_stop(&p->uv_p);
+    uv_poll_stop(p->uv_p);
 
     // close but not free is needed here
-    p->uv_p.data = 0;
-    uv_close((uv_handle_t *) &p->uv_p, close_cb_free); // needed here
+    // we set this data to null only here, and it is to not free anything when the uv_close handler triggers
+    // we free things later, in our free list
+    p->uv_p->data = 0;
+    uv_close((uv_handle_t *) p->uv_p, close_cb_free); // needed here
 }
 
 int us_poll_events(struct us_poll_t *p) {
@@ -171,19 +174,19 @@ void us_loop_run(struct us_loop_t *loop) {
 }
 
 struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    return malloc(sizeof(struct us_poll_t) + ext_size);
+    struct us_poll_t *p = (struct us_poll_t *) malloc(sizeof(struct us_poll_t) + ext_size);
+    p->uv_p = malloc(sizeof(uv_poll_t));
+    p->uv_p->data = p;
+    return p;
 }
 
-// this one is broken, us_poll needs to hold a pointer to uv_poll_t for it to work (bad anyways)
+/* If we update our block position we have to updarte the uv_poll data to point to us */
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
 
-    // do not support it yet
-    return p;
-
     struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
-    if (p != new_p) {
-        new_p->uv_p.data = new_p;
-    }
+    //if (p != new_p) {
+        new_p->uv_p->data = new_p;
+    //}
 
     return new_p;
 }

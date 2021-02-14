@@ -111,8 +111,10 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
             return perform_random_operation(s);
         }
         case 2: {
-            // write
-            us_socket_write(SSL, s, (char *) long_buffer, /*rand() % */long_length, 0);
+            // write - causes the other end to receive the data (event) and possibly us
+            // to receive on writable event - could it be that we get stuck if the other end is closed?
+            // no because, if we do not get ack in time we will timeout after some time
+            us_socket_write(SSL, s, (char *) long_buffer, rand() % long_length, 0);
         }
         break;
         case 3: {
@@ -174,9 +176,9 @@ struct us_socket_t *on_web_socket_close(struct us_socket_t *s, int code, void *r
         closed_servers++;
     }
 
-    print_progress((double) closed_connections / 10000);
-
     closed_connections++;
+
+    print_progress((double) closed_connections / 10000);
 
     if (closed_connections == 10000) {
         if (opened_clients != 5000) {

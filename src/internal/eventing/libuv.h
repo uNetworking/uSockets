@@ -34,8 +34,10 @@ struct us_loop_t {
     uv_check_t *uv_check;
 };
 
+// it is no longer valid to cast a pointer to us_poll_t to a pointer of uv_poll_t
 struct us_poll_t {
-    uv_poll_t uv_p;
+    /* We need to hold a pointer to this uv_poll_t since we need to be able to resize our block */
+    uv_poll_t *uv_p;
     LIBUS_SOCKET_DESCRIPTOR fd;
     unsigned char poll_type;
 };
