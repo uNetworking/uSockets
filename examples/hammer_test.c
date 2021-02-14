@@ -12,7 +12,12 @@ const int SSL = 1;
 #define PBWIDTH 60
 
 void print_progress(double percentage) {
+    static int last_val;
     int val = (int) (percentage * 100);
+    if (last_val && val == last_val) {
+        return;
+    }
+    last_val = val;
     int lpad = (int) (percentage * PBWIDTH);
     int rpad = PBWIDTH - lpad;
     printf("\r%3d%% [%.*s%*s]", val, lpad, PBSTR, rpad, "");
