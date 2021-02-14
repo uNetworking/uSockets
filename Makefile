@@ -30,7 +30,7 @@ endif
 # WITH_ASAN builds with sanitizers
 ifeq ($(WITH_ASAN),1)
 	override CFLAGS += -fsanitize=address -g
-	override LDFLAGS += -lasan
+	override LDFLAGS += -fsanitize=address
 endif
 
 override CFLAGS += -std=c11 -Isrc

@@ -118,6 +118,7 @@ struct us_socket_context_t {
     //void (*on_timeout)(struct us_socket_context *);
     struct us_socket_t *(*on_socket_timeout)(struct us_socket_t *);
     struct us_socket_t *(*on_end)(struct us_socket_t *);
+    struct us_socket_t *(*on_connect_error)(struct us_socket_t *, int code);
     int (*ignore_data)(struct us_socket_t *);
 };
 

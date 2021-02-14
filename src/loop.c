@@ -1,5 +1,5 @@
 /*
- * Authored by Alex Hultman, 2018-2019.
+ * Authored by Alex Hultman, 2018-2021.
  * Intellectual property of third-party.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,7 +94,6 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
         /* Begin at head */
         struct us_socket_t *s = context->head;
         while (s) {
-
             /* Seek until end or timeout found (tightest loop) */
             while (1) {
                 /* We only read from 1 random cache line here */
@@ -177,15 +176,26 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
             if (us_poll_events(p) == LIBUS_SOCKET_WRITABLE) {
                 struct us_socket_t *s = (struct us_socket_t *) p;
 
-                us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
+                /* It is perfectly possible to come here with an error */
+                if (error) {
+                    /* Emit error, close without emitting on_close */
+                    s->context->on_connect_error(s, 0);
+                    us_socket_close_connecting(0, s);
+                } else {
+                    /* All sockets poll for readable */
+                    us_poll_change(p, s->context->loop, LIBUS_SOCKET_READABLE);
 
-                /* We always use nodelay */
-                bsd_socket_nodelay(us_poll_fd(p), 1);
+                    /* We always use nodelay */
+                    bsd_socket_nodelay(us_poll_fd(p), 1);
 
-                /* We are now a proper socket */
-                us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
+                    /* We are now a proper socket */
+                    us_internal_poll_set_type(p, POLL_TYPE_SOCKET);
 
-                s->context->on_open(s, 1, 0, 0);
+                    /* If we used a connection timeout we have to reset it here */
+                    us_socket_timeout(0, s, 0);
+
+                    s->context->on_open(s, 1, 0, 0);
+                }
             } else {
                 struct us_listen_socket_t *listen_socket = (struct us_listen_socket_t *) p;
                 struct bsd_addr_t addr;

@@ -8,10 +8,23 @@ const int SSL = 1;
 #include <string.h>
 #include <time.h>
 
+#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
+#define PBWIDTH 60
+
+void print_progress(double percentage) {
+    int val = (int) (percentage * 100);
+    int lpad = (int) (percentage * PBWIDTH);
+    int rpad = PBWIDTH - lpad;
+    printf("\r%3d%% [%.*s%*s]", val, lpad, PBSTR, rpad, "");
+    fflush(stdout);
+}
+
 // todo: properly put all of these in various ext data so to test them!
 int opened_connections, closed_connections, operations_done;
 struct us_socket_context_t *http_context, *websocket_context;
 struct us_listen_socket_t *listen_socket;
+
+int opened_clients, opened_servers, closed_clients, closed_servers;
 
 // put in loop ext data
 void *long_buffer;
@@ -23,18 +36,22 @@ unsigned int long_length = 5 * 1024 * 1024;
 
 const double pad_should_always_be = 14.652752;
 
+/* We begin smaller than the WS so that resize must fail (opposite of what we have in uWS).
+ * This triggers the libuv resize crash that must be fixed. */
 struct http_socket {
     double pad_invariant;
     int is_http;
     double post_pad_invariant;
-    char content[1024];
+    char content[128];
+    int is_client;
 };
 
 struct web_socket {
     double pad_invariant;
     int is_http;
     double post_pad_invariant;
-    char content[128];
+    char content[1024];
+    int is_client;
 };
 
 /* This checks the ext data state according to callbacks */
@@ -53,9 +70,9 @@ void assume_state(struct us_socket_t *s, int is_http) {
 
     // try and cause havoc (different size)
     if (hs->is_http) {
-        memset(hs->content, 0, 1024);
-    } else {
         memset(hs->content, 0, 128);
+    } else {
+        memset(hs->content, 0, 1024);
     }
 }
 
@@ -74,7 +91,7 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
         }
         case 1: {
             // adoption cannot happen if closed!
-            if (!us_socket_is_closed(SSL, s)) {
+            /*if (!us_socket_is_closed(SSL, s)) {
                 if (rand() % 2) {
                     s = us_socket_context_adopt_socket(SSL, websocket_context, s, sizeof(struct web_socket));
                     struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
@@ -86,20 +103,23 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
                 }
             }
 
-            return perform_random_operation(s);
+            return perform_random_operation(s);*/
         }
         case 2: {
             // write
-            us_socket_write(SSL, s, (char *) long_buffer, rand() % long_length, 0);
+            us_socket_write(SSL, s, (char *) long_buffer, /*rand() % */long_length, 0);
         }
         break;
         case 3: {
-            // shutdown
+            // shutdown (on macOS we can get stuck in fin_wait_2 for some weird reason!)
+            // if we send fin, the other end sends data but then on writable closes? then fin is not sent?
+            // so we need to timeout here to ensure we are closed if no fin is received within 30 seconds
             us_socket_shutdown(SSL, s);
+            us_socket_timeout(SSL, s, 16);
         }
         break;
         case 4: {
-            // loop wakeup and timeout sweep
+            /* Triggers all timeouts next iteration */
             us_socket_timeout(SSL, s, 4);
             us_wakeup_loop(us_socket_context_loop(SSL, us_socket_context(SSL, s)));
         }
@@ -111,16 +131,15 @@ struct us_socket_t *perform_random_operation(struct us_socket_t *s) {
 void on_wakeup(struct us_loop_t *loop) {
     // note: we expose internal functions to trigger a timeout sweep to find bugs
     extern void us_internal_timer_sweep(struct us_loop_t *loop);
-    us_internal_timer_sweep(loop);
+    
+    //us_internal_timer_sweep(loop);
 }
 
 // maybe use thse to count spurious wakeups?
 // that is, if we get tons of pre/post over and over without any events
 // that would point towards 100% cpu usage kind of bugs
 void on_pre(struct us_loop_t *loop) {
-    printf("PRE\n");
 
-    // reset a boolean here
 }
 
 void on_post(struct us_loop_t *loop) {
@@ -128,14 +147,12 @@ void on_post(struct us_loop_t *loop) {
 }
 
 struct us_socket_t *on_web_socket_writable(struct us_socket_t *s) {
-    printf("on_web_socket_writable\n");
     assume_state(s, 0);
 
     return perform_random_operation(s);
 }
 
 struct us_socket_t *on_http_socket_writable(struct us_socket_t *s) {
-    printf("on_http_socket_writable\n");
     assume_state(s, 1);
 
     return perform_random_operation(s);
@@ -145,9 +162,14 @@ struct us_socket_t *on_web_socket_close(struct us_socket_t *s, int code, void *r
     assume_state(s, 0);
 
     closed_connections++;
-    printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
+
 
     if (closed_connections == 10000) {
+        if (opened_clients != 5000) {
+            printf("VA I HELVETE STÄNGER LISTEN INNAN ÖPPNAT ALLA CLIENTS! %d\n", opened_clients);
+            exit(1);
+        }
+
         us_listen_socket_close(SSL, listen_socket);
     } else {
         return perform_random_operation(s);
@@ -158,10 +180,23 @@ struct us_socket_t *on_web_socket_close(struct us_socket_t *s, int code, void *r
 struct us_socket_t *on_http_socket_close(struct us_socket_t *s, int code, void *reason) {
     assume_state(s, 1);
 
-    closed_connections++;
-    printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
+    struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
 
+    if (hs->is_client) {
+        closed_clients++;
+    } else {
+        closed_servers++;
+    }
+
+    print_progress((double) closed_connections / 10000);
+
+    closed_connections++;
+    
     if (closed_connections == 10000) {
+        if (opened_clients != 5000) {
+            printf("VA I HELVETE STÄNGER LISTEN INNAN ÖPPNAT ALLA CLIENTS! %d\n", opened_clients);
+            exit(1);
+        }
         us_listen_socket_close(SSL, listen_socket);
     } else {
         return perform_random_operation(s);
@@ -169,6 +204,7 @@ struct us_socket_t *on_http_socket_close(struct us_socket_t *s, int code, void *
     return s;
 }
 
+/* Same as below */
 struct us_socket_t *on_web_socket_end(struct us_socket_t *s) {
     assume_state(s, 0);
 
@@ -180,8 +216,11 @@ struct us_socket_t *on_web_socket_end(struct us_socket_t *s) {
 struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
     assume_state(s, 1);
 
-    // we need to close on shutdown
+    /* Getting a FIN and we just close down */
     s = us_socket_close(SSL, s, 0, NULL);
+
+    /* I guess we do this, to extra check that following actions are ignored,
+     * we really should just return s here, but to stress the lib we do this */
     return perform_random_operation(s);
 }
 
@@ -193,7 +232,6 @@ struct us_socket_t *on_web_socket_data(struct us_socket_t *s, char *data, int le
         exit(-1);
     }
 
-    //printf("Fick data: <%.*s>\n", length, data);
     return perform_random_operation(s);
 }
 
@@ -205,7 +243,6 @@ struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int l
         exit(-1);
     }
 
-    //printf("Fick data: <%.*s>\n", length, data);
     return perform_random_operation(s);
 }
 
@@ -215,19 +252,64 @@ struct us_socket_t *on_web_socket_open(struct us_socket_t *s, int is_client, cha
     exit(-2);
 }
 
+/* This one drives progress, or well close actually drives progress but this allows sockets to close */
+struct us_socket_t *next_connection() {
+
+    if (opened_clients == 5000) {
+        printf("ERROR! next_connection called when already having made all!\n");
+        free((void *) -1);
+    }
+
+    struct us_socket_t *connection_socket;
+    if (!(connection_socket = us_socket_context_connect(SSL, http_context, "127.0.0.1", 3000, NULL, 0, sizeof(struct http_socket)))) {
+        /* This one we do not deal with, so just exit */
+        printf("FAILED TO START CONNECTION, WILL EXIT NOW\n");
+        exit(1);
+    }
+
+    /* Typically, in real applications you would want to us_socket_timeout the connection_socket
+     * to track a maximal connection timeout. However, because this test relies on perfect sync
+     * between number of server side sockets and number of client side sockets, we cannot use this
+     * feature since it is possible we send a SYN, timeout and close the client socket while
+     * the listen side accepts the SYN and opens up while the client side is missing, causing the
+     * test to fail. */
+
+    return connection_socket;
+}
+
+struct us_socket_t *on_http_socket_connect_error(struct us_socket_t *s, int code) {
+    /* On macOS it is common for a connect to end up here. Even though we have no real timeout
+     * it seems the system has a default connect timeout and we end up here. */
+    next_connection();
+
+    return s;
+}
+
+struct us_socket_t *on_web_socket_connect_error(struct us_socket_t *s, int code) {
+    printf("ERROR: WebSocket can never get connect errors!\n");
+    exit(1);
+
+    return s;
+}
+
 struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, char *ip, int ip_length) {
     struct http_socket *hs = (struct http_socket *) us_socket_ext(SSL, s);
     hs->is_http = 1;
     hs->pad_invariant = pad_should_always_be;
     hs->post_pad_invariant = pad_should_always_be;
+    hs->is_client = is_client;
 
     assume_state(s, 1);
 
     opened_connections++;
-    printf("Opened: %d\nClosed: %d\n\n", opened_connections, closed_connections);
+    if (is_client) {
+        opened_clients++;
+    } else {
+        opened_servers++;
+    }
 
-    if (is_client && opened_connections <= 10000 - 2) {
-        us_socket_context_connect(SSL, http_context, "127.0.0.1", 3000, NULL, 0, sizeof(struct http_socket));
+    if (is_client && opened_clients < 5000) {
+        next_connection();
     }
 
     return perform_random_operation(s);
@@ -240,7 +322,52 @@ struct us_socket_t *on_web_socket_timeout(struct us_socket_t *s) {
 }
 
 struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
+
+    /* If we timed out before being established, we should always cancel connecting and connect again */
+    if (!us_socket_is_established(SSL, s)) {
+
+        if (s != (struct us_socket_t *) listen_socket) {
+            /* Connect sockets are not allowed to timeout since, in this hammer_test
+             * we can get a connection server-side yet no connection client side due
+             * to sending a SYN, the closing due to timeout, yet having the server side
+             * eventually accept and open its side causing out of sync */
+            printf("CONNECTION TIMEOUT!!! CANNOT HAPPEN!!\n");
+            exit(1);
+
+            /* It would be perfectly valid to perform the following if we did not care for
+             * having number of opened sockets server side synced with number of opened sockets
+             * client side (the following is typically what you would do) */
+            us_socket_close_connecting(SSL, s);
+            next_connection();
+        }
+
+        /* Okay, so this is the listen_socket */
+        static time_t last_time;
+
+        if (last_time && time(0) - last_time < 2) {
+            printf("TIMER IS FIRING TOO FAST!!!\n");
+            exit(1);
+        }
+
+        last_time = time(0);
+
+        print_progress((double) closed_connections / 10000);
+        us_socket_timeout(SSL, s, 4);
+        return s;
+    }
+
+    /* Assume this established socket is in the state of http */
     assume_state(s, 1);
+
+    /* An established socket has timed out */
+    if (us_socket_is_shut_down(SSL, s)) {
+        /* If we have sent FIN but not received a FIN on the other side,
+         * we can actually end up stuck in FIN_WAIT_2 without seeing any
+         * progress (FIN_WAIT_2 is not a state kqueue will report as we
+         * still can get data). macOS does not seem to send FIN for closed
+         * sockets in all cases. */
+        return us_socket_close(SSL, s, 0, 0);
+    }
 
     return perform_random_operation(s);
 }
@@ -273,6 +400,7 @@ int main() {
     us_socket_context_on_close(SSL, http_context, on_http_socket_close);
     us_socket_context_on_timeout(SSL, http_context, on_http_socket_timeout);
     us_socket_context_on_end(SSL, http_context, on_http_socket_end);
+    us_socket_context_on_connect_error(SSL, http_context, on_http_socket_connect_error);
 
     websocket_context = us_create_child_socket_context(SSL, http_context, sizeof(struct http_context));
 
@@ -282,12 +410,19 @@ int main() {
     us_socket_context_on_close(SSL, websocket_context, on_web_socket_close);
     us_socket_context_on_timeout(SSL, websocket_context, on_web_socket_timeout);
     us_socket_context_on_end(SSL, websocket_context, on_web_socket_end);
+    us_socket_context_on_connect_error(SSL, websocket_context, on_web_socket_connect_error);
 
     listen_socket = us_socket_context_listen(SSL, http_context, "127.0.0.1", 3000, 0, sizeof(struct http_socket));
 
+    /* We use the listen socket as a way to check so that timeout stamps don't
+     * deviate from wallclock time - they trigger a minimum of 2 seconds apart or the test fail */
+    us_socket_timeout(SSL, (struct us_socket_t *) listen_socket, 4);
+
     if (listen_socket) {
         printf("Running hammer test\n");
-        us_socket_context_connect(SSL, http_context, "127.0.0.1", 3000, NULL, 0, sizeof(struct http_socket));
+        print_progress(0);
+        next_connection();
+
         us_loop_run(loop);
     } else {
         printf("Cannot listen to port 3000!\n");
@@ -297,5 +432,14 @@ int main() {
     us_socket_context_free(SSL, http_context);
     us_loop_free(loop);
     free(long_buffer);
-    printf("Done, shutting down now\n");
+    print_progress(1);
+    printf("\n");
+
+    if (opened_clients == 5000 && closed_clients == 5000 && opened_servers == 5000 && closed_servers == 5000) {
+        printf("ALL GOOD\n");
+        return 0;
+    } else {
+        printf("MISMATCHING! FAILED!\n");
+        return 1;
+    }
 }
