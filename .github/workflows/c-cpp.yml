@@ -17,7 +17,7 @@ jobs:
     - name: install libuv
       run: brew install libuv
     - name: build examples
-      run: CFLAGS="-I /opt/homebrew/include" LDFLAGS="/opt/homebrew/lib" WITH_LIBUV=1 make examples
+      run: WITH_LIBUV=1 make examples
     - name: run test
       run: ./hammer_test
 
