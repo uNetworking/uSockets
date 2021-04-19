@@ -28,6 +28,8 @@ void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct
     loop->data.head = 0;
     loop->data.iterator = 0;
     loop->data.closed_head = 0;
+    loop->data.low_prio_head = 0;
+    loop->data.low_prio_budget = 0;
 
     loop->data.pre_cb = pre_cb;
     loop->data.post_cb = post_cb;
@@ -127,6 +129,30 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
     }
 }
 
+/* We do not want to block the loop with tons and tons of CPU-intensive work for SSL handshakes.
+ * Spread it out during many loop iterations, prioritizing already open connections, they are far
+ * easier on CPU */
+static const int MAX_LOW_PRIO_SOCKETS_PER_LOOP_ITERATION = 5;
+
+void us_internal_handle_low_priority_sockets(struct us_loop_t *loop) {
+    struct us_internal_loop_data_t *loop_data = &loop->data;
+    struct us_socket_t *s;
+
+    loop_data->low_prio_budget = MAX_LOW_PRIO_SOCKETS_PER_LOOP_ITERATION;
+
+    for (s = loop_data->low_prio_head; s && loop_data->low_prio_budget > 0; s = loop_data->low_prio_head, loop_data->low_prio_budget--) {
+        /* Unlink this socket from the low-priority queue */
+        loop_data->low_prio_head = s->next;
+        if (s->next) s->next->prev = 0;
+        s->next = 0;
+
+        us_internal_socket_context_link(s->context, s);
+        us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) | LIBUS_SOCKET_READABLE);
+
+        s->low_prio_state = 2;
+    }
+}
+
 /* Note: Properly takes the linked list and timeout sweep into account */
 void us_internal_free_closed_sockets(struct us_loop_t *loop) {
     /* Free all closed sockets (maybe it is better to reverse order?) */
@@ -151,6 +177,7 @@ long long us_loop_iteration_number(struct us_loop_t *loop) {
 /* These may have somewhat different meaning depending on the underlying event library */
 void us_internal_loop_pre(struct us_loop_t *loop) {
     loop->data.iteration_nr++;
+    us_internal_handle_low_priority_sockets(loop);
     loop->data.pre_cb(loop);
 }
 
@@ -216,6 +243,8 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                         struct us_socket_t *s = (struct us_socket_t *) accepted_p;
 
                         s->context = listen_socket->s.context;
+                        s->timeout = 0;
+                        s->low_prio_state = 0;
 
                         /* We always use nodelay */
                         bsd_socket_nodelay(client_fd, 1);
@@ -264,10 +293,30 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
             }
 
             if (events & LIBUS_SOCKET_READABLE) {
-                /* Contexts may ignore data and postpone it to next iteration, for balancing purposes such as
-                 * when SSL handshakes take too long to finish and we only want a few of them per iteration */
-                if (s->context->ignore_data(s)) {
-                    break;
+                /* Contexts may prioritize down sockets that are currently readable, e.g. when SSL handshake has to be done.
+                 * SSL handshakes are CPU intensive, so we limit the number of handshakes per loop iteration, and move the rest
+                 * to the low-priority queue */
+                if (s->context->is_low_prio(s)) {
+                    if (s->low_prio_state == 2) {
+                        s->low_prio_state = 0; /* Socket has been delayed and now it's time to process incoming data for one iteration */
+                    } else if (s->context->loop->data.low_prio_budget > 0) {
+                        s->context->loop->data.low_prio_budget--; /* Still having budget for this iteration - do normal processing */
+                    } else {
+                        us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
+                        us_internal_socket_context_unlink(s->context, s);
+
+                        /* Link this socket to the low-priority queue - we use a LIFO queue, to prioritize newer clients that are
+                         * maybe not already timeouted - sounds unfair, but works better in real-life with smaller client-timeouts
+                         * under high load */
+                        s->prev = 0;
+                        s->next = s->context->loop->data.low_prio_head;
+                        if (s->next) s->next->prev = s;
+                        s->context->loop->data.low_prio_head = s;
+
+                        s->low_prio_state = 1;
+
+                        break;
+                    }
                 }
 
                 int length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, LIBUS_RECV_BUFFER_LENGTH, 0);

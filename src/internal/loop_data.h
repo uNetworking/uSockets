@@ -29,6 +29,8 @@ struct us_internal_loop_data_t {
     void (*pre_cb)(struct us_loop_t *);
     void (*post_cb)(struct us_loop_t *);
     struct us_socket_t *closed_head;
+    struct us_socket_t *low_prio_head;
+    int low_prio_budget;
     /* We do not care if this flips or not, it doesn't matter */
     long long iteration_nr;
 };

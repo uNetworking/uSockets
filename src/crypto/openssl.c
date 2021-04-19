@@ -35,11 +35,6 @@ void *sni_find(void *sni, const char *hostname);
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
-/* We do not want to block the loop with tons and tons of CPU-intensive work.
- * Spread it out during many loop iterations, prioritizing already open connections,
- * they are far easier on CPU */
-static const int MAX_HANDSHAKES_PER_LOOP_ITERATION = 5;
-
 struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
@@ -48,10 +43,6 @@ struct loop_ssl_data {
 
     int last_write_was_msg_more;
     int msg_more;
-
-    // these are used to throttle SSL handshakes per loop iteration
-    long long last_iteration_nr;
-    int handshake_budget;
 
     BIO *shared_rbio;
     BIO *shared_wbio;
@@ -371,10 +362,6 @@ void us_internal_init_loop_ssl_data(struct us_loop_t *loop) {
         BIO_set_data(loop_ssl_data->shared_rbio, loop_ssl_data);
         BIO_set_data(loop_ssl_data->shared_wbio, loop_ssl_data);
 
-        // reset handshake budget (doesn't matter what loop nr we start on)
-        loop_ssl_data->last_iteration_nr = 0;
-        loop_ssl_data->handshake_budget = MAX_HANDSHAKES_PER_LOOP_ITERATION;
-
         loop->data.ssl_data = loop_ssl_data;
     }
 }
@@ -395,35 +382,13 @@ void us_internal_free_loop_ssl_data(struct us_loop_t *loop) {
     }
 }
 
-// we ignore reading data for ssl sockets that are
-// in init state, if our so called budget for doing
-// so won't allow it. here we actually use
+// we throttle reading data for ssl sockets that are in init state. here we actually use
 // the kernel buffering to our advantage
-int ssl_ignore_data(struct us_internal_ssl_socket_t *s) {
-
-    // fast path just checks for init
-    if (!SSL_in_init(s->ssl)) {
-        return 0;
-    }
-
-    // this path is run for all ssl sockets that are in init and just got data event from polling
-
-    struct us_loop_t *loop = s->s.context->loop;
-    struct loop_ssl_data *loop_ssl_data = loop->data.ssl_data;
-
-    // reset handshake budget if new iteration
-    if (loop_ssl_data->last_iteration_nr != us_loop_iteration_number(loop)) {
-        loop_ssl_data->last_iteration_nr = us_loop_iteration_number(loop);
-        loop_ssl_data->handshake_budget = MAX_HANDSHAKES_PER_LOOP_ITERATION;
-    }
-
-    if (loop_ssl_data->handshake_budget) {
-        loop_ssl_data->handshake_budget--;
-        return 0;
-    }
-
-    // ignore this data event
-    return 1;
+int ssl_is_low_prio(struct us_internal_ssl_socket_t *s) {
+    /* We use SSL_in_before() instead of SSL_in_init(), because only the first step is CPU intensive, and we want to
+     * speed up the rest of connection establishing if the CPU intensive work is already done, so fully established
+     * connections increase lineary over time under high load */
+    return SSL_in_before(s->ssl);
 }
 
 /* Per-context functions */
@@ -649,7 +614,7 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     context->is_parent = 1;
 
     /* We, as parent context, may ignore data */
-    context->sc.ignore_data = (int (*)(struct us_socket_t *)) ssl_ignore_data;
+    context->sc.is_low_prio = (int (*)(struct us_socket_t *)) ssl_is_low_prio;
 
     /* Parent contexts may use SNI */
     SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
