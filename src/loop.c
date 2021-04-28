@@ -88,10 +88,10 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
         struct us_socket_context_t *context = loop_data->iterator;
 
         /* Update this context's 15-bit timestamp */
-        context->timestamp = (context->timestamp + 1) & 0x7fff;
+        context->timestamp = (context->timestamp + 1) & 0x1fff;
 
-        /* Update our 16-bit full timestamp (the needle in the haystack) */
-        unsigned short needle = 0x8000 | context->timestamp;
+        /* Update our 14-bit full timestamp (the needle in the haystack) */
+        unsigned short needle = 0x2000 | context->timestamp;
 
         /* Begin at head */
         struct us_socket_t *s = context->head;

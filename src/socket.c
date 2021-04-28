@@ -52,7 +52,7 @@ struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
 
 void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
     if (seconds) {
-        s->timeout = 0x8000 | (s->context->timestamp + (seconds >> 2));
+        s->timeout = 0x2000 | (s->context->timestamp + (seconds >> 2));
     } else {
         s->timeout = 0;
     }
