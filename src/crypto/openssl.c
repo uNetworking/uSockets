@@ -388,7 +388,7 @@ int ssl_is_low_prio(struct us_internal_ssl_socket_t *s) {
     /* We use SSL_in_before() instead of SSL_in_init(), because only the first step is CPU intensive, and we want to
      * speed up the rest of connection establishing if the CPU intensive work is already done, so fully established
      * connections increase lineary over time under high load */
-    return SSL_in_before(s->ssl);
+    return SSL_in_init(s->ssl);
 }
 
 /* Per-context functions */
