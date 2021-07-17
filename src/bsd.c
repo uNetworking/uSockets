@@ -271,6 +271,64 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
     return listenFd;
 }
 
+LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
+    struct addrinfo hints, *result;
+    memset(&hints, 0, sizeof(struct addrinfo));
+
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    char port_string[16];
+    snprintf(port_string, 16, "%d", port);
+
+    if (getaddrinfo(host, port_string, &hints, &result)) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    LIBUS_SOCKET_DESCRIPTOR listenFd = LIBUS_SOCKET_ERROR;
+    struct addrinfo *listenAddr;
+    for (struct addrinfo *a = result; a && listenFd == LIBUS_SOCKET_ERROR; a = a->ai_next) {
+        if (a->ai_family == AF_INET6) {
+            listenFd = bsd_create_socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+            listenAddr = a;
+        }
+    }
+
+    for (struct addrinfo *a = result; a && listenFd == LIBUS_SOCKET_ERROR; a = a->ai_next) {
+        if (a->ai_family == AF_INET) {
+            listenFd = bsd_create_socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+            listenAddr = a;
+        }
+    }
+
+    if (listenFd == LIBUS_SOCKET_ERROR) {
+        freeaddrinfo(result);
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    if (port != 0) {
+        /* Should this also go for UDP? */
+        int enabled = 1;
+        setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+    }
+    
+#ifdef IPV6_V6ONLY
+    int disabled = 0;
+    setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
+#endif
+
+    /* We bind here as well */
+    if (bind(listenFd, listenAddr->ai_addr, (socklen_t) listenAddr->ai_addrlen)) {
+        bsd_close_socket(listenFd);
+        freeaddrinfo(result);
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    freeaddrinfo(result);
+    return listenFd;
+}
+
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options) {
     struct addrinfo hints, *result;
     memset(&hints, 0, sizeof(struct addrinfo));

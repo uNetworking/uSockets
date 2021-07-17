@@ -57,6 +57,17 @@ struct us_timer_t;
 struct us_socket_context_t;
 struct us_loop_t;
 struct us_poll_t;
+struct us_udp_socket_t;
+
+/* Public interface for UDP sockets */
+
+/* Creates a (heavy-weight) UDP socket with a user space ring buffer. Again, this one is heavy weight and
+ * shoud be reused. One entire QUIC server can be implemented using only one single UDP socket so weight
+ * is not a concern as is the case for TCP sockets which are 1-to-1 with TCP connections. */
+WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, void (*read_cb)(struct us_udp_socket_t *));
+
+/* Binds the UDP socket to an interface and port */
+WIN32_EXPORT int us_udp_socket_bind(struct us_udp_socket_t *s, const char *hostname, unsigned int port);
 
 /* Public interfaces for timers */
 

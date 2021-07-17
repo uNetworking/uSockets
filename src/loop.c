@@ -191,7 +191,7 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
     case POLL_TYPE_CALLBACK: {
             /* Let's just do this to clear the CodeQL alert */
         #ifndef LIBUS_USE_LIBUV
-            us_internal_accept_poll_event(p);
+            //us_internal_accept_poll_event(p);
         #endif
             struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
             cb->cb(cb->cb_expects_the_loop ? (struct us_internal_callback_t *) cb->loop : (struct us_internal_callback_t *) &cb->p);
