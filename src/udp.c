@@ -36,6 +36,7 @@ WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop
     struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
+    cb->leave_poll_ready = 1;
 
     cb->cb = (void (*)(struct us_internal_callback_t *)) read_cb;
 

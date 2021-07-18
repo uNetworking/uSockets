@@ -189,11 +189,14 @@ void us_internal_loop_post(struct us_loop_t *loop) {
 void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events) {
     switch (us_internal_poll_type(p)) {
     case POLL_TYPE_CALLBACK: {
-            /* Let's just do this to clear the CodeQL alert */
-        #ifndef LIBUS_USE_LIBUV
-            //us_internal_accept_poll_event(p);
-        #endif
             struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
+            /* Timers, asyncs should accept (read), while UDP sockets should obviously not */
+            if (!cb->leave_poll_ready) {
+                /* Let's just have this macro to silence the CodeQL alert regarding empty function when using libuv */
+    #ifndef LIBUS_USE_LIBUV
+                us_internal_accept_poll_event(p);
+    #endif
+            }
             cb->cb(cb->cb_expects_the_loop ? (struct us_internal_callback_t *) cb->loop : (struct us_internal_callback_t *) &cb->p);
         }
         break;

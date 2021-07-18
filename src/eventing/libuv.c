@@ -209,7 +209,8 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + sizeof(uv_timer_t) + ext_size);
 
     cb->loop = loop;
-    cb->cb_expects_the_loop = 0;
+    cb->cb_expects_the_loop = 0; // never read?
+    cb->leave_poll_ready = 0; // never read?
 
     uv_timer_t *uv_timer = (uv_timer_t *) (cb + 1);
     uv_timer_init(loop->uv_loop, uv_timer);
