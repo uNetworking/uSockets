@@ -24,10 +24,12 @@
 #define _GNU_SOURCE
 #include <sys/socket.h>
 
-// samma buffer för receive och send, samma get, set?
-
-// en buffer med 16 paket - getta vilket du vill efter ID
-// sätt vilkt du vill med id?
+/* Internal structure of packet buffer */
+struct us_internal_udp_packet_buffer {
+    struct mmsghdr msgvec[512];
+    struct iovec iov[512];
+    struct sockaddr_storage addr[512];
+};
 
 WIN32_EXPORT int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, int index) {
     return 0;
@@ -38,31 +40,27 @@ WIN32_EXPORT char *us_udp_packet_buffer_peer(struct us_udp_packet_buffer_t *buf,
 }
 
 WIN32_EXPORT char *us_udp_packet_buffer_payload(struct us_udp_packet_buffer_t *buf, int index) {
-
     return ((struct mmsghdr *) buf)[index].msg_hdr.msg_iov[0].iov_base;
-
-/*
-    return (char *) msgvec[i].msg_hdr.msg_iov[0].iov_base;
-
-                printf("Pakcet length: %d\n", msgvec[i].msg_len);
-
-            for (int k = 0; k < msgvec[i].msg_len; k++) {
-                printf("%c", ((char *) msgvec[i].msg_hdr.msg_iov[0].iov_base)[k]);
-            }
-*/
 }
 
 WIN32_EXPORT int us_udp_packet_buffer_payload_length(struct us_udp_packet_buffer_t *buf, int index) {
     return ((struct mmsghdr *) buf)[index].msg_len;
 }
 
-WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf) {
-
-        printf("UDP socket is readable!\n");
+WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf) {
 
     int fd = us_poll_fd((struct us_poll_t *) s);
 
-    printf("fd: %d\n", fd);
+
+    int ret = sendmmsg(fd, (struct mmsghdr *) buf, 1, 0);
+
+    return ret;
+}
+
+WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf) {
+
+
+    int fd = us_poll_fd((struct us_poll_t *) s);
 
     int ret = recvmmsg(fd, (struct mmsghdr *) buf, 16, 0, 0);
 
@@ -72,35 +70,19 @@ WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_
 
 WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
 
+    /* Allocate 16kb times 512 */
+    struct us_internal_udp_packet_buffer *b = malloc(sizeof(struct us_internal_udp_packet_buffer) + 16 * 1024 * 512);
 
+    for (int n = 0; n < 16; ++n) {
 
+        b->iov[n].iov_base = &((char *) (b + 1))[n * 1024 * 16];
+        b->iov[n].iov_len = 1024 * 16;
 
+        b->msgvec[n].msg_hdr = (struct msghdr) {
+            .msg_name       = &b->addr,
+            .msg_namelen    = sizeof (struct sockaddr_storage),
 
-
-    static struct mmsghdr msgvec[16];
-
-    //struct sockaddr_storage name;
-
-    struct bsd_addr_t name;
-
-
-
-    static struct iovec iov[16];
-    
-
-    /* Initialize mmsghdrs */
-    for (int n = 0; n < 16; ++n)
-    {
-
-        iov[n].iov_base = malloc(1024 * 16);
-        iov[n].iov_len = 1024 * 16;
-
-
-        msgvec[n].msg_hdr = (struct msghdr) {
-            .msg_name       = &name,
-            .msg_namelen    = sizeof (name),
-
-            .msg_iov        = &iov[n],
+            .msg_iov        = &b->iov[n],
             .msg_iovlen     = 1,
 
             .msg_control    = 0,
@@ -108,17 +90,8 @@ WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
         };
     }
 
-
-
-
-    return (struct us_udp_packet_buffer_t *) msgvec;
-
-
+    return (struct us_udp_packet_buffer_t *) b;
 }
-    // us_udp_socket_receive(socket, buffer);
-
-    // us_udp_socket_get_packet(buffer, id);
-
 
 WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, void (*read_cb)(struct us_udp_socket_t *)) {
     
