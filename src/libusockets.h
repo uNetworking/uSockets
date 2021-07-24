@@ -75,6 +75,8 @@ WIN32_EXPORT int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, in
 /* Receives a set of packets into specified packet buffer */
 WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf);
 
+WIN32_EXPORT void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, void *payload, int length, void *peer_addr);
+
 WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int num);
 
 /* Allocates a packet buffer that is reuable per thread. Mutated by us_udp_socket_receive. */

@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define _GNU_SOURCE
 #include <sys/socket.h>
@@ -67,6 +68,48 @@ WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_
     return ret;
 }
 
+void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, void *payload, int length, void *peer_addr) {
+        // struct us_udp_packet_t
+
+        // copy whatever the payload is, to send buffer
+
+
+        
+
+
+        struct mmsghdr *ss = (struct mmsghdr *) send_buf;
+
+
+        // send buffern ska packa utgående packet tätt, inte i per-16kb, den ska alltså inte ha en fix längd
+
+
+        // en sändbuffer ska alltså ha offset i byte och en 
+
+
+        // copy the peer address
+        memcpy(ss[index].msg_hdr.msg_name, peer_addr, ss[index].msg_hdr.msg_namelen);
+
+        // move iov_base packed
+
+        // copy the payload
+        ss[index].msg_hdr.msg_iov->iov_len = length;
+
+
+
+        // copy to base
+        memcpy(ss[index].msg_hdr.msg_iov->iov_base, payload, length);
+
+
+        //ss->msg_hdr.msg_iov->iov_base
+
+        //memcpy(ss->msg_hdr.msg_iov->iov_base)
+
+
+        //ss->msg_len = 12; - denna håller hur mycket av header som har sänts, kan inte sättas av oss
+        
+
+
+}
 
 WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
 
