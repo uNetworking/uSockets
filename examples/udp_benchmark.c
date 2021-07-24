@@ -29,45 +29,23 @@ void on_post(struct us_loop_t *loop) {
     // us_udp_socket_send(s, send_buf, 3);
 }
 
-
+// håller en buffer efter detta (16k * 512)
 struct us_internal_udp_packet_buffer {
     struct mmsghdr msgvec[512];
     struct iovec iov[512];
     struct sockaddr_storage addr[512];
 };
 
-
-void on_server_read(struct us_udp_socket_t *s) {
-
-
-    // returns how many packets
-    int packets = us_udp_socket_receive(s, buf);
-
-    printf("Packets: %d\n", packets);
-
-    for (int i = 0; i < packets; i++) {
-
-        // payload, length, peer addr (behöver inte veta längd bara void), local addr (vet redan), cong
-        char *payload = us_udp_packet_buffer_payload(buf, i);
-        int length = us_udp_packet_buffer_payload_length(buf, i);
-        int ecn = us_udp_packet_buffer_ecn(buf, i);
-
-        // viktig
-        void *peer_addr = us_udp_packet_buffer_peer(buf, i);
-        struct sockaddr *addr = peer_addr;
-        printf("Family: %d av %d\n", addr->sa_family, AF_INET);
-
-
-        for (int k = 0; k < length; k++) {
-            printf("%c", payload[k]);
-        }
-        printf("\n");
-
+void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, void *payload, int length, void *peer_addr) {
         // struct us_udp_packet_t
 
         // copy whatever the payload is, to send buffer
 
-        struct mmsghdr *ss = send_buf;
+
+        
+
+
+        struct mmsghdr *ss = (struct mmsghdr *) send_buf;
 
 
         // send buffern ska packa utgående packet tätt, inte i per-16kb, den ska alltså inte ha en fix längd
@@ -79,18 +57,87 @@ void on_server_read(struct us_udp_socket_t *s) {
         // copy the peer address
         memcpy(ss->msg_hdr.msg_name, peer_addr, ss->msg_hdr.msg_namelen);
 
+        // move iov_base packed
+
+        // copy the payload
+        ss->msg_hdr.msg_iov->iov_len = length;
+
+
+
+        // copy to base
+        memcpy(ss->msg_hdr.msg_iov->iov_base, payload, length);
+
+
+        //ss->msg_hdr.msg_iov->iov_base
+
+        //memcpy(ss->msg_hdr.msg_iov->iov_base)
+
+
         //ss->msg_len = 12; - denna håller hur mycket av header som har sänts, kan inte sättas av oss
         
 
-        int sent = us_udp_socket_send(s, send_buf);
-        printf("Sent: %d\n", sent);
 
+}
+
+#include <netinet/in.h>
+
+void on_client_read(struct us_udp_socket_t *s) {
+    printf("on client read\n");
+
+    int packets = us_udp_socket_receive(s, buf);
+
+    printf("Packets: %d\n", packets);
+
+    for (int i = 0; i < packets; i++) {
 
     }
+}
 
-    // us_create_udp_send_buffer();
-    // us_udp_socket_send(socket, buffer);
-    // us_udp_send_buffer_write(buffer, payload, len);
+int messages = 0;
+
+void timer_cb(struct us_timer_t *timer) {
+    printf("Messages per second (either side!): %d\n", messages);
+    messages = 0;
+}
+
+void on_server_read(struct us_udp_socket_t *s) {
+
+
+    messages++;
+
+
+    // returns how many packets
+    int packets = us_udp_socket_receive(s, buf);
+
+    //printf("Packets: %d\n", packets);
+
+    for (int i = 0; i < packets; i++) {
+
+        // payload, length, peer addr (behöver inte veta längd bara void), local addr (vet redan), cong
+        char *payload = us_udp_packet_buffer_payload(buf, i);
+        int length = us_udp_packet_buffer_payload_length(buf, i);
+        int ecn = us_udp_packet_buffer_ecn(buf, i);
+
+        // viktig
+        void *peer_addr = us_udp_packet_buffer_peer(buf, i);
+        //struct sockaddr_in *addr = peer_addr;
+        //printf("Family: %d av %d\n", addr->sin_family, AF_INET);
+
+
+        //printf("ip = %u, port = %hu\n", addr->sin_addr.s_addr, htons(addr->sin_port));
+
+        //addr->sin_addr.s_addr = 16777343;
+
+        //for (int k = 0; k < length; k++) {
+            //printf("%c", payload[k]);
+        //}
+        //printf("\n");
+
+
+        us_udp_buffer_set_packet_payload(send_buf, 0, payload, length, peer_addr);
+        int sent = us_udp_socket_send(s, send_buf);
+        //printf("Sent: %d\n", sent);
+    }
 }
 
 int main() {
@@ -102,12 +149,25 @@ int main() {
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     /* Create two UDP sockets and bind them to their respective ports */
-    struct us_udp_socket_t *server = us_create_udp_socket(loop, on_server_read);
-    //us_udp_socket_bind(server, "127.0.0.1", 5678);
-
-
-
+    struct us_udp_socket_t *server = us_create_udp_socket(loop, on_server_read, 5678);
     printf("Server socket: %p\n", server);
+
+    struct us_udp_socket_t *client = us_create_udp_socket(loop, on_server_read, 5679);
+
+    /* Send first packet from client to server */
+    struct sockaddr_storage storage;
+    struct sockaddr_in *addr = (struct sockaddr_in *) &storage;
+
+    addr->sin_addr.s_addr = 16777343;
+    addr->sin_port = htons(5678);
+
+    us_udp_buffer_set_packet_payload(send_buf, 0, "Hello UDP!", 10, &storage);
+    int sent = us_udp_socket_send(client, send_buf);
+    printf("Sent: %d\n", sent);
+
+    /* Start a counting timer */
+    struct us_timer_t *timer = us_create_timer(loop, 0, 0);
+    us_timer_set(timer, timer_cb, 1000, 1000);
 
     /* Send packets from one UDP socket to the next, starting the loop */
     us_loop_run(loop);

@@ -93,10 +93,10 @@ WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
     return (struct us_udp_packet_buffer_t *) b;
 }
 
-WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, void (*read_cb)(struct us_udp_socket_t *)) {
+WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, void (*read_cb)(struct us_udp_socket_t *), unsigned short port) {
     
     
-    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket("127.0.0.1", 5678);
+    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket("127.0.0.1", port);
 
     printf("UDP: %d\n", fd);
 
