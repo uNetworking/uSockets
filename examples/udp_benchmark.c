@@ -55,17 +55,17 @@ void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, i
 
 
         // copy the peer address
-        memcpy(ss->msg_hdr.msg_name, peer_addr, ss->msg_hdr.msg_namelen);
+        memcpy(ss[index].msg_hdr.msg_name, peer_addr, ss[index].msg_hdr.msg_namelen);
 
         // move iov_base packed
 
         // copy the payload
-        ss->msg_hdr.msg_iov->iov_len = length;
+        ss[index].msg_hdr.msg_iov->iov_len = length;
 
 
 
         // copy to base
-        memcpy(ss->msg_hdr.msg_iov->iov_base, payload, length);
+        memcpy(ss[index].msg_hdr.msg_iov->iov_base, payload, length);
 
 
         //ss->msg_hdr.msg_iov->iov_base
@@ -103,7 +103,7 @@ void timer_cb(struct us_timer_t *timer) {
 void on_server_read(struct us_udp_socket_t *s) {
 
 
-    messages++;
+
 
 
     // returns how many packets
@@ -134,10 +134,16 @@ void on_server_read(struct us_udp_socket_t *s) {
         //printf("\n");
 
 
-        us_udp_buffer_set_packet_payload(send_buf, 0, payload, length, peer_addr);
-        int sent = us_udp_socket_send(s, send_buf);
+        us_udp_buffer_set_packet_payload(send_buf, i, payload, length, peer_addr);
+
         //printf("Sent: %d\n", sent);
+
+
+        messages++;
     }
+
+    int sent = us_udp_socket_send(s, send_buf, packets);
+    //printf("Sent: %d\n", sent);
 }
 
 int main() {
@@ -160,9 +166,14 @@ int main() {
 
     addr->sin_addr.s_addr = 16777343;
     addr->sin_port = htons(5678);
+    addr->sin_family = AF_INET;
 
-    us_udp_buffer_set_packet_payload(send_buf, 0, "Hello UDP!", 10, &storage);
-    int sent = us_udp_socket_send(client, send_buf);
+    for (int i = 0; i < 100; i++) {
+        us_udp_buffer_set_packet_payload(send_buf, i, "Hello UDP!", 10, &storage);
+    }
+
+
+    int sent = us_udp_socket_send(client, send_buf, 100); // buffer should know how many it holds!
     printf("Sent: %d\n", sent);
 
     /* Start a counting timer */

@@ -47,12 +47,12 @@ WIN32_EXPORT int us_udp_packet_buffer_payload_length(struct us_udp_packet_buffer
     return ((struct mmsghdr *) buf)[index].msg_len;
 }
 
-WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf) {
+WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int num) {
 
     int fd = us_poll_fd((struct us_poll_t *) s);
 
 
-    int ret = sendmmsg(fd, (struct mmsghdr *) buf, 1, 0);
+    int ret = sendmmsg(fd, (struct mmsghdr *) buf, num, 0);
 
     return ret;
 }
@@ -62,7 +62,7 @@ WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_
 
     int fd = us_poll_fd((struct us_poll_t *) s);
 
-    int ret = recvmmsg(fd, (struct mmsghdr *) buf, 16, 0, 0);
+    int ret = recvmmsg(fd, (struct mmsghdr *) buf, 512, 0, 0);
 
     return ret;
 }
@@ -73,7 +73,7 @@ WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
     /* Allocate 16kb times 512 */
     struct us_internal_udp_packet_buffer *b = malloc(sizeof(struct us_internal_udp_packet_buffer) + 16 * 1024 * 512);
 
-    for (int n = 0; n < 16; ++n) {
+    for (int n = 0; n < 512; ++n) {
 
         b->iov[n].iov_base = &((char *) (b + 1))[n * 1024 * 16];
         b->iov[n].iov_len = 1024 * 16;
