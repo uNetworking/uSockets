@@ -49,7 +49,7 @@ void on_server_read(struct us_udp_socket_t *s) {
         int ecn = us_udp_packet_buffer_ecn(buf, i);
         void *peer_addr = us_udp_packet_buffer_peer(buf, i);
 
-        us_udp_buffer_set_packet_payload(send_buf, i, payload, length, peer_addr);
+        us_udp_buffer_set_packet_payload(send_buf, i, 0, payload, length, peer_addr);
         messages++;
     }
 
@@ -80,7 +80,7 @@ int main() {
     addr->sin_family = AF_INET;
 
     for (int i = 0; i < 100; i++) {
-        us_udp_buffer_set_packet_payload(send_buf, i, "Hello UDP!", 10, &storage);
+        us_udp_buffer_set_packet_payload(send_buf, i, 0, "Hello UDP!", 10, &storage);
     }
 
 
