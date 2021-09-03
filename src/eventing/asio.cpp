@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+extern "C" {
+
+#include "libusockets.h"
+#include "internal/internal.h"
+
+}
+
 #ifdef LIBUS_USE_ASIO
 
 #include <boost/asio.hpp>
@@ -26,8 +33,8 @@ int polls; // temporary solution keeping track of outstanding work
 
 extern "C" {
 
-#include "libusockets.h"
-#include "internal/internal.h"
+//#include "libusockets.h"
+//#include "internal/internal.h"
 #include <stdlib.h>
 
 // define a timer internally as something that inherits from callback_t
@@ -58,13 +65,15 @@ void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type
     boost_block->assign(fd);
     p->poll_type = poll_type;
     p->events = 0;
+
+    p->fd = fd; //apparently we access fd after close
 }
 
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
     struct boost_block_poll_t *boost_block = (struct boost_block_poll_t *) p->boost_block;
 
-    //boost_block->release();
-    delete boost_block; // because of post mortem calls we need to have a weak_ptr to this block
+    //boost_block->nr++;
+    delete boost_block; // because of post mortem calls we need to have a weak_ptr to this block    
     free(p);
 }
 
@@ -174,7 +183,7 @@ void us_poll_stop(struct us_poll_t *p, struct us_loop_t *loop) {
     struct boost_block_poll_t *boost_block = (struct boost_block_poll_t *) p->boost_block;
 
     boost_block->nr++;
-    boost_block->cancel();
+    boost_block->release();
 }
 
 int us_poll_events(struct us_poll_t *p) {
@@ -195,6 +204,14 @@ void us_internal_poll_set_type(struct us_poll_t *p, int poll_type) {
 
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
     struct boost_block_poll_t *boost_block = (struct boost_block_poll_t *) p->boost_block;
+
+
+    return p->fd;
+
+    if (boost_block->native_handle() == -1) {
+        printf("cannot happen!\n");
+        exit(1337);
+    }
 
     return boost_block->native_handle();
 }
@@ -222,7 +239,13 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
 
 // based on if this was default loop or not
 void us_loop_free(struct us_loop_t *loop) {
+    us_internal_loop_data_free(loop);
 
+    if (!loop->is_default) {
+        delete (boost::asio::io_context *) loop->io;
+    }
+
+    free(loop);
 }
 
 void us_loop_run(struct us_loop_t *loop) {
@@ -240,13 +263,13 @@ void us_loop_run(struct us_loop_t *loop) {
         if (!num) {
             break;
         }
-        /*
+        
         for (int i = 0; true; i++) {
             num = ((boost::asio::io_context *) loop->io)->poll_one();
             if (!num || i == 999) {
                 break;
             }
-        }*/
+        }
         us_internal_loop_post(loop);
 
         // here we check if our timer is the only poll in the event loop - how?
@@ -277,12 +300,13 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 
     struct boost_timer *cb = (struct boost_timer *) malloc(sizeof(struct boost_timer) + ext_size);
 
+    // inplace construct the timer on this callback_t
+    new (cb) boost_timer((boost::asio::io_context *)loop->io);
+
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
     cb->p.poll_type = POLL_TYPE_CALLBACK; // this is missing from libuv flow
 
-    // inplace construct the timer on this callback_t
-    new (cb) boost_timer((boost::asio::io_context *)loop->io);
 
     if (fallthrough) {
         //uv_unref((uv_handle_t *) uv_timer);
@@ -296,7 +320,11 @@ void *us_timer_ext(struct us_timer_t *timer) {
 }
 
 void us_timer_close(struct us_timer_t *t) {
-
+    
+    // needs proper close with weak_ptr
+    ((boost_timer *) t)->timer.cancel();
+    ((boost_timer *) t)->~boost_timer();
+    free(t);
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
@@ -316,7 +344,8 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 
                 us_timer_set(t, cb, ms, repeat_ms);
             }
-            us_internal_dispatch_ready_poll((struct us_poll_t *)t, 0, 0);
+            //cb(t);
+            us_internal_dispatch_ready_poll((struct us_poll_t *)t, 0, LIBUS_SOCKET_READABLE);
         }
     });
 

@@ -50,7 +50,7 @@ struct us_poll_t {
     //void *s;
     void *boost_block;
 
-    //LIBUS_SOCKET_DESCRIPTOR fd;
+    LIBUS_SOCKET_DESCRIPTOR fd;
     unsigned char poll_type;
     int events;//part of poll_type
 };

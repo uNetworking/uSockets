@@ -24,8 +24,8 @@ endif
 # WITH_ASIO builds with boot asio event-loop
 ifeq ($(WITH_ASIO),1)
 	override CFLAGS += -DLIBUS_USE_ASIO
-	override LDFLAGS += -lc++
-	override CXXFLAGS += -DLIBUS_USE_ASIO
+	override LDFLAGS += -lstdc++ -lpthread
+	override CXXFLAGS += -pthread -DLIBUS_USE_ASIO
 endif
 
 # WITH_GCD=1 builds with libdispatch as event-loop

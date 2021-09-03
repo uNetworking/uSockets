@@ -19,6 +19,7 @@
 #include "internal/internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /* Shared with SSL */
 
