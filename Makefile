@@ -21,6 +21,13 @@ ifeq ($(WITH_LIBUV),1)
 	override LDFLAGS += -luv
 endif
 
+# WITH_ASIO builds with boot asio event-loop
+ifeq ($(WITH_ASIO),1)
+	override CFLAGS += -DLIBUS_USE_ASIO
+	override LDFLAGS += -lc++
+	override CXXFLAGS += -DLIBUS_USE_ASIO
+endif
+
 # WITH_GCD=1 builds with libdispatch as event-loop
 ifeq ($(WITH_GCD),1)
 	override CFLAGS += -DLIBUS_USE_GCD
@@ -40,6 +47,11 @@ override LDFLAGS += uSockets.a
 default:
 	rm -f *.o
 	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
+# Also link in Boost Asio support
+ifeq ($(WITH_ASIO),1)
+	$(CXX) $(CXXFLAGS) -Isrc -std=c++14 -flto -O3 -c src/eventing/asio.cpp
+endif
+
 # For now we do rely on C++17 for OpenSSL support but we will be porting this work to C11
 ifeq ($(WITH_OPENSSL),1)
 	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
