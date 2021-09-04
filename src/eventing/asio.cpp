@@ -238,13 +238,17 @@ void us_loop_free(struct us_loop_t *loop) {
     free(loop);
 }
 
+// we need fallthrough to correspond to our polls
+// therefore we exit when our polls are 0
+// if third party asio server wants to keep the loop running
+// they have to use a guard such as a us_timer_t
 void us_loop_run(struct us_loop_t *loop) {
     us_loop_integrate(loop);
 
     // this way of running adds one extra epoll_wait per event loop iteration
     // but does not add per-poll overhead. besides, asio is sprinkled with inefficiencies
     // everywhere so it's negligible for what it solves (we must have pre, post callbacks)
-    while (true) {
+    while (polls) {
         us_internal_loop_pre(loop);
         size_t num = ((boost::asio::io_context *) loop->io)->run_one();
         if (!num) {
@@ -412,6 +416,7 @@ void us_internal_async_wakeup(struct us_internal_async *a) {
     boost::asio::io_context *io = (boost::asio::io_context *)cb->loop->io;
     cb->m.unlock();
 
+    // should increase and decrease polls (again, loop mutex)
     io->post([weakBoostBlock = std::weak_ptr<boost_async>(cb->isValid)]() {
 
         // was the async deleted before we came here?
