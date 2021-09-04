@@ -37,6 +37,9 @@
 #ifdef LIBUS_USE_GCD
 #include "internal/eventing/gcd.h"
 #endif
+#ifdef LIBUS_USE_ASIO
+#include "internal/eventing/asio.h"
+#endif
 
 /* Poll type and what it polls for */
 enum {
