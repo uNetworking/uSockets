@@ -33,7 +33,9 @@
 #define SETSOCKOPT_PTR_TYPE const char *
 #define LIBUS_SOCKET_ERROR INVALID_SOCKET
 #else
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 /* For socklen_t */
 #include <sys/socket.h>
 #define SETSOCKOPT_PTR_TYPE int *

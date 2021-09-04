@@ -16,10 +16,9 @@
  */
 
 extern "C" {
-
-#include "libusockets.h"
-#include "internal/internal.h"
-
+    #include "libusockets.h"
+    #include "internal/internal.h"
+    #include <stdlib.h>
 }
 
 #ifdef LIBUS_USE_ASIO
@@ -29,21 +28,19 @@ extern "C" {
 #include <mutex>
 #include <memory>
 
-int polls; // temporary solution keeping track of outstanding work
-
-extern "C" {
-
-//#include "libusockets.h"
-//#include "internal/internal.h"
-#include <stdlib.h>
+// setting polls to 1 disables fallthrough
+int polls = 0; // temporary solution keeping track of outstanding work
 
 // define a timer internally as something that inherits from callback_t
 // us_timer_t is convertible to this one
 struct boost_timer : us_internal_callback_t {
     boost::asio::deadline_timer timer;
+    std::shared_ptr<boost_timer> isValid;
+
+    unsigned char nr = 0;
 
     boost_timer(boost::asio::io_context *io) : timer(*io) {
-        std::cout << "constructing timer" << std::endl;
+        isValid.reset(this, [](boost_timer *t) {});
     }
 };
 
@@ -59,6 +56,8 @@ struct boost_block_poll_t : boost::asio::posix::descriptor {
     struct us_poll_t *p;
 };
 
+extern "C" {
+
 // poll
 void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type) {
     struct boost_block_poll_t *boost_block = (struct boost_block_poll_t *) p->boost_block;
@@ -72,8 +71,7 @@ void us_poll_init(struct us_poll_t *p, LIBUS_SOCKET_DESCRIPTOR fd, int poll_type
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
     struct boost_block_poll_t *boost_block = (struct boost_block_poll_t *) p->boost_block;
 
-    //boost_block->nr++;
-    delete boost_block; // because of post mortem calls we need to have a weak_ptr to this block    
+    delete boost_block;
     free(p);
 }
 
@@ -89,7 +87,6 @@ void poll_for_error(struct boost_block_poll_t *boost_block) {
             if (auto observe = weakBoostBlock.lock()) {
                 boost_block = observe.get();
             } else {
-                std::cout << "poll for error post mortem" << std::endl;
                 return;
             }
 
@@ -208,19 +205,12 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
 
     return p->fd;
 
-    if (boost_block->native_handle() == -1) {
-        printf("cannot happen!\n");
-        exit(1337);
-    }
-
-    return boost_block->native_handle();
+    //return boost_block->native_handle();
 }
 
 // if we get an io_context ptr as hint, we use it
 // otherwise we create a new one for only us
 struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
-    std::cout << "creating loop" << std::endl;
-
     struct us_loop_t *loop = (struct us_loop_t *) malloc(sizeof(struct us_loop_t) + ext_size);
 
     loop->io = hint ? hint : new boost::asio::io_context();
@@ -249,14 +239,11 @@ void us_loop_free(struct us_loop_t *loop) {
 }
 
 void us_loop_run(struct us_loop_t *loop) {
-    //std::cout << "us_loop_run" << std::endl;
-
     us_loop_integrate(loop);
 
-    //((boost::asio::io_context *) loop->io)->run();
-    //return;
-
-    // this kind of running produces identical syscalls as just run, so it is fine
+    // this way of running adds one extra epoll_wait per event loop iteration
+    // but does not add per-poll overhead. besides, asio is sprinkled with inefficiencies
+    // everywhere so it's negligible for what it solves (we must have pre, post callbacks)
     while (true) {
         us_internal_loop_pre(loop);
         size_t num = ((boost::asio::io_context *) loop->io)->run_one();
@@ -271,9 +258,6 @@ void us_loop_run(struct us_loop_t *loop) {
             }
         }
         us_internal_loop_post(loop);
-
-        // here we check if our timer is the only poll in the event loop - how?
-
     }
 }
 
@@ -296,8 +280,6 @@ struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, un
 
 // timer
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    //std::cout << "creating timer" << std::endl;
-
     struct boost_timer *cb = (struct boost_timer *) malloc(sizeof(struct boost_timer) + ext_size);
 
     // inplace construct the timer on this callback_t
@@ -306,7 +288,6 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
     cb->p.poll_type = POLL_TYPE_CALLBACK; // this is missing from libuv flow
-
 
     if (fallthrough) {
         //uv_unref((uv_handle_t *) uv_timer);
@@ -320,35 +301,58 @@ void *us_timer_ext(struct us_timer_t *timer) {
 }
 
 void us_timer_close(struct us_timer_t *t) {
-    
-    // needs proper close with weak_ptr
     ((boost_timer *) t)->timer.cancel();
     ((boost_timer *) t)->~boost_timer();
     free(t);
 }
 
-void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
-    struct boost_timer *b_timer = (struct boost_timer *) t;
-
-    b_timer->cb = (void(*)(struct us_internal_callback_t *)) cb;
-
-    b_timer->timer.expires_from_now(boost::posix_time::milliseconds(ms)); // timer.expiry() + 
-    b_timer->timer.async_wait([t, cb, ms, repeat_ms](const boost::system::error_code &ec) {
+void poll_for_timeout(struct boost_timer *b_timer, int repeat_ms) {
+    b_timer->timer.async_wait([nr = b_timer->nr, repeat_ms, weakBoostBlock = std::weak_ptr<boost_timer>(b_timer->isValid)](const boost::system::error_code &ec) {
         if (ec != boost::asio::error::operation_aborted) {
+
+            struct boost_timer *b_timer;
+            if (auto observe = weakBoostBlock.lock()) {
+                b_timer = observe.get();
+            } else {
+                return;
+            }
+
+            if (nr != b_timer->nr) {
+                return;
+            }
+
             if (repeat_ms) {
 
                 if (!polls) {
-                    //std::cout << "we own no polls" << std::endl;
+                    // we do fallthrough if no other polling
+                    // this is problematic if WE fallthrough
+                    // but other parts do not
+                    // that causes timeouts to stop working
+                    // we should really ask the executor if there is work
+                    // if there is, then continue ticking until there isn't
                     return;
                 }
 
-                us_timer_set(t, cb, ms, repeat_ms);
+                b_timer->timer.expires_at(b_timer->timer.expires_at() + boost::posix_time::milliseconds(repeat_ms));
+                poll_for_timeout(b_timer, repeat_ms);
             }
-            //cb(t);
-            us_internal_dispatch_ready_poll((struct us_poll_t *)t, 0, LIBUS_SOCKET_READABLE);
+            us_internal_dispatch_ready_poll((struct us_poll_t *)b_timer, 0, LIBUS_SOCKET_READABLE);
         }
     });
+}
 
+void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
+    struct boost_timer *b_timer = (struct boost_timer *) t;
+
+    if (!ms) {
+        b_timer->nr++;
+        b_timer->timer.cancel();
+    } else {
+        b_timer->cb = (void(*)(struct us_internal_callback_t *)) cb;
+
+        b_timer->timer.expires_from_now(boost::posix_time::milliseconds(ms));
+        poll_for_timeout(b_timer, repeat_ms);
+    }
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
@@ -360,6 +364,11 @@ struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
 // async (internal only) probably map to io_context::post
 struct boost_async : us_internal_callback_t {
     std::mutex m;
+    std::shared_ptr<boost_async> isValid;
+
+    boost_async() {
+        isValid.reset(this, [](boost_async *a) {});
+    }
 };
 
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
@@ -370,7 +379,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 
     // these properties are accessed from another thread when wakeup
     cb->m.lock();
-    cb->loop = loop;
+    cb->loop = loop; // the only lock needed
     cb->cb_expects_the_loop = 0;
     cb->p.poll_type = POLL_TYPE_CALLBACK; // this is missing from libuv flow
     cb->m.unlock();
@@ -390,32 +399,32 @@ void us_internal_async_close(struct us_internal_async *a) {
 void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_internal_async *)) {
     struct boost_async *internal_cb = (struct boost_async *) a;
 
-    //internal_cb->m.lock();
     internal_cb->cb = (void(*)(struct us_internal_callback_t *)) cb;
-    //internal_cb->m.unlock();
 }
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
-    //std::cout << "us_internal_async_wakeup not implemented" << std::endl;
-
     struct boost_async *cb = (struct boost_async *) a;
 
-    // snarare loopens mutex som locks
-
+    // this doesn't really guarantee loop.io being visible here
+    // really we should use the loops mutex, and have the loops constructor
+    // use its own mutex, then we are guaranteed to have visibility here
     cb->m.lock();
-    ((boost::asio::io_context *) cb->loop->io)->post([cb]() {
+    boost::asio::io_context *io = (boost::asio::io_context *)cb->loop->io;
+    cb->m.unlock();
 
-        // check if our weak_ptr is expired from the close/free above
+    io->post([weakBoostBlock = std::weak_ptr<boost_async>(cb->isValid)]() {
 
-        //std::cout << "calling async cb now" << std::endl;
+        // was the async deleted before we came here?
+        struct boost_async *cb;
+        if (auto observe = weakBoostBlock.lock()) {
+            cb = observe.get();
+        } else {
+            return;
+        }
 
         us_internal_dispatch_ready_poll((struct us_poll_t *) cb, 0, 0);
 
-        cb->m.lock();
-        //cb->cb(cb);// = (void(*)(struct us_internal_callback_t *)) cb;
-        cb->m.unlock();
     });
-    cb->m.unlock();
 }
 
 }
