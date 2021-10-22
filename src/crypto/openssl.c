@@ -17,6 +17,10 @@
 
 #ifdef LIBUS_USE_OPENSSL
 
+// DH_free is deprected in 3.0 so we keep using 1.1 for now
+#define OPENSSL_CONFIGURED_API 0x10100000L
+#define OPENSSL_API_COMPAT 0x10100000L
+
 /* These are in sni_tree.cpp */
 void *sni_new();
 void sni_free(void *sni, void(*cb)(void *));
@@ -34,6 +38,7 @@ void *sni_find(void *sni, const char *hostname);
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/dh.h>
 
 struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
