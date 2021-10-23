@@ -1,17 +1,25 @@
-# WITH_OPENSSL=1 enables OpenSSL 1.1+ support or BoringSSL
-# For now we need to link with C++ for OpenSSL support, but should be removed with time
-ifeq ($(WITH_OPENSSL),1)
-	override CFLAGS += -DLIBUS_USE_OPENSSL
+# WITH_BORINGSSL=1 enables BoringSSL support, linked statically (preferred over OpenSSL)
+# You need to call "make boringssl" before
+ifeq ($(WITH_BORINGSSL),1)
+	override CFLAGS += -Iboringssl/include -pthread -DLIBUS_USE_OPENSSL
 	# With problems on macOS, make sure to pass needed LDFLAGS required to find these
-	override LDFLAGS += -lssl -lcrypto -lstdc++
+	override LDFLAGS += -pthread boringssl/build/ssl/libssl.a boringssl/build/crypto/libcrypto.a -lstdc++
 else
-	# WITH_WOLFSSL=1 enables WolfSSL 4.2.0 support (mutually exclusive with OpenSSL)
-	ifeq ($(WITH_WOLFSSL),1)
-		# todo: change these
-		override CFLAGS += -DLIBUS_USE_WOLFSSL -I/usr/local/include
-		override LDFLAGS += -L/usr/local/lib -lwolfssl
+	# WITH_OPENSSL=1 enables OpenSSL 1.1+ support
+	# For now we need to link with C++ for OpenSSL support, but should be removed with time
+	ifeq ($(WITH_OPENSSL),1)
+		override CFLAGS += -DLIBUS_USE_OPENSSL
+		# With problems on macOS, make sure to pass needed LDFLAGS required to find these
+		override LDFLAGS += -lssl -lcrypto -lstdc++
 	else
-		override CFLAGS += -DLIBUS_NO_SSL
+		# WITH_WOLFSSL=1 enables WolfSSL 4.2.0 support (mutually exclusive with OpenSSL)
+		ifeq ($(WITH_WOLFSSL),1)
+			# todo: change these
+			override CFLAGS += -DLIBUS_USE_WOLFSSL -I/usr/local/include
+			override LDFLAGS += -L/usr/local/lib -lwolfssl
+		else
+			override CFLAGS += -DLIBUS_NO_SSL
+		endif
 	endif
 endif
 
@@ -57,6 +65,11 @@ ifeq ($(WITH_OPENSSL),1)
 	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
 endif
 	$(AR) rvs uSockets.a *.o
+
+# BoringSSL needs cmake and golang
+.PHONY: boringssl
+boringssl:
+	cd boringssl && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j8
 
 # Builds all examples
 .PHONY: examples

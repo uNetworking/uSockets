@@ -111,10 +111,15 @@ int main(int argc, char **argv) {
 
     /* Create a socket context for HTTP */
     struct us_socket_context_options_t options = {};
-    options.key_file_name = "/home/alexhultman/uWebSockets.js/misc/key.pem";
-    options.cert_file_name = "/home/alexhultman/uWebSockets.js/misc/cert.pem";
+    options.key_file_name = "../../misc/key.pem";
+    options.cert_file_name = "../../misc/cert.pem";
     options.passphrase = "1234";
     struct us_socket_context_t *http_context = us_create_socket_context(SSL, loop, 0, options);
+
+    if (!http_context) {
+		printf("Could not load SSL cert/key\n");
+		exit(0);
+	}
 
     /* Set up event handlers */
     us_socket_context_on_open(SSL, http_context, on_http_socket_open);

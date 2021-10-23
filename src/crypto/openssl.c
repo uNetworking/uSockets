@@ -17,10 +17,6 @@
 
 #ifdef LIBUS_USE_OPENSSL
 
-// DH_free is deprected in 3.0 so we keep using 1.1 for now
-#define OPENSSL_CONFIGURED_API 0x10100000L
-#define OPENSSL_API_COMPAT 0x10100000L
-
 /* These are in sni_tree.cpp */
 void *sni_new();
 void sni_free(void *sni, void(*cb)(void *));
