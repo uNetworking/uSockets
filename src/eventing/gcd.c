@@ -1,5 +1,5 @@
 /*
- * Authored by Alex Hultman, 2018-2019.
+ * Authored by Alex Hultman, 2018-2021.
  * Intellectual property of third-party.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -197,6 +197,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
+    cb->leave_poll_ready = 0;
 
     dispatch_source_t *gcd_timer = (dispatch_source_t *) (cb + 1);
 
@@ -250,6 +251,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 1;
+    cb->leave_poll_ready = 0;
 
     if (fallthrough) {
         //uv_unref((uv_handle_t *) uv_timer);

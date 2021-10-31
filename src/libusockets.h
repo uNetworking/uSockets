@@ -57,6 +57,38 @@ struct us_timer_t;
 struct us_socket_context_t;
 struct us_loop_t;
 struct us_poll_t;
+struct us_udp_socket_t;
+struct us_udp_packet_buffer_t;
+
+/* Public interface for UDP sockets */
+
+/* Peeks data and length of UDP payload */
+WIN32_EXPORT char *us_udp_packet_buffer_payload(struct us_udp_packet_buffer_t *buf, int index);
+WIN32_EXPORT int us_udp_packet_buffer_payload_length(struct us_udp_packet_buffer_t *buf, int index);
+
+/* Peeks peer addr (sockaddr) of received packet */
+WIN32_EXPORT char *us_udp_packet_buffer_peer(struct us_udp_packet_buffer_t *buf, int index);
+
+/* Peeks ECN of received packet */
+WIN32_EXPORT int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, int index);
+
+/* Receives a set of packets into specified packet buffer */
+WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf);
+
+WIN32_EXPORT void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, int offset, void *payload, int length, void *peer_addr);
+
+WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int num);
+
+/* Allocates a packet buffer that is reuable per thread. Mutated by us_udp_socket_receive. */
+WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer();
+
+/* Creates a (heavy-weight) UDP socket with a user space ring buffer. Again, this one is heavy weight and
+ * shoud be reused. One entire QUIC server can be implemented using only one single UDP socket so weight
+ * is not a concern as is the case for TCP sockets which are 1-to-1 with TCP connections. */
+WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, void (*read_cb)(struct us_udp_socket_t *), unsigned short port);
+
+/* Binds the UDP socket to an interface and port */
+WIN32_EXPORT int us_udp_socket_bind(struct us_udp_socket_t *s, const char *hostname, unsigned int port);
 
 /* Public interfaces for timers */
 
