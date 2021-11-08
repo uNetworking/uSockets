@@ -293,6 +293,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
     struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
+    cb->leave_poll_ready = 0;
 
     return (struct us_timer_t *) cb;
 }
@@ -302,6 +303,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
+    cb->leave_poll_ready = 0;
 
     /* Bug: us_internal_poll_set_type does not SET the type, it only CHANGES it */
     cb->p.state.poll_type = POLL_TYPE_POLLING_IN;
@@ -372,6 +374,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
     struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;
     cb->loop = loop;
     cb->cb_expects_the_loop = 1;
+    cb->leave_poll_ready = 0;
 
     return (struct us_internal_async *) cb;
 }
@@ -406,6 +409,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 1;
+    cb->leave_poll_ready = 0;
 
     /* Bug: us_internal_poll_set_type does not SET the type, it only CHANGES it */
     cb->p.state.poll_type = POLL_TYPE_POLLING_IN;
