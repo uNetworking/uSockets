@@ -252,6 +252,14 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
             setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
         }
 #endif
+
+#ifdef _WIN32
+        if (options & LIBUS_LISTEN_EXCLUSIVE_PORT) {
+            int optval2 = 1;
+            setsockopt(listenFd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, &optval2, sizeof(optval2));
+        }
+#endif
+
         int enabled = 1;
         setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
     }
