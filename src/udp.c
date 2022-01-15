@@ -18,6 +18,9 @@
 #include "libusockets.h"
 #include "internal/internal.h"
 
+#define LIBUS_UDP_MAX_SIZE (64 * 1024)
+#define LIBUS_UDP_MAX_NUM 1024
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,9 +30,9 @@
 
 /* Internal structure of packet buffer */
 struct us_internal_udp_packet_buffer {
-    struct mmsghdr msgvec[512];
-    struct iovec iov[512];
-    struct sockaddr_storage addr[512];
+    struct mmsghdr msgvec[LIBUS_UDP_MAX_NUM];
+    struct iovec iov[LIBUS_UDP_MAX_NUM];
+    struct sockaddr_storage addr[LIBUS_UDP_MAX_NUM];
 };
 
 WIN32_EXPORT int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, int index) {
@@ -63,7 +66,7 @@ WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_
 
     int fd = us_poll_fd((struct us_poll_t *) s);
 
-    int ret = recvmmsg(fd, (struct mmsghdr *) buf, 512, 0, 0);
+    int ret = recvmmsg(fd, (struct mmsghdr *) buf, LIBUS_UDP_MAX_NUM, 0, 0);
 
     return ret;
 }
@@ -73,7 +76,7 @@ WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_
 void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, int offset, void *payload, int length, void *peer_addr) {
 
 
-        printf("length: %d, offset: %d\n", length, offset);
+        //printf("length: %d, offset: %d\n", length, offset);
 
         struct mmsghdr *ss = (struct mmsghdr *) send_buf;
 
@@ -88,15 +91,19 @@ void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, i
         memcpy(((char *) ss[index].msg_hdr.msg_iov->iov_base) + offset, payload, length);
 }
 
+/* The maximum UDP payload size is 64kb, but in IPV6 you can have jumbopackets larger than so.
+ * We do not support those jumbo packets currently, but will safely ignore them.
+ * Any sane sender would assume we don't support them if we consistently drop them.
+ * Therefore a udp_packet_buffer_t will be 64 MB in size (64kb * 1024). */
 WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
 
-    /* Allocate 16kb times 512 */
-    struct us_internal_udp_packet_buffer *b = malloc(sizeof(struct us_internal_udp_packet_buffer) + 16 * 1024 * 512);
+    /* Allocate 64kb times 1024 */
+    struct us_internal_udp_packet_buffer *b = malloc(sizeof(struct us_internal_udp_packet_buffer) + LIBUS_UDP_MAX_SIZE * LIBUS_UDP_MAX_NUM);
 
-    for (int n = 0; n < 512; ++n) {
+    for (int n = 0; n < LIBUS_UDP_MAX_NUM; ++n) {
 
-        b->iov[n].iov_base = &((char *) (b + 1))[n * 1024 * 16];
-        b->iov[n].iov_len = 1024 * 16;
+        b->iov[n].iov_base = &((char *) (b + 1))[n * LIBUS_UDP_MAX_SIZE];
+        b->iov[n].iov_len = LIBUS_UDP_MAX_SIZE;
 
         b->msgvec[n].msg_hdr = (struct msghdr) {
             .msg_name       = &b->addr,
@@ -118,7 +125,11 @@ WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop
     
     LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket("127.0.0.1", port);
 
-    printf("UDP: %d\n", fd);
+    if (fd == LIBUS_SOCKET_ERROR) {
+        return 0;
+    }
+
+    //printf("UDP: %d\n", fd);
 
     int ext_size = 0;
     int fallthrough = 0;
