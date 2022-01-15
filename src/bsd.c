@@ -246,14 +246,25 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
 
     if (port != 0) {
         /* Otherwise, always enable SO_REUSEPORT and SO_REUSEADDR _unless_ options specify otherwise */
-#if /*defined(__linux) &&*/ defined(SO_REUSEPORT)
+#ifdef _WIN32
+        if (options & LIBUS_LISTEN_EXCLUSIVE_PORT) {
+            int optval2 = 1;
+            setsockopt(listenFd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, &optval2, sizeof(optval2));
+        } else {
+            int optval3 = 1;
+            setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &optval3, sizeof(optval3));
+        }
+#else
+    #if /*defined(__linux) &&*/ defined(SO_REUSEPORT)
         if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
             int optval = 1;
             setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
         }
-#endif
+    #endif
         int enabled = 1;
         setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+#endif
+
     }
     
 #ifdef IPV6_V6ONLY
