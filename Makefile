@@ -48,11 +48,14 @@ ifeq ($(WITH_ASAN),1)
 endif
 
 
+override CFLAGS += -std=c11 -Isrc
+override LDFLAGS += uSockets.a
+
 # To build with boringssl one should pass WITH_BORINGSSL=path_to_folder
 # To build with QUIC one should pass WITH_LSQUIC=path_to_lsquic AND ALSO WITH_BORINGSSL=path_to_folder
 # WITH_BORINGSSL=/home/alexhultman/boringssl WITH_LSQUIC=/home/alexhultman/lsquic make examples
-override CFLAGS += -pthread -std=c11 -Isrc -I/home/alexhultman/lsquic/include -I/home/alexhultman/boringssl/include
-override LDFLAGS += -pthread -lz -lm uSockets.a /home/alexhultman/lsquic/src/liblsquic/liblsquic.a /home/alexhultman/boringssl/ssl/libssl.a /home/alexhultman/boringssl/crypto/libcrypto.a
+#override CFLAGS += -pthread -std=c11 -Isrc -I/home/alexhultman/lsquic/include -I/home/alexhultman/boringssl/include
+#override LDFLAGS += -pthread -lz -lm uSockets.a /home/alexhultman/lsquic/src/liblsquic/liblsquic.a /home/alexhultman/boringssl/ssl/libssl.a /home/alexhultman/boringssl/crypto/libcrypto.a
 
 # By default we build the uSockets.a static library
 default:
