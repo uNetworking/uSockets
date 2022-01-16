@@ -9,6 +9,7 @@
  * We should remove this and replace it with bsd_addr_t and a builder function */
 #include <netinet/in.h>
 
+struct us_udp_packet_buffer_t *send_buf;
 
 void on_wakeup(struct us_loop_t *loop) {
 
@@ -17,9 +18,6 @@ void on_wakeup(struct us_loop_t *loop) {
 void on_pre(struct us_loop_t *loop) {
 
 }
-
-struct us_udp_packet_buffer_t *buf;
-struct us_udp_packet_buffer_t *send_buf;
 
 void on_post(struct us_loop_t *loop) {
     // send whatever in buffer here
@@ -34,11 +32,16 @@ void timer_cb(struct us_timer_t *timer) {
     messages = 0;
 }
 
-void on_server_read(struct us_udp_socket_t *s) {
+/* Called whenever you can write more datagrams after a failure to write */
+void on_server_drain(struct us_udp_socket_t *s) {
 
-    int packets = us_udp_socket_receive(s, buf);
-    //printf("Packets: %d\n", packets);
+}
 
+/* Called whenever there are received datagrams for the app to consume */
+void on_server_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int packets) {
+    
+    // you could theoretically modify the receive buffer and just pass it to send
+    
     for (int i = 0; i < packets; i++) {
         // payload, length, peer addr (behöver inte veta längd bara void), local addr (vet redan), cong
         char *payload = us_udp_packet_buffer_payload(buf, i);
@@ -56,17 +59,18 @@ void on_server_read(struct us_udp_socket_t *s) {
 
 int main() {
     /* Allocate per thread, UDP packet buffers */
-    buf = us_create_udp_packet_buffer();
+    struct us_udp_packet_buffer_t *receive_buf = us_create_udp_packet_buffer();
+    /* We also want a send buffer we can assemble while iterating the read buffer */
     send_buf = us_create_udp_packet_buffer();
 
 	/* Create the event loop */
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     /* Create two UDP sockets and bind them to their respective ports */
-    struct us_udp_socket_t *server = us_create_udp_socket(loop, on_server_read, 5678);
+    struct us_udp_socket_t *server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678);
     printf("Server socket: %p\n", server);
 
-    struct us_udp_socket_t *client = us_create_udp_socket(loop, on_server_read, 5679);
+    struct us_udp_socket_t *client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679);
 
     /* Send first packet from client to server */
     struct sockaddr_storage storage;
@@ -79,7 +83,6 @@ int main() {
     for (int i = 0; i < 100; i++) {
         us_udp_buffer_set_packet_payload(send_buf, i, 0, "Hello UDP!", 10, &storage);
     }
-
 
     int sent = us_udp_socket_send(client, send_buf, 100); // buffer should know how many it holds!
     printf("Sent: %d\n", sent);
