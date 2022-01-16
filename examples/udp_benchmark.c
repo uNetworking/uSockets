@@ -1,17 +1,14 @@
 /* Simple usage of two UDP sockets sending messages to eachother like ping/pong */
-
-#define _GNU_SOURCE
-#include <sys/socket.h>
-
 #include <libusockets.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/* This one we allow here since we use it to create the peer addr.
+ * We should remove this and replace it with bsd_addr_t and a builder function */
 #include <netinet/in.h>
 
-#include "../src/internal/internal.h"
 
 void on_wakeup(struct us_loop_t *loop) {
 

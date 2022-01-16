@@ -21,6 +21,7 @@
 #include "internal/internal.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifndef _WIN32
 //#define _GNU_SOURCE
@@ -34,6 +35,110 @@
 #include <fcntl.h>
 #include <errno.h>
 #endif
+
+/* Internal structure of packet buffer */
+struct us_internal_udp_packet_buffer {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    struct mmsghdr msgvec[LIBUS_UDP_MAX_NUM];
+    struct iovec iov[LIBUS_UDP_MAX_NUM];
+    struct sockaddr_storage addr[LIBUS_UDP_MAX_NUM];
+#endif
+};
+
+/* We need to emulate sendmmsg, recvmmsg on platform who don't have it */
+int bsd_sendmmsg(LIBUS_SOCKET_DESCRIPTOR fd, void *msgvec, unsigned int vlen, int flags) {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    return sendmmsg(fd, (struct mmsghdr *)msgvec, vlen, flags);
+#endif
+}
+
+int bsd_recvmmsg(LIBUS_SOCKET_DESCRIPTOR fd, void *msgvec, unsigned int vlen, int flags, void *timeout) {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    return recvmmsg(fd, (struct mmsghdr *)msgvec, vlen, flags, 0);
+#endif
+}
+
+char *bsd_udp_packet_buffer_peer(void *msgvec, int index) {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    return ((struct mmsghdr *) msgvec)[index].msg_hdr.msg_name;
+#endif
+}
+
+char *bsd_udp_packet_buffer_payload(void *msgvec, int index) {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    return ((struct mmsghdr *) msgvec)[index].msg_hdr.msg_iov[0].iov_base;
+#endif
+}
+
+int bsd_udp_packet_buffer_payload_length(void *msgvec, int index) {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    return ((struct mmsghdr *) msgvec)[index].msg_len;
+#endif
+}
+
+void bsd_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, int offset, void *payload, int length, void *peer_addr) {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    //printf("length: %d, offset: %d\n", length, offset);
+
+    struct mmsghdr *ss = (struct mmsghdr *) send_buf;
+
+    // copy the peer address
+    memcpy(ss[index].msg_hdr.msg_name, peer_addr, /*ss[index].msg_hdr.msg_namelen*/ sizeof(struct sockaddr_in));
+
+    // copy the payload
+    
+    ss[index].msg_hdr.msg_iov->iov_len = length + offset;
+
+
+    memcpy(((char *) ss[index].msg_hdr.msg_iov->iov_base) + offset, payload, length);
+#endif
+}
+
+/* The maximum UDP payload size is 64kb, but in IPV6 you can have jumbopackets larger than so.
+ * We do not support those jumbo packets currently, but will safely ignore them.
+ * Any sane sender would assume we don't support them if we consistently drop them.
+ * Therefore a udp_packet_buffer_t will be 64 MB in size (64kb * 1024). */
+void *bsd_create_udp_packet_buffer() {
+#if defined(_WIN32) || defined(__APPLE__)
+
+#else
+    /* Allocate 64kb times 1024 */
+    struct us_internal_udp_packet_buffer *b = malloc(sizeof(struct us_internal_udp_packet_buffer) + LIBUS_UDP_MAX_SIZE * LIBUS_UDP_MAX_NUM);
+
+    for (int n = 0; n < LIBUS_UDP_MAX_NUM; ++n) {
+
+        b->iov[n].iov_base = &((char *) (b + 1))[n * LIBUS_UDP_MAX_SIZE];
+        b->iov[n].iov_len = LIBUS_UDP_MAX_SIZE;
+
+        b->msgvec[n].msg_hdr = (struct msghdr) {
+            .msg_name       = &b->addr,
+            .msg_namelen    = sizeof (struct sockaddr_storage),
+
+            .msg_iov        = &b->iov[n],
+            .msg_iovlen     = 1,
+
+            .msg_control    = 0,
+            .msg_controllen = 0,
+        };
+    }
+
+    return (struct us_udp_packet_buffer_t *) b;
+#endif
+}
 
 LIBUS_SOCKET_DESCRIPTOR apple_no_sigpipe(LIBUS_SOCKET_DESCRIPTOR fd) {
 #ifdef __APPLE__
