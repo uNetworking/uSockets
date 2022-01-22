@@ -200,10 +200,24 @@ void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
     us_quic_socket_context_t *context = h;
 
+    //printf("stream is readable\n");
+
+    // I guess you just get the header set here
+    void *header_set = lsquic_stream_get_hset(s);
+    printf("Header set is: %p\n", header_set);
+
+    if (header_set) {
+        context->on_stream_headers(s);
+    }
+
+    // here we emit a new request if we have headers?
+    // if only data, we probably don't get headers
 
     //printf("lsquick on_read for stream: %p\n", s);
 
     char temp[4096] = {};
+
+    printf("stream_reading now\n");
 
     int nr = lsquic_stream_read(s, temp, 4096);
     //printf("read: %d\n", nr);
@@ -347,6 +361,129 @@ int us_quic_stream_shutdown(us_quic_stream_t *s) {
     return 0;
 }
 
+// header of header set
+struct header_set_hd {
+    int offset;
+};
+
+// let's just store last header set here
+struct header_set_hd *last_hset;
+
+// just a shitty marker for now
+struct processed_header {
+    void *name, *value;
+    int name_length, value_length;
+};
+
+int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int index, char **name, int *name_length, char **value, int *value_length) {
+
+    if (index < last_hset->offset) {
+
+        struct processed_header *pd = (last_hset + 1);
+
+        pd = pd + index;
+
+        *name = pd->name;
+        *value = pd->value;
+        *value_length = pd->value_length;
+        *name_length = pd->name_length;
+
+        return 1;
+    }
+
+    return 0;
+
+}
+
+// header set callbacks
+void *hsi_create_header_set(void *hsi_ctx, lsquic_stream_t *stream, int is_push_promise) {
+
+    //printf("hsi_create_header_set\n");
+
+    void *hset = malloc(1024);
+    memset(hset, 0, sizeof(struct header_set_hd));
+
+    // hsi_ctx is set in engine creation below
+
+    // I guess we just return whatever here, what we return here is gettable via the stream
+
+    // gettable via lsquic_stream_get_hset
+
+    // return user defined header set
+
+    return hset;
+}
+
+void hsi_discard_header_set(void *hdr_set) {
+    // this is pretty much the destructor of above constructor
+
+    printf("hsi_discard_header!\n");
+}
+
+// one header set allocates one 8kb buffer from a linked list of available buffers
+
+
+// 8kb of preallocated heap for headers
+char header_decode_heap[1024 * 8];
+int header_decode_heap_offset = 0;
+
+struct lsxpack_header *hsi_prepare_decode(void *hdr_set, struct lsxpack_header *hdr, size_t space) {
+
+    //printf("hsi_prepare_decode\n");
+
+    if (!hdr) {
+        hdr = malloc(sizeof(struct lsxpack_header));
+        memset(hdr, 0, sizeof(struct lsxpack_header));
+        hdr->buf = malloc(space);
+        lsxpack_header_prepare_decode(hdr, hdr->buf, 0, space);
+    } else {
+        hdr->val_len = space;
+        hdr->buf = realloc(hdr->buf, space);
+    }
+
+    return hdr;
+}
+
+int hsi_process_header(void *hdr_set, struct lsxpack_header *hdr) {
+
+    // I guess this is the emitting of the header to app space
+
+    //printf("hsi_process_header: %p\n", hdr);
+
+    struct header_set_hd *hd = hdr_set;
+    struct processed_header *proc_hdr = hd + 1;
+
+    if (!hdr) {
+        //printf("end of headers!\n");
+
+        last_hset = hd;
+
+        // mark end, well we can also just read the offset!
+        //memset(&proc_hdr[hd->offset], 0, sizeof(struct processed_header));
+
+        return 0;
+    }
+
+    /*if (hdr->hpack_index) {
+        printf("header has hpack index: %d\n", hdr->hpack_index);
+    }
+
+    if (hdr->qpack_index) {
+        printf("header has qpack index: %d\n", hdr->qpack_index);
+    }*/
+
+    proc_hdr[hd->offset].value = &hdr->buf[hdr->val_offset];
+    proc_hdr[hd->offset].name = &hdr->buf[hdr->name_offset];
+    proc_hdr[hd->offset].value_length = hdr->val_len;
+    proc_hdr[hd->offset].name_length = hdr->name_len;
+
+    //printf("header %.*s = %.*s\n", hdr->name_len, &hdr->buf[hdr->name_offset], hdr->val_len, &hdr->buf[hdr->val_offset]);
+
+    hd->offset++;
+
+    return 0;
+}
+
 // this will be for both client and server, but will be only for either h3 or raw quic
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options) {
 
@@ -383,6 +520,13 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
     //memset(&stream_callbacks, 13, sizeof(struct lsquic_stream_if));
 
+    static struct lsquic_hset_if hset_if = {
+        .hsi_discard_header_set = hsi_discard_header_set,
+        .hsi_create_header_set = hsi_create_header_set,
+        .hsi_prepare_decode = hsi_prepare_decode,
+        .hsi_process_header = hsi_process_header
+    };
+
 
     add_alpn("h3");
 
@@ -400,7 +544,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
         // these are zero anyways
         .ea_hsi_ctx = 0,
-        .ea_hsi_if = 0,
+        .ea_hsi_if = &hset_if,
     };
 
     //printf("log: %d\n", lsquic_set_log_level("debug"));

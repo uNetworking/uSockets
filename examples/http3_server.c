@@ -24,18 +24,16 @@ void on_server_quic_stream_open() {
 /* This would be a request */
 void on_server_quic_stream_headers(us_quic_stream_t *s) {
 
-    // why not just read them from the context just like we set them to the context
-    // first you get how many there are, including if the headers are the only ones or if data follows
-    // then you just get them by ptr and index
+    printf("==== HTTP/3 request ====\n");
 
-    
-
-    printf("HTTP/3 request:\n");
-}
-
-/* And this would be the body of the request */
-void on_server_quic_stream_data(us_quic_stream_t *s, char *data, int length) {
-    printf("==========================\n%.*s\n", length, data);
+    /* Iterate the headers and print them */
+    for (int i = 0, more = 1; more; i++) {
+        char *name, *value;
+        int name_length, value_length;
+        if (more = us_quic_socket_context_get_header(context, i, &name, &name_length, &value, &value_length)) {
+            printf("header %.*s = %.*s\n", name_length, name, value_length, value);
+        }
+    }
 
     /* Write headers */
     us_quic_socket_context_set_header(context, 0, ":status", 7, "200", 3);
@@ -43,8 +41,15 @@ void on_server_quic_stream_data(us_quic_stream_t *s, char *data, int length) {
     us_quic_socket_context_send_headers(context, s, 2);
 
     /* Write body and shutdown */
-    us_quic_stream_write(s, "Jaja hello!", 11);
+    us_quic_stream_write(s, "Hehe hello!", 11);
+
+    /* Every request has its own stream, so we conceptually serve requests like in HTTP 1.0 */
     us_quic_stream_shutdown(s);
+}
+
+/* And this would be the body of the request */
+void on_server_quic_stream_data(us_quic_stream_t *s, char *data, int length) {
+    printf("Body length is: %d\n", length);
 }
 
 void on_server_quic_stream_writable() {
