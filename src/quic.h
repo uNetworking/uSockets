@@ -22,6 +22,10 @@ typedef struct us_quic_listen_socket_s us_quic_listen_socket_t;
 typedef struct us_quic_stream_s us_quic_stream_t;
 
 int us_quic_stream_write(us_quic_stream_t *s, char *data, int length);
+int us_quic_stream_shutdown(us_quic_stream_t *s);
+
+void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length);
+void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num);
 
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options);
 us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port);

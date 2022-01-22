@@ -61,7 +61,11 @@ void us_quic_socket_context_on_stream_writable(us_quic_socket_context_t *context
 
 /* UDP handlers */
 void on_udp_socket_writable(struct us_udp_socket_t *s) {
+    /* Need context from socket here */
+    us_quic_socket_context_t *context = us_udp_socket_user(s);
 
+    /* We just continue now */
+    lsquic_engine_send_unsent_packets(context->engine);
 }
 
 void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int packets) {
@@ -141,8 +145,10 @@ lsquic_stream_ctx_t *on_new_stream(void *stream_if_ctx, lsquic_stream_t *s) {
     return context;
 }
 
-#define V(v) (v), strlen(v)
+//#define V(v) (v), strlen(v)
 
+// header bug is really just an offset buffer - perfect for per context!
+// could even use cork buffer or similar
 struct header_buf
 {
     unsigned    off;
@@ -167,27 +173,25 @@ header_set_ptr (struct lsxpack_header *hdr, struct header_buf *header_buf,
         return -1;
 }
 
-static int
-send_headers2 (struct lsquic_stream *stream, struct lsquic_stream_ctx *st_h,
-                    size_t content_len)
-{
-    char clbuf[0x20];
-    struct header_buf hbuf;
+/* Static storage should be per context or really per loop */
+struct header_buf hbuf;
+struct lsxpack_header headers_arr[10];
 
-    snprintf(clbuf, sizeof(clbuf), "%zd", content_len);
+void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length) {
+    header_set_ptr(&headers_arr[index], &hbuf, key, key_length, value, value_length);
+}
 
-    hbuf.off = 0;
-    struct lsxpack_header  headers_arr[4];
-    header_set_ptr(&headers_arr[0], &hbuf, V(":status"), V("200"));
-    header_set_ptr(&headers_arr[1], &hbuf, V("server"), V("uSockets"));
-    header_set_ptr(&headers_arr[2], &hbuf, V("content-type"), V("text/html"));
-    header_set_ptr(&headers_arr[3], &hbuf, V("content-length"), V(clbuf));
+void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num) {
+
     lsquic_http_headers_t headers = {
-        .count = sizeof(headers_arr) / sizeof(headers_arr[0]),
+        .count = num,
         .headers = headers_arr,
     };
+    // last here is whether this is eof or not (has body)
+    lsquic_stream_send_headers(s, &headers, 0);
 
-    return lsquic_stream_send_headers(stream, &headers, 0);
+    /* Reset header offset */
+    hbuf.off = 0;
 }
 
 // this would be the application logic of the echo server
@@ -219,45 +223,12 @@ void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
 int us_quic_stream_write(us_quic_stream_t *s, char *data, int length) {
     lsquic_stream_t *stream = s;
-
-    
-
-    send_headers2(s, 0, length);
     int ret = lsquic_stream_write(s, data, length);
-    lsquic_stream_shutdown(s, 1);
-
     return ret;
 }
 
 void on_write (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
-    //printf("Sending response in on_write now\n");
-
-/*
-    static struct lsxpack_header packed_headers[2] = {{}, {}};
-
-    // set status 200
-    lsxpack_header_set_qpack_idx(&packed_headers[0], 25, "", 0);
-    // no content length
-    lsxpack_header_set_qpack_idx(&packed_headers[1], 4, "", 0);
-
-    static lsquic_http_headers_t headers = {
-        .count = 1,
-        .headers = packed_headers,
-    };
-
-    printf("Sending headers: %d\n", lsquic_stream_send_headers(s, &headers, 0));*/
-
-    //send_headers2(s, h, 11);
-
-    //printf("write: %d\n", lsquic_stream_write(s, "Hello QUIC!", 11));
-
-
-    //lsquic_stream_shutdown(s, 1);
-    //lsquic_stream_flush(s);
-
-    //lsquic_stream_wantwrite(s, 0);
-    //lsquic_stream_wantread(s, 1);
 }
 
 void on_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
@@ -365,6 +336,14 @@ SSL_CTX *sni_lookup(void *lsquic_cert_lookup_ctx, const struct sockaddr *local, 
 
 int log_buf_cb(void *logger_ctx, const char *buf, size_t len) {
     printf("%.*s\n", len, buf);
+    return 0;
+}
+
+int us_quic_stream_shutdown(us_quic_stream_t *s) {
+    lsquic_stream_t *stream = s;
+
+    lsquic_stream_shutdown(s, 1);
+
     return 0;
 }
 
