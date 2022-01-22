@@ -65,6 +65,7 @@ struct us_internal_udp_t {
     struct us_udp_packet_buffer_t *receive_buf;
     void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int);
     void (*drain_cb)(struct us_udp_socket_t *);
+    void *user;
 };
 
 /* Internal wrapper, move from here */
@@ -82,7 +83,27 @@ void internal_on_udp_read(struct us_udp_socket_t *s) {
     udp->data_cb(s, udp->receive_buf, packets);
 }
 
-WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), char *host, unsigned short port) {
+void *us_udp_socket_user(struct us_udp_socket_t *s) {
+    struct us_internal_udp_t *udp = (struct us_internal_udp_t *) s;
+
+    return udp->user;
+}
+
+typedef struct {
+    void *data;
+    size_t length;
+} us_iov_t;
+
+typedef struct {
+    size_t iovlen;
+    us_iov_t *iov;
+} us_udp_datagram_t;
+
+int us_udp_socket_send_datagrams(struct us_udp_socket_t *s, void *name, int name_length, us_udp_datagram_t d) {
+    
+}
+
+WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), char *host, unsigned short port, void *user) {
     
     LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket(host, port);
     if (fd == LIBUS_SOCKET_ERROR) {
@@ -104,6 +125,10 @@ WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop
     cb->cb.loop = loop;
     cb->cb.cb_expects_the_loop = 0;
     cb->cb.leave_poll_ready = 1;
+
+    /* There is no udp socket context, only user data */
+    /* This should really be ext like everything else */
+    cb->user = user;
 
     cb->data_cb = data_cb;
     cb->receive_buf = buf;

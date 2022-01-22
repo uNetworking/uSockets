@@ -1,6 +1,6 @@
 #ifdef LIBUS_USE_QUIC
 
-/* Experimental QUIC server */
+/* Experimental HTTP/3 server */
 #include <libusockets.h>
 
 /* Quic interface is not exposed under libusockets.h yet */
@@ -8,20 +8,42 @@
 
 #include <stdio.h>
 
-void on_wakeup(struct us_loop_t *loop) {
+/* Loop callbacks not used in this example */
+void on_wakeup(struct us_loop_t *loop) {}
+void on_pre(struct us_loop_t *loop) {}
+void on_post(struct us_loop_t *loop) {}
+
+/* No need to handle this one */
+void on_server_quic_stream_open() {
 
 }
 
-void on_pre(struct us_loop_t *loop) {
+/* This would be a request */
+void on_server_quic_stream_headers() {
+    printf("HTTP/3 request:\n");
+}
+
+/* And this would be the body of the request */
+void on_server_quic_stream_data(us_quic_stream_t *s, char *data, int length) {
+    printf("==========================\n%.*s\n", length, data);
+
+    us_quic_stream_write(s, "Jaja hello!", 11);
+}
+
+void on_server_quic_stream_writable() {
 
 }
 
-void on_post(struct us_loop_t *loop) {
+void on_server_quic_stream_close() {
 
 }
 
-void on_server_quic_data(us_quic_socket_t *s, char *data, int length) {
-    printf("quic data emitted\n");
+void on_server_quic_open() {
+
+}
+
+void on_server_quic_close() {
+
 }
 
 int main() {
@@ -34,14 +56,20 @@ int main() {
         .key_file_name = ""
     };
 
-    /* Create quic socket context */
+    /* Create quic socket context (assumes h3 for now) */
     us_quic_socket_context_t *context = us_create_quic_socket_context(loop, options);
 
     /* Specify application callbacks */
-    us_quic_socket_context_on_data(context, on_server_quic_data);
+    us_quic_socket_context_on_stream_data(context, on_server_quic_stream_data);
+    us_quic_socket_context_on_stream_open(context, on_server_quic_stream_open);
+    us_quic_socket_context_on_stream_close(context, on_server_quic_stream_close);
+    us_quic_socket_context_on_stream_writable(context, on_server_quic_stream_writable);
+    us_quic_socket_context_on_stream_headers(context, on_server_quic_stream_headers);
+    us_quic_socket_context_on_open(context, on_server_quic_open);
+    us_quic_socket_context_on_close(context, on_server_quic_close);
 
     /* The listening socket is the actual UDP socket used */
-    us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "127.0.0.1", 5678);
+    us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "127.0.0.1", 9004);
 
     /* Run the event loop */
     us_loop_run(loop);

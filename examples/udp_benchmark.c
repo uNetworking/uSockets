@@ -64,8 +64,8 @@ int main() {
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     /* Create two UDP sockets and bind them to their respective ports */
-    struct us_udp_socket_t *server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678);
-    struct us_udp_socket_t *client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679);
+    struct us_udp_socket_t *server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
+    struct us_udp_socket_t *client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
     if (!client || !server) {
         printf("Failed to create UDP sockets!\n");
         return 1;
