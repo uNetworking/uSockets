@@ -31,21 +31,21 @@ void on_server_quic_stream_open() {
 /* This would be a request */
 void on_server_quic_stream_headers(us_quic_stream_t *s) {
 
-    if (thread != gettid()) {
-        printf("different threadss!\n");
-        exit(0);
-    }
+    // if (thread != gettid()) {
+    //     printf("different threadss!\n");
+    //     exit(0);
+    // }
 
     //printf("==== HTTP/3 request %d ====\n", ++requests);
 
     /* Iterate the headers and print them */
-    for (int i = 0, more = 1; more; i++) {
-        char *name, *value;
-        int name_length, value_length;
-        if (more = us_quic_socket_context_get_header(context, i, &name, &name_length, &value, &value_length)) {
-            //printf("header %.*s = %.*s\n", name_length, name, value_length, value);
-        }
-    }
+    // for (int i = 0, more = 1; more; i++) {
+    //     char *name, *value;
+    //     int name_length, value_length;
+    //     if (more = us_quic_socket_context_get_header(context, i, &name, &name_length, &value, &value_length)) {
+    //         //printf("header %.*s = %.*s\n", name_length, name, value_length, value);
+    //     }
+    // }
 
     /* Write headers */
     us_quic_socket_context_set_header(context, 0, ":status", 7, "200", 3);

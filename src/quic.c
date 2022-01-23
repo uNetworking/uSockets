@@ -233,6 +233,8 @@ void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
     if (header_set) {
         context->on_stream_headers(s);
+
+        leave_all();//free(header_set);
     }
 
     // here we emit a new request if we have headers?
@@ -437,12 +439,28 @@ int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int ind
 
 }
 
+char pool[100][4096];
+int pool_top = 0;
+
+void *take() {
+    if (pool_top == 100) {
+        printf("out of memory\n");
+        exit(0);
+    }
+    return pool[pool_top++];
+}
+
+void leave_all() {
+    pool_top = 0;
+}
+
+
 // header set callbacks
 void *hsi_create_header_set(void *hsi_ctx, lsquic_stream_t *stream, int is_push_promise) {
 
     //printf("hsi_create_header_set\n");
 
-    void *hset = malloc(1024);
+    void *hset = take();//malloc(1024);
     memset(hset, 0, sizeof(struct header_set_hd));
 
     // hsi_ctx is set in engine creation below
@@ -474,13 +492,20 @@ struct lsxpack_header *hsi_prepare_decode(void *hdr_set, struct lsxpack_header *
     //printf("hsi_prepare_decode\n");
 
     if (!hdr) {
-        hdr = malloc(sizeof(struct lsxpack_header));
+        char *mem = take();
+        hdr = mem;//malloc(sizeof(struct lsxpack_header));
         memset(hdr, 0, sizeof(struct lsxpack_header));
-        hdr->buf = malloc(space);
+        hdr->buf = mem + sizeof(struct lsxpack_header);//take();//malloc(space);
         lsxpack_header_prepare_decode(hdr, hdr->buf, 0, space);
     } else {
+
+        if (space > 4096 - sizeof(struct lsxpack_header)) {
+            printf("not hanlded!\n");
+            exit(0);
+        }
+
         hdr->val_len = space;
-        hdr->buf = realloc(hdr->buf, space);
+        //hdr->buf = realloc(hdr->buf, space);
     }
 
     return hdr;
@@ -529,7 +554,7 @@ int hsi_process_header(void *hdr_set, struct lsxpack_header *hdr) {
 extern us_quic_socket_context_t *context;
 
 void timer_cb(struct us_timer_t *t) {
-    printf("Processing conns from timer\n");
+    //printf("Processing conns from timer\n");
     lsquic_engine_process_conns(context->engine);
 }
 
@@ -604,7 +629,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
 
 
-    lsquic_logger_init(&logger, 0, LLTS_NONE);
+    //lsquic_logger_init(&logger, 0, LLTS_NONE);
 
     /* Create an engine in server mode with HTTP behavior: */
     context->engine = lsquic_engine_new(LSENG_SERVER | LSENG_HTTP, &engine_api);
