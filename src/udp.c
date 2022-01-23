@@ -89,20 +89,6 @@ void *us_udp_socket_user(struct us_udp_socket_t *s) {
     return udp->user;
 }
 
-typedef struct {
-    void *data;
-    size_t length;
-} us_iov_t;
-
-typedef struct {
-    size_t iovlen;
-    us_iov_t *iov;
-} us_udp_datagram_t;
-
-int us_udp_socket_send_datagrams(struct us_udp_socket_t *s, void *name, int name_length, us_udp_datagram_t d) {
-    
-}
-
 WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), char *host, unsigned short port, void *user) {
     
     LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket(host, port);
