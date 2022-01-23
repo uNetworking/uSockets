@@ -1,5 +1,12 @@
 #ifdef LIBUS_USE_QUIC
 
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdlib.h>
+
+pid_t thread;
+int requests;
+
 /* Experimental HTTP/3 server */
 #include <libusockets.h>
 
@@ -18,30 +25,36 @@ void on_post(struct us_loop_t *loop) {}
 
 /* No need to handle this one */
 void on_server_quic_stream_open() {
-    printf("Stream open!\n");
+    //printf("Stream open!\n");
 }
 
 /* This would be a request */
 void on_server_quic_stream_headers(us_quic_stream_t *s) {
 
-    printf("==== HTTP/3 request ====\n");
+    if (thread != gettid()) {
+        printf("different threadss!\n");
+        exit(0);
+    }
+
+    //printf("==== HTTP/3 request %d ====\n", ++requests);
 
     /* Iterate the headers and print them */
     for (int i = 0, more = 1; more; i++) {
         char *name, *value;
         int name_length, value_length;
         if (more = us_quic_socket_context_get_header(context, i, &name, &name_length, &value, &value_length)) {
-            printf("header %.*s = %.*s\n", name_length, name, value_length, value);
+            //printf("header %.*s = %.*s\n", name_length, name, value_length, value);
         }
     }
 
     /* Write headers */
     us_quic_socket_context_set_header(context, 0, ":status", 7, "200", 3);
-    us_quic_socket_context_set_header(context, 1, "content-length", 14, "11", 2);
-    us_quic_socket_context_send_headers(context, s, 2);
+    //us_quic_socket_context_set_header(context, 1, "content-length", 14, "11", 2);
+    //us_quic_socket_context_set_header(context, 2, "content-type", 12, "text/html", 9);
+    us_quic_socket_context_send_headers(context, s, 1);
 
     /* Write body and shutdown */
-    us_quic_stream_write(s, "Hehe hello!", 11);
+    //us_quic_stream_write(s, "Hehe hello!", 11);
 
     /* Every request has its own stream, so we conceptually serve requests like in HTTP 1.0 */
     us_quic_stream_shutdown(s);
@@ -49,7 +62,7 @@ void on_server_quic_stream_headers(us_quic_stream_t *s) {
 
 /* And this would be the body of the request */
 void on_server_quic_stream_data(us_quic_stream_t *s, char *data, int length) {
-    printf("Body length is: %d\n", length);
+    //printf("Body length is: %d\n", length);
 }
 
 void on_server_quic_stream_writable() {
@@ -69,6 +82,9 @@ void on_server_quic_close() {
 }
 
 int main() {
+
+    thread = gettid();
+
 	/* Create the event loop */
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
