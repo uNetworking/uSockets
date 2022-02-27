@@ -296,6 +296,9 @@ WIN32_EXPORT int us_socket_local_port(int ssl, struct us_socket_t *s);
 /* Copy remote (IP) address of socket, or fail with zero length. */
 WIN32_EXPORT void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);
 
+/* Copy local (IP) address of socket, or fail with zero length. */
+WIN32_EXPORT void us_socket_local_address(int ssl, struct us_socket_t *s, char *buf, int *length);
+
 #ifdef __cplusplus
 }
 #endif

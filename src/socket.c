@@ -37,14 +37,23 @@ void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
     bsd_shutdown_socket_read(us_poll_fd((struct us_poll_t *) s));
 }
 
-void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
+static void us_socket_address(int(*bsd_addr)(LIBUS_SOCKET_DESCRIPTOR, struct bsd_addr_t *),
+                              int ssl, struct us_socket_t *s, char *buf, int *length) {
     struct bsd_addr_t addr;
-    if (bsd_remote_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
+    if (bsd_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
         *length = 0;
     } else {
         *length = bsd_addr_get_ip_length(&addr);
         memcpy(buf, bsd_addr_get_ip(&addr), *length);
     }
+}
+
+void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
+    us_socket_address(&bsd_remote_addr, ssl, s, buf, length);
+}
+
+void us_socket_local_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
+    us_socket_address(&bsd_local_addr, ssl, s, buf, length);
 }
 
 struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
