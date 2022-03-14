@@ -16,6 +16,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct sockaddr_in client_addr = {
+    AF_INET,
+    1,
+    1
+};
+
+struct sockaddr_in server_addr = {
+    AF_INET,
+    2,
+    2
+};
+
+    // used in process_quic
+    lsquic_engine_t *global_engine;
+    lsquic_engine_t *global_client_engine;
+
 /* Socket context */
 struct us_quic_socket_context_s {
 
@@ -26,13 +42,14 @@ struct us_quic_socket_context_s {
     struct us_udp_socket_t *udp_socket;
     struct us_loop_t *loop;
     lsquic_engine_t *engine;
+    lsquic_engine_t *client_engine;
 
     void(*on_stream_data)(us_quic_stream_t *s, char *data, int length);
     void(*on_stream_headers)();
     void(*on_stream_open)();
     void(*on_stream_close)();
     void(*on_stream_writable)();
-    void(*on_open)();
+    void(*on_open)(int is_client);
     void(*on_close)();
 };
 
@@ -49,7 +66,7 @@ void us_quic_socket_context_on_stream_open(us_quic_socket_context_t *context, vo
 void us_quic_socket_context_on_stream_close(us_quic_socket_context_t *context, void(*on_stream_close)()) {
     context->on_stream_close = on_stream_close;
 }
-void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_open)()) {
+void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_open)(int is_client)) {
     context->on_open = on_open;
 }
 void us_quic_socket_context_on_close(us_quic_socket_context_t *context, void(*on_close)()) {
@@ -99,8 +116,86 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
 
 }
 
-/* Return number of packets sent or -1 on error */
+// called every tick
+void process_quic() {
+    printf("Processing quic now\n");
+
+repeat:
+    lsquic_engine_process_conns(global_client_engine);
+    lsquic_engine_process_conns(global_engine);
+
+    int diff;
+
+    if (lsquic_engine_earliest_adv_tick(global_client_engine, &diff)) {
+        goto repeat;
+    }
+
+    if (lsquic_engine_earliest_adv_tick(global_engine, &diff)) {
+        goto repeat;
+    }
+
+    printf("Exiting now!\n");
+}
+
+// the client will pass outgoing packets directly into the server's ingoing packets
+int send_packets_out_client(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
+    us_quic_socket_context_t *context = ctx;
+    
+    //printf("client sending packets out!\n");
+    // all sending functions MUST queue the passing of packets until next event loop iteration
+    for (int i = 0; i < n_specs; i++) {
+        // smush together iov to one linear buffer
+        char payload[16 * 1024];
+        int length = 0;
+        for (int j = 0; j < specs[i].iovlen; j++) {
+            memcpy(payload + length, specs[i].iov[j].iov_base, specs[i].iov[j].iov_len);
+            length += specs[i].iov[j].iov_len;
+
+            if (length > 16 * 1024) {
+                exit(0);
+            }
+        }
+
+        int ret = lsquic_engine_packet_in(context->engine, payload, length, (struct sockaddr *) &server_addr, (struct sockaddr *) &client_addr, (void *) 12, 0); 
+    
+        if (ret == -1) {
+            exit(0);
+        }
+    }  
+    us_wakeup_loop(context->loop);
+    return n_specs;
+}
+
 int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
+    us_quic_socket_context_t *context = ctx;
+    
+    //printf("server sending packets out!\n");
+    // all sending functions MUST queue the passing of packets until next event loop iteration
+    for (int i = 0; i < n_specs; i++) {
+        // smush together iov to one linear buffer
+        char payload[16 * 1024];
+        int length = 0;
+        for (int j = 0; j < specs[i].iovlen; j++) {
+            memcpy(payload + length, specs[i].iov[j].iov_base, specs[i].iov[j].iov_len);
+            length += specs[i].iov[j].iov_len;
+
+            if (length > 16 * 1024) {
+                exit(0);
+            }
+        }
+
+        int ret = lsquic_engine_packet_in(context->client_engine, payload, length, (struct sockaddr *) &client_addr, (struct sockaddr *) &server_addr, (void *) 12, 0); 
+    
+        if (ret == -1) {
+            exit(0);
+        }
+    }  
+    us_wakeup_loop(context->loop);
+    return n_specs;
+}
+
+/* Return number of packets sent or -1 on error */
+int send_packets_out_real(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
     us_quic_socket_context_t *context = ctx;
 
     //printf("Sending UDP\n");
@@ -139,10 +234,32 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
 lsquic_conn_ctx_t *on_new_conn(void *stream_if_ctx, lsquic_conn_t *c) {
     us_quic_socket_context_t *context = stream_if_ctx;
 
-    context->on_open();
+    context->on_open(0);
 
     return 0;
 }
+
+lsquic_conn_ctx_t *on_new_conn_client(void *stream_if_ctx, lsquic_conn_t *c) {
+    us_quic_socket_context_t *context = stream_if_ctx;
+
+    context->on_open(1);
+
+
+    // having 10 streams dramatically improves perf. compared to 1 single stream
+
+    // 8.5 seconds vs 3.5 seconds
+    
+    // for simplicity, lets open one stream by default
+    lsquic_conn_make_stream(c); // these can end up calling cb with null if the conn was
+    //closed
+
+    // multiple streams should be like multiple clients
+    for (int i = 0; i < 0; i++)
+    lsquic_conn_make_stream(c);
+
+    return 0;
+}
+
 
 void on_conn_closed(lsquic_conn_t *c) {
     //us_quic_socket_context_t *context = ctx;
@@ -152,14 +269,51 @@ void on_conn_closed(lsquic_conn_t *c) {
     printf("QUIC connection closed!\n");
 }
 
+void on_conn_closed_client(lsquic_conn_t *c) {
+    //us_quic_socket_context_t *context = ctx;
+
+    //context->on_close();
+
+    printf("QUIC connection closed client!\n");
+}
+
 lsquic_stream_ctx_t *on_new_stream(void *stream_if_ctx, lsquic_stream_t *s) {
 
     /* In true usockets style we always want read */
     lsquic_stream_wantread(s, 1);
 
+    //printf("server stream opened!\n");
+
     us_quic_socket_context_t *context = stream_if_ctx;
 
     context->on_stream_open();
+
+    return context;
+}
+
+lsquic_stream_ctx_t *on_new_stream_client(void *stream_if_ctx, lsquic_stream_t *s) {
+
+    //printf("client stream opened! %p\n", s);
+
+
+    /* In true usockets style we always want read */
+    //lsquic_stream_wantwrite(s, 1);
+    on_write_client (s, NULL); // immediately call it
+
+
+    us_quic_socket_context_t *context = stream_if_ctx;
+
+    context->on_stream_open();
+
+    // send something here
+    /*int ret = lsquic_stream_write(s, "Hello!", 6);
+
+    if (ret != 6) {
+        printf("we only sent: %d bytes out of 6\n", ret);
+        exit(0);
+    }*/
+
+    //printf("Hello returning from client stream open!\n");
 
     return context;
 }
@@ -219,6 +373,29 @@ void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_q
     hbuf.off = 0;
 }
 
+void on_read_client(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    //printf("Client read data!\n");
+
+    char temp[4096] = {};
+    int nr = lsquic_stream_read(s, temp, 4096);
+
+    //printf("%s\n", temp);
+
+    // here we close this stream, and start a new one - doing a new request
+
+    // get the conn of this stream
+
+    lsquic_conn_make_stream(lsquic_stream_conn(s));
+
+    lsquic_stream_shutdown(s, 0); // both?
+    //lsquic_stream_close(s);
+    // should we also close it?
+
+    //exit(0);
+}
+
+#include <errno.h>
+
 // this would be the application logic of the echo server
 // this function should emit the quic message to the high level application
 void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
@@ -249,7 +426,12 @@ void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     int nr = lsquic_stream_read(s, temp, 4096);
 
     if (nr == -1) {
-        printf("Error in reading!\n");
+        printf("Error in reading! errno is: %d\n", errno);
+        if (errno != EWOULDBLOCK) {
+            printf("Errno is not EWOULDBLOCK\n");
+        } else {
+            printf("Errno is would block, fine!\n");
+        }
         exit(0);
         return;
     }
@@ -285,6 +467,45 @@ void on_write (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 }
 
 void on_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    //printf("STREAM CLOSED!\n");
+}
+
+void on_write_client (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    //printf("Client is now writable\n");
+
+
+    us_quic_socket_context_set_header(NULL, 0, ":method", 7, "GET", 3);
+    us_quic_socket_context_set_header(NULL, 1, ":path", 5, "/hi", 3);
+
+    // begin by sending no headers
+    lsquic_http_headers_t headers = {
+        .count = 2,
+        .headers = headers_arr,
+    };
+    // last here is whether this is eof or not (has body)
+    if (lsquic_stream_send_headers(s, &headers, 1)) {// pass 0 if data
+        printf("CANNOT SEND HEADERS from client!\n");
+        exit(0);
+    }
+
+    lsquic_stream_shutdown(s, 1); // stop writing
+    //lsquic_stream_flush(s);
+
+
+    // send something here
+    /*int ret = lsquic_stream_write(s, "Hello!", 6);
+
+    if (ret != 6) {
+        printf("we only sent: %d bytes out of 6\n", ret);
+        exit(0);
+    }*/
+
+    // set us not writable, but wantread
+    lsquic_stream_wantwrite(s, 0);
+    lsquic_stream_wantread(s, 1);
+}
+
+void on_close_client (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     //printf("STREAM CLOSED!\n");
 }
 
@@ -555,7 +776,7 @@ extern us_quic_socket_context_t *context;
 
 void timer_cb(struct us_timer_t *t) {
     //printf("Processing conns from timer\n");
-    lsquic_engine_process_conns(context->engine);
+    //lsquic_engine_process_conns(context->engine);
 }
 
 // this will be for both client and server, but will be only for either h3 or raw quic
@@ -579,7 +800,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     context->send_buf = us_create_udp_packet_buffer();
 
     /* Init lsquic engine */
-    if (0 != lsquic_global_init(/*LSQUIC_GLOBAL_CLIENT|*/LSQUIC_GLOBAL_SERVER)) {
+    if (0 != lsquic_global_init(LSQUIC_GLOBAL_CLIENT|LSQUIC_GLOBAL_SERVER)) {
         exit(EXIT_FAILURE);
     }
 
@@ -634,11 +855,60 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     /* Create an engine in server mode with HTTP behavior: */
     context->engine = lsquic_engine_new(LSENG_SERVER | LSENG_HTTP, &engine_api);
 
-    //printf("Engine: %p\n", context->engine);
+
+
+
+
+
+
+
+
+    // for client only
+    static struct lsquic_stream_if stream_callbacks_client = {
+        .on_close = on_close_client,
+        .on_conn_closed = on_conn_closed_client,
+        .on_write = on_write_client,
+        .on_read = on_read_client,
+        .on_new_stream = on_new_stream_client,
+        .on_new_conn = on_new_conn_client
+    };
+
+    /*static struct lsquic_hset_if hset_if = {
+        .hsi_discard_header_set = hsi_discard_header_set,
+        .hsi_create_header_set = hsi_create_header_set,
+        .hsi_prepare_decode = hsi_prepare_decode,
+        .hsi_process_header = hsi_process_header
+    };*/
+
+    struct lsquic_engine_api engine_api_client = {
+        .ea_packets_out     = send_packets_out_client,
+        .ea_packets_out_ctx = (void *) context,  /* For example */
+        .ea_stream_if       = &stream_callbacks_client,
+        .ea_stream_if_ctx   = context,
+
+        //.ea_get_ssl_ctx = get_ssl_ctx, // for client?
+        
+        // lookup certificate
+        //.ea_lookup_cert = sni_lookup, // for client?
+        //.ea_cert_lu_ctx = 13, // for client?
+
+        // these are zero anyways
+        //.ea_hsi_ctx = 0,
+        //.ea_hsi_if = &hset_if,
+    };
+
+    context->client_engine = lsquic_engine_new(LSENG_HTTP, &engine_api_client);
+
+    printf("Engine: %p\n", context->engine);
+    printf("Client Engine: %p\n", context->client_engine);
 
     // start a timer to handle connections
     struct us_timer_t *delayTimer = us_create_timer(loop, 0, 0);
     us_timer_set(delayTimer, timer_cb, 1000, 1000);
+
+    // used by process_quic
+    global_engine = context->engine;
+    global_client_engine = context->client_engine;
 
     return context;
 }
@@ -647,6 +917,27 @@ us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t 
     /* We literally do create a listen socket */
     context->udp_socket = us_create_udp_socket(context->loop, context->recv_buf, on_udp_socket_data, on_udp_socket_writable, host, port, context);
     return context->udp_socket;
+}
+
+/* A client connection is its own UDP socket, while a server connection makes use of the shared listen UDP socket */
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port) {
+    printf("Connecting..\n");
+
+
+    
+
+    // Refer to the UDP socket, and from that, get the context?
+
+    // Create an UDP socket with host-picked port, or well, any port for now
+
+    // we need 1 socket for servers, then we bind multiple ports to that one socket
+
+    void *client = lsquic_engine_connect(context->client_engine, LSQVER_I001, (struct sockaddr *) &client_addr, (struct sockaddr *) &server_addr, 0, 0, "sni", 0, 0, 0, 0, 0);
+
+    printf("Client: %p\n", client);
+
+    // this is requiored to even have packetgs sending out
+    lsquic_engine_process_conns(context->client_engine);
 }
 
 #endif

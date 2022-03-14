@@ -9,8 +9,10 @@ typedef struct {
     char *key_file_name;
 } us_quic_socket_context_options_t;
 
-typedef struct {
 
+typedef struct {
+    /* Refers to either the shared listen socket or the client UDP socket */
+    void *udp_socket;
 } us_quic_socket_t;
 
 struct us_quic_socket_context_s;
@@ -32,12 +34,14 @@ void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_q
 
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options);
 us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port);
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port);
+
 
 void us_quic_socket_context_on_stream_data(us_quic_socket_context_t *context, void(*on_stream_data)(us_quic_stream_t *s, char *data, int length));
 void us_quic_socket_context_on_stream_headers(us_quic_socket_context_t *context, void(*on_stream_headers)());
 void us_quic_socket_context_on_stream_open(us_quic_socket_context_t *context, void(*on_stream_open)());
 void us_quic_socket_context_on_stream_close(us_quic_socket_context_t *context, void(*on_stream_close)());
-void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_open)());
+void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_open)(int is_client));
 void us_quic_socket_context_on_close(us_quic_socket_context_t *context, void(*on_close)());
 void us_quic_socket_context_on_stream_writable(us_quic_socket_context_t *context, void(*on_stream_writable)());
 

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 pid_t thread;
-int requests;
+//int requests;
 
 /* Experimental HTTP/3 server */
 #include <libusockets.h>
@@ -18,8 +18,15 @@ us_quic_socket_context_t *context;
 
 #include <stdio.h>
 
+unsigned long long requests = 0;
+
+void process_quic();
+
 /* Loop callbacks not used in this example */
-void on_wakeup(struct us_loop_t *loop) {}
+void on_wakeup(struct us_loop_t *loop) {
+    printf("Wakeup!\n");
+    process_quic();
+}
 void on_pre(struct us_loop_t *loop) {}
 void on_post(struct us_loop_t *loop) {}
 
@@ -36,16 +43,22 @@ void on_server_quic_stream_headers(us_quic_stream_t *s) {
     //     exit(0);
     // }
 
-    //printf("==== HTTP/3 request %d ====\n", ++requests);
+    // printf("==== HTTP/3 request %d ====\n", ++requests);
 
-    /* Iterate the headers and print them */
+    // /* Iterate the headers and print them */
     // for (int i = 0, more = 1; more; i++) {
     //     char *name, *value;
     //     int name_length, value_length;
     //     if (more = us_quic_socket_context_get_header(context, i, &name, &name_length, &value, &value_length)) {
-    //         //printf("header %.*s = %.*s\n", name_length, name, value_length, value);
+    //         printf("header %.*s = %.*s\n", name_length, name, value_length, value);
     //     }
     // }
+
+    requests++;
+    if (requests == 1000000) {
+        printf("Done!\n");
+        exit(0);
+    }
 
     /* Write headers */
     us_quic_socket_context_set_header(context, 0, ":status", 7, "200", 3);
@@ -70,11 +83,16 @@ void on_server_quic_stream_writable() {
 }
 
 void on_server_quic_stream_close() {
-    printf("Stream closed\n");
+    //printf("Stream closed\n");
 }
 
-void on_server_quic_open() {
-    printf("New QUIC connection!\n");
+void on_server_quic_open(int is_client) {
+    printf("New QUIC connection! Is client: %d\n", is_client);
+
+    // for now the lib creates a stream by itself here if client
+    if (is_client) {
+        //us_
+    }
 }
 
 void on_server_quic_close() {
@@ -109,8 +127,14 @@ int main() {
     /* The listening socket is the actual UDP socket used */
     us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "127.0.0.1", 9004);
 
+    /* We also establish a client connection that sends requests */
+    us_quic_socket_t *connect_socket = us_quic_socket_context_connect(context, "127.0.0.1", 9004);
+
     /* Run the event loop */
-    us_loop_run(loop);
+    //us_loop_run(loop);
+    process_quic();
+
+    printf("Falling through!\n");
 }
 #else
 
