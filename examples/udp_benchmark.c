@@ -43,18 +43,28 @@ void on_server_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *bu
         int length = us_udp_packet_buffer_payload_length(buf, i);
         int ecn = us_udp_packet_buffer_ecn(buf, i);
         void *peer_addr = us_udp_packet_buffer_peer(buf, i);
+        //void *local_addr = us_udp_packet_buffer_local(buf, i);
 
         /* Echo it back */
         us_udp_buffer_set_packet_payload(send_buf, i, 0, payload, length, peer_addr);
         
         /* Let's count a one whole message as one whole roundtrip for easier comparison with TCP echo benchmark */
-        messages += 0.5;
+        messages += 1;
     }
 
     int sent = us_udp_socket_send(s, send_buf, packets);
 }
 
-int main() {
+int main(int argc, char **argv) {
+
+    int is_client = 0;
+    if (argc == 2 && !strcmp(argv[1], "client")) {
+        is_client = 1;
+        printf("Running as client\n");
+    } else {
+        printf("Running as server\n");
+    }
+
     /* Allocate per thread, UDP packet buffers */
     struct us_udp_packet_buffer_t *receive_buf = us_create_udp_packet_buffer();
     /* We also want a send buffer we can assemble while iterating the read buffer */
@@ -64,9 +74,15 @@ int main() {
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     /* Create two UDP sockets and bind them to their respective ports */
-    struct us_udp_socket_t *server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
-    struct us_udp_socket_t *client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
-    if (!client || !server) {
+    struct us_udp_socket_t *server;// = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
+    struct us_udp_socket_t *client;// = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
+    
+    if (is_client) {
+        client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
+    } else {
+        server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
+    }
+    if (!client && !server) {
         printf("Failed to create UDP sockets!\n");
         return 1;
     }
@@ -81,10 +97,12 @@ int main() {
     addr->sin_family = AF_INET;
 
     /* Send initial message batch */
-    for (int i = 0; i < 40; i++) {
-        us_udp_buffer_set_packet_payload(send_buf, i, 0, "Hello UDP!", 10, &storage);
+    if (is_client) {
+        for (int i = 0; i < 40; i++) {
+            us_udp_buffer_set_packet_payload(send_buf, i, 0, "Hello UDP!", 10, &storage);
+        }
+        int sent = us_udp_socket_send(client, send_buf, 40);
     }
-    int sent = us_udp_socket_send(client, send_buf, 40);
 
     /* Start a counting timer */
     struct us_timer_t *timer = us_create_timer(loop, 0, 0);
