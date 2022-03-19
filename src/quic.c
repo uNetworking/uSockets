@@ -1,5 +1,7 @@
 #ifdef LIBUS_USE_QUIC
 
+#define USE_QUIC
+
 #include "quic.h"
 
 #define _GNU_SOURCE
@@ -351,13 +353,17 @@ struct header_buf hbuf;
 struct lsxpack_header headers_arr[10];
 
 void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length) {
+#ifndef USE_QUIC
     if (header_set_ptr(&headers_arr[index], &hbuf, key, key_length, value, value_length) != 0) {
         printf("CANNOT FORMAT HEADER!\n");
         exit(0);
     }
+#endif
 }
 
 void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num) {
+
+#ifndef USE_QUIC
 
     lsquic_http_headers_t headers = {
         .count = num,
@@ -371,15 +377,26 @@ void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_q
 
     /* Reset header offset */
     hbuf.off = 0;
+
+#endif
 }
 
 void on_read_client(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
-    //printf("Client read data!\n");
 
     char temp[4096] = {};
     int nr = lsquic_stream_read(s, temp, 4096);
 
+    //printf("Client read data: %d!\n", nr);
     //printf("%s\n", temp);
+
+#ifdef USE_QUIC
+    extern unsigned long long requests;
+    requests++;
+    if (requests == 1000000) {
+        printf("Done with quic!\n");
+        exit(0);
+    }
+#endif
 
     // here we close this stream, and start a new one - doing a new request
 
@@ -404,6 +421,7 @@ void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
     //printf("stream is readable\n");
 
+#ifndef USE_QUIC
     // I guess you just get the header set here
     void *header_set = lsquic_stream_get_hset(s);
     //printf("Header set is: %p\n", header_set);
@@ -413,6 +431,7 @@ void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
         leave_all();//free(header_set);
     }
+#endif
 
     // here we emit a new request if we have headers?
     // if only data, we probably don't get headers
@@ -473,7 +492,7 @@ void on_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 void on_write_client (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     //printf("Client is now writable\n");
 
-
+#ifndef USE_QUIC
     us_quic_socket_context_set_header(NULL, 0, ":method", 7, "GET", 3);
     us_quic_socket_context_set_header(NULL, 1, ":path", 5, "/hi", 3);
 
@@ -487,6 +506,10 @@ void on_write_client (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
         printf("CANNOT SEND HEADERS from client!\n");
         exit(0);
     }
+#else
+    // just write some data here
+    lsquic_stream_write(s, "Hello", 5);
+#endif
 
     lsquic_stream_shutdown(s, 1); // stop writing
     //lsquic_stream_flush(s);
@@ -823,7 +846,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     };
 
 
-    add_alpn("h3");
+    add_alpn("echo");
 
     struct lsquic_engine_api engine_api = {
         .ea_packets_out     = send_packets_out,
@@ -838,8 +861,8 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
         .ea_cert_lu_ctx = 13,
 
         // these are zero anyways
-        .ea_hsi_ctx = 0,
-        .ea_hsi_if = &hset_if,
+        //.ea_hsi_ctx = 0,
+        //.ea_hsi_if = &hset_if,
     };
 
     //printf("log: %d\n", lsquic_set_log_level("debug"));
@@ -853,7 +876,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     //lsquic_logger_init(&logger, 0, LLTS_NONE);
 
     /* Create an engine in server mode with HTTP behavior: */
-    context->engine = lsquic_engine_new(LSENG_SERVER | LSENG_HTTP, &engine_api);
+    context->engine = lsquic_engine_new(LSENG_SERVER /*| LSENG_HTTP*/, &engine_api);
 
 
 
@@ -895,9 +918,11 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
         // these are zero anyways
         //.ea_hsi_ctx = 0,
         //.ea_hsi_if = &hset_if,
+
+        .ea_alpn = "echo"
     };
 
-    context->client_engine = lsquic_engine_new(LSENG_HTTP, &engine_api_client);
+    context->client_engine = lsquic_engine_new(/*LSENG_HTTP*/0, &engine_api_client);
 
     printf("Engine: %p\n", context->engine);
     printf("Client Engine: %p\n", context->client_engine);
@@ -932,7 +957,7 @@ us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *conte
 
     // we need 1 socket for servers, then we bind multiple ports to that one socket
 
-    void *client = lsquic_engine_connect(context->client_engine, LSQVER_I001, (struct sockaddr *) &client_addr, (struct sockaddr *) &server_addr, 0, 0, "sni", 0, 0, 0, 0, 0);
+    void *client = lsquic_engine_connect(context->client_engine, N_LSQVER, (struct sockaddr *) &client_addr, (struct sockaddr *) &server_addr, 0, 0, "sni", 0, 0, 0, 0, 0);
 
     printf("Client: %p\n", client);
 

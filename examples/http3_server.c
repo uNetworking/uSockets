@@ -76,6 +76,10 @@ void on_server_quic_stream_headers(us_quic_stream_t *s) {
 /* And this would be the body of the request */
 void on_server_quic_stream_data(us_quic_stream_t *s, char *data, int length) {
     //printf("Body length is: %d\n", length);
+
+    // write response back
+    //us_quic_stream_write(s, "Hehe hello!", 11);
+    //us_quic_stream_shutdown(s);
 }
 
 void on_server_quic_stream_writable() {
