@@ -93,8 +93,8 @@ int main() {
 
 	/* Create a socket context for HTTP */
 	struct us_socket_context_options_t options = {};
-	options.key_file_name = "/home/alexhultman/uWebSockets.js/misc/key.pem";
-	options.cert_file_name = "/home/alexhultman/uWebSockets.js/misc/cert.pem";
+	options.key_file_name = "../../misc/key.pem";
+	options.cert_file_name = "../../misc/cert.pem";
 	options.passphrase = "1234";
 
 	struct us_socket_context_t *http_context = us_create_socket_context(SSL, loop, sizeof(struct http_context), options);
