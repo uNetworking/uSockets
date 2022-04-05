@@ -186,6 +186,39 @@ void us_internal_loop_post(struct us_loop_t *loop) {
     loop->data.post_cb(loop);
 }
 
+int us_socket_transfer(int client_fd, struct us_listen_socket_t *listen_socket, void *internal_addr)
+{
+    struct bsd_addr_t *addr = (struct bsd_addr_t*)internal_addr;
+    struct bsd_addr_t bsd_addr;
+    if (addr == NULL)
+    {
+        addr = &bsd_addr;
+        if (bsd_remote_addr(client_fd, &bsd_addr) == -1)
+            return -1;
+    }
+
+    struct us_poll_t *accepted_p = us_create_poll(us_socket_context(0, &listen_socket->s)->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + listen_socket->socket_ext_size);
+    us_poll_init(accepted_p, client_fd, POLL_TYPE_SOCKET);
+    us_poll_start(accepted_p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
+
+    struct us_socket_t *s = (struct us_socket_t *) accepted_p;
+
+    s->context = listen_socket->s.context;
+    s->timeout = 0;
+    s->low_prio_state = 0;
+
+    /* We always use nodelay */
+    bsd_socket_nodelay(client_fd, 1);
+
+    us_internal_socket_context_link(listen_socket->s.context, s);
+
+    listen_socket->s.context->on_open(s, 0, bsd_addr_get_ip(addr), bsd_addr_get_ip_length(addr));
+
+    /* Exit accept loop if listen socket was closed in on_open handler */
+    return us_socket_is_closed(0, &listen_socket->s);
+}
+
+
 void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events) {
     switch (us_internal_poll_type(p)) {
     case POLL_TYPE_CALLBACK: {
@@ -236,28 +269,8 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                     /* Todo: stop timer if any */
 
                     do {
-                        struct us_poll_t *accepted_p = us_create_poll(us_socket_context(0, &listen_socket->s)->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + listen_socket->socket_ext_size);
-                        us_poll_init(accepted_p, client_fd, POLL_TYPE_SOCKET);
-                        us_poll_start(accepted_p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
-
-                        struct us_socket_t *s = (struct us_socket_t *) accepted_p;
-
-                        s->context = listen_socket->s.context;
-                        s->timeout = 0;
-                        s->low_prio_state = 0;
-
-                        /* We always use nodelay */
-                        bsd_socket_nodelay(client_fd, 1);
-
-                        us_internal_socket_context_link(listen_socket->s.context, s);
-
-                        listen_socket->s.context->on_open(s, 0, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
-
-                        /* Exit accept loop if listen socket was closed in on_open handler */
-                        if (us_socket_is_closed(0, &listen_socket->s)) {
+                        if (us_socket_transfer(client_fd, listen_socket, &addr))
                             break;
-                        }
-
                     } while ((client_fd = bsd_accept_socket(us_poll_fd(p), &addr)) != LIBUS_SOCKET_ERROR);
                 }
             }
