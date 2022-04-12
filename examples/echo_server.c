@@ -105,7 +105,7 @@ struct us_socket_t *on_echo_socket_open(struct us_socket_t *s, int is_client, ch
 	es->backpressure = 0;
 	es->length = 0;
 
-	/* Start a timeout to close the socekt if boring */
+	/* Start a timeout to close the socket if boring */
 	us_socket_timeout(SSL, s, 30);
 
 	printf("Client connected\n");
