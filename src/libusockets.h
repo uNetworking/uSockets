@@ -169,6 +169,14 @@ WIN32_EXPORT void *us_socket_context_ext(int ssl, struct us_socket_context_t *co
 WIN32_EXPORT struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_context_t *context,
     const char *host, int port, int options, int socket_ext_size);
 
+#ifdef __linux__
+/* Listen for connections on unix port. Acts as the main driving cog in a server. Will call set async callbacks. 
+ * Accepts path as a pathname socket (path on filesystem) or abstract socket (starts with null character), second null character ends the path.
+ * See `sockaddr_un.sun_path` for details. */
+WIN32_EXPORT struct us_listen_socket_t *us_socket_context_unix_listen(int ssl, struct us_socket_context_t *context,
+    const char *path, int options, int socket_ext_size);
+#endif
+
 /* listen_socket.c/.h */
 WIN32_EXPORT void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
 

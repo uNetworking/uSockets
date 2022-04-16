@@ -36,6 +36,10 @@
 #include <errno.h>
 #endif
 
+#ifdef __linux__
+#include <linux/un.h>
+#endif
+
 /* Internal structure of packet buffer */
 struct us_internal_udp_packet_buffer {
 #if defined(_WIN32) || defined(__APPLE__)
@@ -439,6 +443,39 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
     freeaddrinfo(result);
     return listenFd;
 }
+
+#ifdef __linux__
+// return LIBUS_SOCKET_ERROR or the fd that represents listen socket
+// listen on a unix domain socket
+LIBUS_SOCKET_DESCRIPTOR bsd_create_unix_listen_socket(const char *path, int options) {
+    // Unix sockets persist, this removes any old listening sockets at the path.
+    if (path[0]) unlink(path);
+
+    LIBUS_SOCKET_DESCRIPTOR listenFd = LIBUS_SOCKET_ERROR;
+    listenFd = bsd_create_socket(AF_UNIX, SOCK_STREAM, 0);
+
+    if (listenFd == LIBUS_SOCKET_ERROR) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    if (path[0]) {
+        strncpy(addr.sun_path, path, UNIX_PATH_MAX);
+    } else {
+        addr.sun_path[0] = 0;
+        strncpy(addr.sun_path + 1, path + 1, UNIX_PATH_MAX);
+    } 
+
+    if (bind(listenFd, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) || listen(listenFd, 512)) {
+        bsd_close_socket(listenFd);
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    return listenFd;
+}
+#endif
 
 LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
     struct addrinfo hints, *result;
