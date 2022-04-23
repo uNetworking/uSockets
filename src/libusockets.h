@@ -66,6 +66,12 @@ struct us_udp_packet_buffer_t;
 WIN32_EXPORT char *us_udp_packet_buffer_payload(struct us_udp_packet_buffer_t *buf, int index);
 WIN32_EXPORT int us_udp_packet_buffer_payload_length(struct us_udp_packet_buffer_t *buf, int index);
 
+/* Copies out local (received destination) ip (4 or 16 bytes) of received packet */
+WIN32_EXPORT int us_udp_packet_buffer_local_ip(struct us_udp_packet_buffer_t *buf, int index, char *ip);
+
+/* Get the bound port in host byte order */
+WIN32_EXPORT int us_udp_socket_bound_port(struct us_udp_socket_t *s);
+
 /* Peeks peer addr (sockaddr) of received packet */
 WIN32_EXPORT char *us_udp_packet_buffer_peer(struct us_udp_packet_buffer_t *buf, int index);
 

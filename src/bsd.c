@@ -46,6 +46,7 @@ struct us_internal_udp_packet_buffer {
     struct mmsghdr msgvec[LIBUS_UDP_MAX_NUM];
     struct iovec iov[LIBUS_UDP_MAX_NUM];
     struct sockaddr_storage addr[LIBUS_UDP_MAX_NUM];
+    char control[LIBUS_UDP_MAX_NUM][256];
 #endif
 };
 
@@ -99,7 +100,41 @@ int bsd_recvmmsg(LIBUS_SOCKET_DESCRIPTOR fd, void *msgvec, unsigned int vlen, in
 
     return LIBUS_UDP_MAX_NUM;
 #else
+    // we need to set controllen for ip packet
+    for (int i = 0; i < vlen; i++) {
+        ((struct mmsghdr *)msgvec)[i].msg_hdr.msg_controllen = 256;
+    }
+
     return recvmmsg(fd, (struct mmsghdr *)msgvec, vlen, flags, 0);
+#endif
+}
+
+// this one is needed for knowing the destination addr of udp packet
+// an udp socket can only bind to one port, and that port never changes
+// this function returns ONLY the IP address, not any port
+int bsd_udp_packet_buffer_local_ip(void *msgvec, int index, char *ip) {
+#if defined(_WIN32) || defined(__APPLE__)
+    return 0; // not supported
+#else
+    struct msghdr *mh = &((struct mmsghdr *) msgvec)[index].msg_hdr;
+    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(mh); cmsg != NULL; cmsg = CMSG_NXTHDR(mh, cmsg)) {
+        // ipv6 or ipv4
+        if (cmsg->cmsg_level == IPPROTO_IP) {
+            if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                struct in6_pktinfo *pi6 = CMSG_DATA(cmsg);
+                memcpy(ip, &pi6->ipi6_addr, 16);
+                return 16;
+            }
+            if (cmsg->cmsg_type == IP_PKTINFO) {
+                struct in_pktinfo *pi = CMSG_DATA(cmsg);
+                memcpy(ip, &pi->ipi_addr, 4);
+                return 4;
+            }
+        }
+    }
+
+    return 0; // no length
+
 #endif
 }
 
@@ -146,6 +181,9 @@ void bsd_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, 
     // copy the peer address
     memcpy(ss[index].msg_hdr.msg_name, peer_addr, /*ss[index].msg_hdr.msg_namelen*/ sizeof(struct sockaddr_in));
 
+    // set control length to 0
+    ss[index].msg_hdr.msg_controllen = 0;
+
     // copy the payload
     
     ss[index].msg_hdr.msg_iov->iov_len = length + offset;
@@ -184,8 +222,8 @@ void *bsd_create_udp_packet_buffer() {
             .msg_iov        = &b->iov[n],
             .msg_iovlen     = 1,
 
-            .msg_control    = 0,
-            .msg_controllen = 0,
+            .msg_control    = b->control[n],
+            .msg_controllen = 256,
         };
     }
 
@@ -487,6 +525,19 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
     setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
 #endif
 
+    /* We need destination address for udp packets in both ipv6 and ipv4 */
+    int enabled = 1;
+    setsockopt(listenFd, IPPROTO_IP, IP_PKTINFO, &enabled, sizeof(enabled));
+    if (setsockopt(listenFd, IPPROTO_IP, IPV6_RECVPKTINFO, &enabled, sizeof(enabled)) != 0) {
+        printf("Error pkt!\n");
+        exit(0);
+    }
+
+    if (setsockopt(listenFd, IPPROTO_IP, IP_RECVTOS, &enabled, sizeof(enabled)) != 0) {
+        printf("Error tos!\n");
+        exit(0);
+    }
+
     /* We bind here as well */
     if (bind(listenFd, listenAddr->ai_addr, (socklen_t) listenAddr->ai_addrlen)) {
         bsd_close_socket(listenFd);
@@ -496,6 +547,21 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
 
     freeaddrinfo(result);
     return listenFd;
+}
+
+int bsd_udp_packet_buffer_ecn(void *msgvec, int index) {
+    // we should iterate all control messages once, after recvmmsg and then only fetch them with these functions
+    struct msghdr *mh = &((struct mmsghdr *) msgvec)[index].msg_hdr;
+    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(mh); cmsg != NULL; cmsg = CMSG_NXTHDR(mh, cmsg)) {
+        if (cmsg->cmsg_level == IPPROTO_IP) {
+            if (cmsg->cmsg_type == IP_TOS) {
+                uint8_t tos = *(uint8_t *)CMSG_DATA(cmsg);
+                return tos & 3;
+            }
+        }
+    }
+
+    return 0; // no ecn defaults to 0
 }
 
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options) {

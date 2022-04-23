@@ -23,7 +23,11 @@
 #include <string.h>
 
 WIN32_EXPORT int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, int index) {
-    return 0;
+    return bsd_udp_packet_buffer_ecn(buf, index);
+}
+
+WIN32_EXPORT int us_udp_packet_buffer_local_ip(struct us_udp_packet_buffer_t *buf, int index, char *ip) {
+    return bsd_udp_packet_buffer_local_ip(buf, index, ip);
 }
 
 WIN32_EXPORT char *us_udp_packet_buffer_peer(struct us_udp_packet_buffer_t *buf, int index) {
@@ -66,7 +70,15 @@ struct us_internal_udp_t {
     void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int);
     void (*drain_cb)(struct us_udp_socket_t *);
     void *user;
+    /* An UDP socket can only ever be bound to one single port regardless of how
+     * many interfaces it may listen to. Therefore we cache the port after creation
+     * and use it to build a proper and full sockaddr_in or sockaddr_in6 for every received packet */
+    int port;
 };
+
+WIN32_EXPORT int us_udp_socket_bound_port(struct us_udp_socket_t *s) {
+    return ((struct us_internal_udp_t *) s)->port;
+}
 
 /* Internal wrapper, move from here */
 void internal_on_udp_read(struct us_udp_socket_t *s) {
@@ -111,6 +123,13 @@ WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop
     cb->cb.loop = loop;
     cb->cb.cb_expects_the_loop = 0;
     cb->cb.leave_poll_ready = 1;
+
+    /* Get and store the port once */
+    struct bsd_addr_t tmp;
+    bsd_local_addr(fd, &tmp);
+    cb->port = bsd_addr_get_port(&tmp);
+
+    printf("The port of UDP is: %d\n", cb->port);
 
     /* There is no udp socket context, only user data */
     /* This should really be ext like everything else */

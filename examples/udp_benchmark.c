@@ -43,7 +43,19 @@ void on_server_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *bu
         int length = us_udp_packet_buffer_payload_length(buf, i);
         int ecn = us_udp_packet_buffer_ecn(buf, i);
         void *peer_addr = us_udp_packet_buffer_peer(buf, i);
-        //void *local_addr = us_udp_packet_buffer_local(buf, i);
+
+        //printf("ECN is: %d\n", ecn);
+
+
+        char ip[16];
+        int ip_length = us_udp_packet_buffer_local_ip(buf, i, ip);
+        if (!ip_length) {
+            printf("We got no ip on received packet!\n");
+            exit(0);
+        }
+
+        int port = us_udp_socket_bound_port(s);
+        //printf("We received packet on port: %d\n", port);
 
         /* Echo it back */
         us_udp_buffer_set_packet_payload(send_buf, i, 0, payload, length, peer_addr);
@@ -78,7 +90,8 @@ int main(int argc, char **argv) {
     struct us_udp_socket_t *client;// = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
     
     if (is_client) {
-        client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
+        // passing 0 as port should bind to any ephemeral port
+        client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 0, 0);
     } else {
         server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
     }
@@ -102,6 +115,7 @@ int main(int argc, char **argv) {
             us_udp_buffer_set_packet_payload(send_buf, i, 0, "Hello UDP!", 10, &storage);
         }
         int sent = us_udp_socket_send(client, send_buf, 40);
+        printf("Sent initial packets: %d\n", sent);
     }
 
     /* Start a counting timer */

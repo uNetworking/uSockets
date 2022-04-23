@@ -516,12 +516,12 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
         }
     }
 
-    if (options.ssl_ciphers) {
-        if (SSL_CTX_set_cipher_list(ssl_context, options.ssl_ciphers) != 1) {
-            free_ssl_context(ssl_context);
-            return NULL;
-        }
-    }
+    // if (options.ssl_ciphers) {
+    //     if (SSL_CTX_set_cipher_list(ssl_context, options.ssl_ciphers) != 1) {
+    //         free_ssl_context(ssl_context);
+    //         return NULL;
+    //     }
+    // }
 
     /* This must be free'd with free_ssl_context, not SSL_CTX_free */
     return ssl_context;
