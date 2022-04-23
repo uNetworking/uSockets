@@ -119,17 +119,16 @@ int bsd_udp_packet_buffer_local_ip(void *msgvec, int index, char *ip) {
     struct msghdr *mh = &((struct mmsghdr *) msgvec)[index].msg_hdr;
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(mh); cmsg != NULL; cmsg = CMSG_NXTHDR(mh, cmsg)) {
         // ipv6 or ipv4
-        if (cmsg->cmsg_level == IPPROTO_IP) {
-            if (cmsg->cmsg_type == IPV6_PKTINFO) {
-                struct in6_pktinfo *pi6 = CMSG_DATA(cmsg);
-                memcpy(ip, &pi6->ipi6_addr, 16);
-                return 16;
-            }
-            if (cmsg->cmsg_type == IP_PKTINFO) {
-                struct in_pktinfo *pi = CMSG_DATA(cmsg);
-                memcpy(ip, &pi->ipi_addr, 4);
-                return 4;
-            }
+        if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_PKTINFO) {
+            struct in_pktinfo *pi = CMSG_DATA(cmsg);
+            memcpy(ip, &pi->ipi_addr, 4);
+            return 4;
+        }
+
+        if (cmsg->cmsg_level == IPPROTO_IPV6 && cmsg->cmsg_type == IPV6_PKTINFO) {
+            struct in6_pktinfo *pi6 = CMSG_DATA(cmsg);
+            memcpy(ip, &pi6->ipi6_addr, 16);
+            return 16;
         }
     }
 
@@ -526,16 +525,32 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
 #endif
 
     /* We need destination address for udp packets in both ipv6 and ipv4 */
+
+/* On FreeBSD this option seems to be called like so */
+#ifndef IPV6_RECVPKTINFO
+#define IPV6_RECVPKTINFO IPV6_PKTINFO
+#endif
+
     int enabled = 1;
-    setsockopt(listenFd, IPPROTO_IP, IP_PKTINFO, &enabled, sizeof(enabled));
-    if (setsockopt(listenFd, IPPROTO_IP, IPV6_RECVPKTINFO, &enabled, sizeof(enabled)) != 0) {
-        printf("Error pkt!\n");
-        exit(0);
+    if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &enabled, sizeof(enabled)) == -1) {
+        if (errno == 92) {
+            if (setsockopt(listenFd, IPPROTO_IP, IP_PKTINFO, &enabled, sizeof(enabled)) != 0) {
+                printf("Error setting IPv4 pktinfo!\n");
+            }
+        } else {
+            printf("Error setting IPv6 pktinfo!\n");
+        }
     }
 
-    if (setsockopt(listenFd, IPPROTO_IP, IP_RECVTOS, &enabled, sizeof(enabled)) != 0) {
-        printf("Error tos!\n");
-        exit(0);
+    /* These are used for getting the ECN */
+    if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVTCLASS, &enabled, sizeof(enabled)) == -1) {
+        if (errno == 92) {
+            if (setsockopt(listenFd, IPPROTO_IP, IP_RECVTOS, &enabled, sizeof(enabled)) != 0) {
+                printf("Error setting IPv4 ECN!\n");
+            }
+        } else {
+            printf("Error setting IPv6 ECN!\n");
+        }
     }
 
     /* We bind here as well */
@@ -553,13 +568,24 @@ int bsd_udp_packet_buffer_ecn(void *msgvec, int index) {
     // we should iterate all control messages once, after recvmmsg and then only fetch them with these functions
     struct msghdr *mh = &((struct mmsghdr *) msgvec)[index].msg_hdr;
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(mh); cmsg != NULL; cmsg = CMSG_NXTHDR(mh, cmsg)) {
+        // do we need to get TOS from ipv6 also?
         if (cmsg->cmsg_level == IPPROTO_IP) {
             if (cmsg->cmsg_type == IP_TOS) {
                 uint8_t tos = *(uint8_t *)CMSG_DATA(cmsg);
                 return tos & 3;
             }
         }
+
+        if (cmsg->cmsg_level == IPPROTO_IPV6) {
+            if (cmsg->cmsg_type == IPV6_TCLASS) {
+                // is this correct?
+                uint8_t tos = *(uint8_t *)CMSG_DATA(cmsg);
+                return tos & 3;
+            }
+        }
     }
+
+    printf("We got no ECN!\n");
 
     return 0; // no ecn defaults to 0
 }

@@ -54,6 +54,8 @@ void on_server_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *bu
             exit(0);
         }
 
+        //printf("Our received destination IP length is: %d\n", ip_length);
+
         int port = us_udp_socket_bound_port(s);
         //printf("We received packet on port: %d\n", port);
 
@@ -70,7 +72,12 @@ void on_server_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *bu
 int main(int argc, char **argv) {
 
     int is_client = 0;
-    if (argc == 2 && !strcmp(argv[1], "client")) {
+    int is_ipv6 = 0;
+    if (argc > 1 && !strcmp(argv[argc - 1], "ipv6")) {
+        is_ipv6 = 1;
+        printf("Using IPv6 UDP\n");
+    }
+    if (argc >= 2 && !strcmp(argv[1], "client")) {
         is_client = 1;
         printf("Running as client\n");
     } else {
@@ -86,14 +93,21 @@ int main(int argc, char **argv) {
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 
     /* Create two UDP sockets and bind them to their respective ports */
-    struct us_udp_socket_t *server;// = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
-    struct us_udp_socket_t *client;// = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5679, 0);
+    struct us_udp_socket_t *server;
+    struct us_udp_socket_t *client;
     
     if (is_client) {
-        // passing 0 as port should bind to any ephemeral port
-        client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 0, 0);
+        if (is_ipv6) {
+            client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "::1", 0, 0);
+        } else {
+            client = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 0, 0);
+        }
     } else {
-        server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
+        if (is_ipv6) {
+            server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "::1", 5678, 0);
+        } else {
+            server = us_create_udp_socket(loop, receive_buf, on_server_data, on_server_drain, "127.0.0.1", 5678, 0);
+        }
     }
     if (!client && !server) {
         printf("Failed to create UDP sockets!\n");
@@ -103,11 +117,18 @@ int main(int argc, char **argv) {
     /* Send first packets from client to server */
 
     /* This is ugly and needs to be wrapped in bsd_addr_t */
-    struct sockaddr_storage storage;
-    struct sockaddr_in *addr = (struct sockaddr_in *) &storage;
-    addr->sin_addr.s_addr = 16777343;
-    addr->sin_port = htons(5678);
-    addr->sin_family = AF_INET;
+    struct sockaddr_storage storage = {};
+    if (is_ipv6) {
+        struct sockaddr_in6 *addr = (struct sockaddr_in6 *) &storage;
+        addr->sin6_addr.s6_addr[15] = 1;
+        addr->sin6_port = htons(5678);
+        addr->sin6_family = AF_INET6;
+    } else {
+        struct sockaddr_in *addr = (struct sockaddr_in *) &storage;
+        addr->sin_addr.s_addr = 16777343;
+        addr->sin_port = htons(5678);
+        addr->sin_family = AF_INET;
+    }
 
     /* Send initial message batch */
     if (is_client) {
