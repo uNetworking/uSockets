@@ -17,6 +17,8 @@
 
 /* Todo: this file should lie in networking/bsd.c */
 
+#define __APPLE_USE_RFC_3542
+
 #include "libusockets.h"
 #include "internal/internal.h"
 
