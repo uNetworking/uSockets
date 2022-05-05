@@ -122,13 +122,13 @@ int bsd_udp_packet_buffer_local_ip(void *msgvec, int index, char *ip) {
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(mh); cmsg != NULL; cmsg = CMSG_NXTHDR(mh, cmsg)) {
         // ipv6 or ipv4
         if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_PKTINFO) {
-            struct in_pktinfo *pi = CMSG_DATA(cmsg);
+            struct in_pktinfo *pi = (struct in_pktinfo *) CMSG_DATA(cmsg);
             memcpy(ip, &pi->ipi_addr, 4);
             return 4;
         }
 
         if (cmsg->cmsg_level == IPPROTO_IPV6 && cmsg->cmsg_type == IPV6_PKTINFO) {
-            struct in6_pktinfo *pi6 = CMSG_DATA(cmsg);
+            struct in6_pktinfo *pi6 = (struct in6_pktinfo *) CMSG_DATA(cmsg);
             memcpy(ip, &pi6->ipi6_addr, 16);
             return 16;
         }

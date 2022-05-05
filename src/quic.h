@@ -31,7 +31,7 @@ int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int ind
 
 
 void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length);
-void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num);
+void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num, int has_body);
 
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options);
 us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port);

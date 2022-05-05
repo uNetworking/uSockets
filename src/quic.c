@@ -320,14 +320,14 @@ void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int in
     }
 }
 
-void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num) {
+void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num, int has_body) {
 
     lsquic_http_headers_t headers = {
         .count = num,
         .headers = headers_arr,
     };
     // last here is whether this is eof or not (has body)
-    if (lsquic_stream_send_headers(s, &headers, 1)) {// pass 0 if data
+    if (lsquic_stream_send_headers(s, &headers, has_body ? 0 : 1)) {// pass 0 if data
         printf("CANNOT SEND HEADERS!\n");
         exit(0);
     }
