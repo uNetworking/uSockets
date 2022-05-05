@@ -36,13 +36,14 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port);
 us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port);
 
+void us_quic_socket_create_stream(us_quic_socket_t *s);
 
 void us_quic_socket_context_on_stream_data(us_quic_socket_context_t *context, void(*on_stream_data)(us_quic_stream_t *s, char *data, int length));
-void us_quic_socket_context_on_stream_headers(us_quic_socket_context_t *context, void(*on_stream_headers)());
-void us_quic_socket_context_on_stream_open(us_quic_socket_context_t *context, void(*on_stream_open)());
-void us_quic_socket_context_on_stream_close(us_quic_socket_context_t *context, void(*on_stream_close)());
-void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_open)(int is_client));
-void us_quic_socket_context_on_close(us_quic_socket_context_t *context, void(*on_close)());
-void us_quic_socket_context_on_stream_writable(us_quic_socket_context_t *context, void(*on_stream_writable)());
+void us_quic_socket_context_on_stream_headers(us_quic_socket_context_t *context, void(*on_stream_headers)(us_quic_stream_t *s));
+void us_quic_socket_context_on_stream_open(us_quic_socket_context_t *context, void(*on_stream_open)(us_quic_stream_t *s, int is_client));
+void us_quic_socket_context_on_stream_close(us_quic_socket_context_t *context, void(*on_stream_close)(us_quic_stream_t *s));
+void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_open)(us_quic_socket_t *s, int is_client));
+void us_quic_socket_context_on_close(us_quic_socket_context_t *context, void(*on_close)(us_quic_socket_t *s));
+void us_quic_socket_context_on_stream_writable(us_quic_socket_context_t *context, void(*on_stream_writable)(us_quic_stream_t *s));
 
 #endif
