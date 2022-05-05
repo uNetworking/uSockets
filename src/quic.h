@@ -25,6 +25,7 @@ typedef struct us_quic_stream_s us_quic_stream_t;
 
 int us_quic_stream_write(us_quic_stream_t *s, char *data, int length);
 int us_quic_stream_shutdown(us_quic_stream_t *s);
+int us_quic_stream_shutdown_read(us_quic_stream_t *s);
 
 int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int index, char **name, int *name_length, char **value, int *value_length);
 
@@ -37,6 +38,10 @@ us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t 
 us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port);
 
 void us_quic_socket_create_stream(us_quic_socket_t *s);
+us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s);
+
+/* This one is ugly and is only used to make clean examples */
+int us_quic_stream_is_client(us_quic_stream_t *s);
 
 void us_quic_socket_context_on_stream_data(us_quic_socket_context_t *context, void(*on_stream_data)(us_quic_stream_t *s, char *data, int length));
 void us_quic_socket_context_on_stream_headers(us_quic_socket_context_t *context, void(*on_stream_headers)(us_quic_stream_t *s));

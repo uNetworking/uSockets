@@ -22,11 +22,7 @@ void on_wakeup(struct us_loop_t *loop) {}
 void on_pre(struct us_loop_t *loop) {}
 void on_post(struct us_loop_t *loop) {}
 
-/* This would be a request */
-void on_stream_headers(us_quic_stream_t *s) {
-
-    printf("==== HTTP/3 request %lld ====\n", ++requests);
-
+void print_current_headers() {
     /* Iterate the headers and print them */
     for (int i = 0, more = 1; more; i++) {
         char *name, *value;
@@ -35,6 +31,28 @@ void on_stream_headers(us_quic_stream_t *s) {
             printf("header %.*s = %.*s\n", name_length, name, value_length, value);
         }
     }
+}
+
+/* This would be a request */
+void on_stream_headers(us_quic_stream_t *s) {
+
+    if (us_quic_stream_is_client(s)) {
+        printf("CLIENT GOT HTTP RESPONSE!\n");
+
+        print_current_headers();
+
+        /* Make a new stream */
+        us_quic_socket_create_stream(us_quic_stream_socket(s));
+
+        return;
+    }
+
+    // this will be called for both clients and servers
+    // we need us_quic_stream_ext() to determine if a stream is client or not
+
+    printf("==== HTTP/3 request %lld ====\n", ++requests);
+
+    print_current_headers();
 
     requests++;
     if (requests == 10) {
@@ -60,7 +78,7 @@ void on_stream_data(us_quic_stream_t *s, char *data, int length) {
     printf("Body length is: %d\n", length);
 
     // if we are client then open new stream (resulting in new request being made!)
-    
+
 }
 
 void on_stream_writable(us_quic_stream_t *s) {

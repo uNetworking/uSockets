@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
 struct sockaddr_in client_addr = {
     AF_INET,
     1,
@@ -26,7 +27,7 @@ struct sockaddr_in server_addr = {
     AF_INET,
     2,
     2
-};
+};*/
 
     // used in process_quic
     lsquic_engine_t *global_engine;
@@ -335,27 +336,18 @@ void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_q
     hbuf.off = 0;
 }
 
-void on_read_client(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
-    //printf("Client read data!\n");
+int us_quic_stream_is_client(us_quic_stream_t *s) {
+    us_quic_socket_context_t *context = lsquic_conn_get_ctx(lsquic_stream_conn(s));
 
-    char temp[4096] = {};
-    int nr = lsquic_stream_read(s, temp, 4096);
+    int is_client = 0;
+    if (lsquic_conn_get_engine(lsquic_stream_conn(s)) == context->client_engine) {
+        is_client = 1;
+    }
+    return is_client;
+}
 
-    printf("Client got body of length: %d\n", nr);
-
-    printf("%s\n", temp);
-
-    // here we close this stream, and start a new one - doing a new request
-
-    // get the conn of this stream
-
-    lsquic_conn_make_stream(lsquic_stream_conn(s));
-
-    lsquic_stream_shutdown(s, 0); // both?
-    //lsquic_stream_close(s);
-    // should we also close it?
-
-    //exit(0);
+us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s) {
+    return lsquic_stream_conn(s);
 }
 
 #include <errno.h>
@@ -389,6 +381,7 @@ static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
     int nr = lsquic_stream_read(s, temp, 4096);
 
+    // we will get 9, ebadf if we read from a closed stream
     if (nr == -1) {
         printf("Error in reading! errno is: %d\n", errno);
         if (errno != EWOULDBLOCK) {
@@ -431,10 +424,6 @@ static void on_write (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 }
 
 static void on_stream_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
-    //printf("STREAM CLOSED!\n");
-}
-
-void on_close_client (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     //printf("STREAM CLOSED!\n");
 }
 
@@ -540,6 +529,18 @@ SSL_CTX *sni_lookup(void *lsquic_cert_lookup_ctx, const struct sockaddr *local, 
 
 int log_buf_cb(void *logger_ctx, const char *buf, size_t len) {
     printf("%.*s\n", len, buf);
+    return 0;
+}
+
+int us_quic_stream_shutdown_read(us_quic_stream_t *s) {
+    lsquic_stream_t *stream = s;
+
+    int ret = lsquic_stream_shutdown(s, 0);
+    if (ret != 0) {
+        printf("cannot shutdown stream!\n");
+        exit(0);
+    }
+
     return 0;
 }
 
@@ -784,35 +785,10 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     /* Create an engine in server mode with HTTP behavior: */
     context->engine = lsquic_engine_new(LSENG_SERVER | LSENG_HTTP, &engine_api);
 
-
-
-
-
-
-
-
-
-    // for client only
-    static struct lsquic_stream_if stream_callbacks_client = {
-        .on_close = on_close_client,
-        .on_conn_closed = on_conn_closed,
-        .on_write = on_write,
-        .on_read = on_read_client,
-        .on_new_stream = on_new_stream,
-        .on_new_conn = on_new_conn
-    };
-
-    /*static struct lsquic_hset_if hset_if = {
-        .hsi_discard_header_set = hsi_discard_header_set,
-        .hsi_create_header_set = hsi_create_header_set,
-        .hsi_prepare_decode = hsi_prepare_decode,
-        .hsi_process_header = hsi_process_header
-    };*/
-
     struct lsquic_engine_api engine_api_client = {
         .ea_packets_out     = send_packets_out,
         .ea_packets_out_ctx = (void *) context,  /* For example */
-        .ea_stream_if       = &stream_callbacks_client,
+        .ea_stream_if       = &stream_callbacks,
         .ea_stream_if_ctx   = context,
 
         //.ea_get_ssl_ctx = get_ssl_ctx, // for client?
@@ -822,8 +798,8 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
         //.ea_cert_lu_ctx = 13, // for client?
 
         // these are zero anyways
-        //.ea_hsi_ctx = 0,
-        //.ea_hsi_if = &hset_if,
+        .ea_hsi_ctx = 0,
+        .ea_hsi_if = &hset_if,
     };
 
     context->client_engine = lsquic_engine_new(LSENG_HTTP, &engine_api_client);
