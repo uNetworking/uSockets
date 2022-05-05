@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+void leave_all();
+
 /*
 struct sockaddr_in client_addr = {
     AF_INET,
