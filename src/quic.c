@@ -1,9 +1,9 @@
 #ifdef LIBUS_USE_QUIC
 
-#include "quic.h"
-
 #define _GNU_SOURCE
 #include <sys/socket.h>
+
+#include "quic.h"
 
 #include "lsquic.h"
 #include "lsquic_types.h"
@@ -210,7 +210,7 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
     us_quic_socket_context_t *context = ctx;
 
     /* A run is at most UIO_MAXIOV datagrams long */
-    struct mmsghdr[UIO_MAXIOV] hdrs;
+    struct mmsghdr hdrs[UIO_MAXIOV];
     int run_length = 0;
 
     /* We assume that thiss whole cb will never be called with 0 specs */
@@ -220,7 +220,7 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
     for (int i = 0; i < n_specs; i++) {
         /* Send this run if we need to */
         if (run_length == UIO_MAXIOV || specs[i].peer_ctx != last_socket) {
-            int ret = sendmmsg(us_poll_fd(last_socket), &hdrs, run_length, 0);
+            int ret = sendmmsg(us_poll_fd(last_socket), hdrs, run_length, 0);
             if (ret != run_length) {
                 if (ret == -1) {
                     return sent;
@@ -230,22 +230,25 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
             }
             sent += ret;
             run_length = 0;
+            last_socket = specs[i].peer_ctx;
         }
 
         /* Continue existing run or start a new one */
-        hdrs[i] = {};
+        memset(&hdrs[i].msg_hdr, 0, sizeof(hdrs[i].msg_hdr));
         hdrs[i].msg_hdr.msg_name       = (void *) specs[i].dest_sa;
         hdrs[i].msg_hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
                                             sizeof(struct sockaddr_in) :
                                             sizeof(struct sockaddr_in6)),
-        hdr[i].msg_hdr.msg_iov        = specs[i].iov;
-        hdr[i].msg_hdr.msg_iovlen     = specs[i].iovlen;
-        hdr[i].msg_hdr.msg_flags      = 0;
+        hdrs[i].msg_hdr.msg_iov        = specs[i].iov;
+        hdrs[i].msg_hdr.msg_iovlen     = specs[i].iovlen;
+        hdrs[i].msg_hdr.msg_flags      = 0;
+
+        run_length++;
     }
 
     /* Send last run */
     if (run_length) {
-        int ret = sendmmsg(us_poll_fd(last_socket), &hdrs, run_length, 0);
+        int ret = sendmmsg(us_poll_fd(last_socket), hdrs, run_length, 0);
         if (ret == -1) {
             return sent;
         }
