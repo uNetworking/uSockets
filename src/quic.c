@@ -208,34 +208,50 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
 /* Server and client packet out is identical */
 int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
     us_quic_socket_context_t *context = ctx;
-    
-    /* We need to partition outgoing packets per udp_socket */
+
+    /* A run is at most UIO_MAXIOV datagrams long */
+    struct mmsghdr[UIO_MAXIOV] hdrs;
+    int run_length = 0;
+
+    /* We assume that thiss whole cb will never be called with 0 specs */
+    struct us_udp_socket_t *last_socket = (struct us_udp_socket_t *) specs[0].peer_ctx;
+
     int sent = 0;
     for (int i = 0; i < n_specs; i++) {
-        struct msghdr hdr = {};
+        /* Send this run if we need to */
+        if (run_length == UIO_MAXIOV || specs[i].peer_ctx != last_socket) {
+            int ret = sendmmsg(us_poll_fd(last_socket), &hdrs, run_length, 0);
+            if (ret != run_length) {
+                if (ret == -1) {
+                    return sent;
+                } else {
+                    return sent + ret;
+                }
+            }
+            sent += ret;
+            run_length = 0;
+        }
 
-        hdr.msg_name       = (void *) specs[i].dest_sa;
-        hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
+        /* Continue existing run or start a new one */
+        hdrs[i] = {};
+        hdrs[i].msg_hdr.msg_name       = (void *) specs[i].dest_sa;
+        hdrs[i].msg_hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
                                             sizeof(struct sockaddr_in) :
                                             sizeof(struct sockaddr_in6)),
-        hdr.msg_iov        = specs[i].iov;
-        hdr.msg_iovlen     = specs[i].iovlen;
-        hdr.msg_flags      = 0;
-
-        struct us_udp_socket_t *udp_socket = (struct us_udp_socket_t *) specs[i].peer_ctx;
-
-        printf("Sending a packet out on udp socket: %p!\n", udp_socket);
-
-        int fd = us_poll_fd(udp_socket);
-
-        int ret = sendmsg(fd, &hdr, 0);
-        if (ret == -1) {
-            /* Something did not play along, break before this one */
-            return i;
-        }
+        hdr[i].msg_hdr.msg_iov        = specs[i].iov;
+        hdr[i].msg_hdr.msg_iovlen     = specs[i].iovlen;
+        hdr[i].msg_hdr.msg_flags      = 0;
     }
 
-    /* If we come here all specs have been sent */
+    /* Send last run */
+    if (run_length) {
+        int ret = sendmmsg(us_poll_fd(last_socket), &hdrs, run_length, 0);
+        if (ret == -1) {
+            return sent;
+        }
+        return sent + ret;
+    }
+
     return n_specs;
 }
 
