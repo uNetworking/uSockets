@@ -34,9 +34,9 @@ void print_current_headers() {
 /* This would be a request */
 void on_stream_headers(us_quic_stream_t *s) {
 
-    printf("==== HTTP/3 request ====\n");
+    //printf("==== HTTP/3 request ====\n");
 
-    print_current_headers();
+    //print_current_headers();
 
     /* Write headers */
     us_quic_socket_context_set_header(context, 0, ":status", 7, "200", 3);
@@ -61,7 +61,7 @@ void on_stream_writable(us_quic_stream_t *s) {
 }
 
 void on_stream_close(us_quic_stream_t *s) {
-    printf("Stream closed\n");
+    //printf("Stream closed\n");
 }
 
 /* On new connection */
@@ -71,7 +71,7 @@ void on_open(us_quic_socket_t *s, int is_client) {
 
 /* On new stream */
 void on_stream_open(us_quic_stream_t *s, int is_client) {
-    printf("Stream opened!\n");
+    //printf("Stream opened!\n");
 }
 
 void on_close(us_quic_socket_t *s) {

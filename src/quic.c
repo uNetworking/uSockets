@@ -39,10 +39,10 @@ struct sockaddr_in server_addr = {
 struct us_quic_socket_context_s {
 
     struct us_udp_packet_buffer_t *recv_buf;
-    struct us_udp_packet_buffer_t *send_buf;
+    //struct us_udp_packet_buffer_t *send_buf;
     int outgoing_packets;
 
-    struct us_udp_socket_t *udp_socket;
+    //struct us_udp_socket_t *udp_socket;
     struct us_loop_t *loop;
     lsquic_engine_t *engine;
     lsquic_engine_t *client_engine;
@@ -91,8 +91,10 @@ void on_udp_socket_writable(struct us_udp_socket_t *s) {
 // we need two differetn handlers to know to put it in client or servcer context
 void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int packets) {
     
+    int fd = us_poll_fd(s);
+    //printf("Reading on fd: %d\n", fd);
 
-    printf("UDP (client) socket got data: %p\n", s);
+    //printf("UDP (client) socket got data: %p\n", s);
 
     /* We need to lookup the context from the udp socket */
     //us_udpus_udp_socket_context(s);
@@ -116,10 +118,10 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
             exit(0);
         }
 
-        printf("Our received destination IP length is: %d\n", ip_length);
+        //printf("Our received destination IP length is: %d\n", ip_length);
 
         int port = us_udp_socket_bound_port(s);
-        printf("We received packet on port: %d\n", port);
+        //printf("We received packet on port: %d\n", port);
 
         /* We build our address based on what the dest addr is */
         struct sockaddr_storage local_addr = {};
@@ -130,13 +132,16 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
             ipv6->sin6_port = ntohs(port);
             memcpy(ipv6->sin6_addr.s6_addr, ip, 16);
         } else {
-            printf("Error: client ip is ipv4\n");
-            exit(0);
+            struct sockaddr_in *ipv4 = (struct sockaddr_in *) &local_addr;
+
+            ipv4->sin_family = AF_INET;
+            ipv4->sin_port = ntohs(port);
+            memcpy(&ipv4->sin_addr.s_addr, ip, 4);
         }
 
 
         int ret = lsquic_engine_packet_in(context->client_engine, payload, length, &local_addr, peer_addr, (void *) s, 0);
-        printf("Engine returned: %d\n", ret);
+        //printf("Engine returned: %d\n", ret);
 
     
     }
@@ -148,13 +153,16 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
 void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int packets) {
     
 
-    printf("UDP socket got data: %p\n", s);
+    //printf("UDP socket got data: %p\n", s);
 
     /* We need to lookup the context from the udp socket */
     //us_udpus_udp_socket_context(s);
     // do we have udp socket contexts? or do we just have user data?
 
     us_quic_socket_context_t *context = us_udp_socket_user(s);
+
+    // process conns now? to accept new connections?
+    lsquic_engine_process_conns(context->engine);
     
     /* We just shove it to lsquic */
     for (int i = 0; i < packets; i++) {
@@ -172,10 +180,10 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
             exit(0);
         }
 
-        printf("Our received destination IP length is: %d\n", ip_length);
+        //printf("Our received destination IP length is: %d\n", ip_length);
 
         int port = us_udp_socket_bound_port(s);
-        printf("We received packet on port: %d\n", port);
+        //printf("We received packet on port: %d\n", port);
 
         /* We build our address based on what the dest addr is */
         struct sockaddr_storage local_addr = {};
@@ -196,7 +204,7 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
 
 
         int ret = lsquic_engine_packet_in(context->engine, payload, length, &local_addr, peer_addr, (void *) s, 0);
-        printf("Engine returned: %d\n", ret);
+        //printf("Engine returned: %d\n", ret);
 
     
     }
@@ -205,9 +213,48 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
 
 }
 
+int send_packets_out_slow(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
+    us_quic_socket_context_t *context = ctx;
+    
+    /* We need to partition outgoing packets per udp_socket */
+    int sent = 0;
+    for (int i = 0; i < n_specs; i++) {
+        struct msghdr hdr = {};
+
+        hdr.msg_name       = (void *) specs[i].dest_sa;
+        hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
+                                            sizeof(struct sockaddr_in) :
+                                            sizeof(struct sockaddr_in6)),
+        hdr.msg_iov        = specs[i].iov;
+        hdr.msg_iovlen     = specs[i].iovlen;
+        hdr.msg_flags      = 0;
+
+        struct us_udp_socket_t *udp_socket = (struct us_udp_socket_t *) specs[i].peer_ctx;
+
+        //printf("Sending a packet out on udp socket: %p!\n", udp_socket);
+
+        int fd = us_poll_fd(udp_socket);
+
+        //printf("Sending on fd: %d\n", fd);
+
+        int ret = sendmsg(fd, &hdr, 0);
+        if (ret == -1) {
+            /* Something did not play along, break before this one */
+            printf("backpressure\n");
+            exit(0);
+            return i;
+        }
+    }
+
+    /* If we come here all specs have been sent */
+    return n_specs;
+}
+
 /* Server and client packet out is identical */
 int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
     us_quic_socket_context_t *context = ctx;
+
+    //printf("About to send %d datagrams\n", n_specs);
 
     /* A run is at most UIO_MAXIOV datagrams long */
     struct mmsghdr hdrs[UIO_MAXIOV];
@@ -223,25 +270,30 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
             int ret = sendmmsg(us_poll_fd(last_socket), hdrs, run_length, 0);
             if (ret != run_length) {
                 if (ret == -1) {
+                    printf("backpressure!\n");
                     return sent;
                 } else {
+                    printf("backpressure!\n");
                     return sent + ret;
                 }
             }
             sent += ret;
             run_length = 0;
             last_socket = specs[i].peer_ctx;
+            //printf("different socket breask run!\n");
         }
 
         /* Continue existing run or start a new one */
-        memset(&hdrs[i].msg_hdr, 0, sizeof(hdrs[i].msg_hdr));
-        hdrs[i].msg_hdr.msg_name       = (void *) specs[i].dest_sa;
-        hdrs[i].msg_hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
+        //memset(&hdrs[i].msg_hdr, 0, sizeof(hdrs[i].msg_hdr));
+        memset(&hdrs[run_length], 0, sizeof(hdrs[run_length]));
+
+        hdrs[run_length].msg_hdr.msg_name       = (void *) specs[i].dest_sa;
+        hdrs[run_length].msg_hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
                                             sizeof(struct sockaddr_in) :
                                             sizeof(struct sockaddr_in6)),
-        hdrs[i].msg_hdr.msg_iov        = specs[i].iov;
-        hdrs[i].msg_hdr.msg_iovlen     = specs[i].iovlen;
-        hdrs[i].msg_hdr.msg_flags      = 0;
+        hdrs[run_length].msg_hdr.msg_iov        = specs[i].iov;
+        hdrs[run_length].msg_hdr.msg_iovlen     = specs[i].iovlen;
+        hdrs[run_length].msg_hdr.msg_flags      = 0;
 
         run_length++;
     }
@@ -250,10 +302,17 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
     if (run_length) {
         int ret = sendmmsg(us_poll_fd(last_socket), hdrs, run_length, 0);
         if (ret == -1) {
+            printf("backpressure!\n");
             return sent;
         }
+        if (sent + ret != n_specs) {
+            printf("backpressure!\n");
+        }
+        //printf("Returning %d\n", sent + ret);
         return sent + ret;
     }
+
+    //printf("Returning %d\n", n_specs);
 
     return n_specs;
 }
@@ -611,11 +670,11 @@ int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int ind
 
 }
 
-char pool[100][4096];
+char pool[1000][4096];
 int pool_top = 0;
 
 void *take() {
-    if (pool_top == 100) {
+    if (pool_top == 1000) {
         printf("out of memory\n");
         exit(0);
     }
@@ -727,7 +786,8 @@ extern us_quic_socket_context_t *context;
 
 void timer_cb(struct us_timer_t *t) {
     //printf("Processing conns from timer\n");
-    //lsquic_engine_process_conns(context->engine);
+    lsquic_engine_process_conns(context->engine);
+    lsquic_engine_process_conns(context->client_engine);
 }
 
 // this will be for both client and server, but will be only for either h3 or raw quic
@@ -744,11 +804,11 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     us_quic_socket_context_t *context = malloc(sizeof(us_quic_socket_context_t));
 
     context->loop = loop;
-    context->udp_socket = 0;
+    //context->udp_socket = 0;
 
     /* Allocate per thread, UDP packet buffers */
     context->recv_buf = us_create_udp_packet_buffer();
-    context->send_buf = us_create_udp_packet_buffer();
+    //context->send_buf = us_create_udp_packet_buffer();
 
     /* Init lsquic engine */
     if (0 != lsquic_global_init(LSQUIC_GLOBAL_CLIENT|LSQUIC_GLOBAL_SERVER)) {
@@ -830,7 +890,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
     // start a timer to handle connections
     struct us_timer_t *delayTimer = us_create_timer(loop, 0, 0);
-    us_timer_set(delayTimer, timer_cb, 1000, 1000);
+    us_timer_set(delayTimer, timer_cb, 50, 50);
 
     // used by process_quic
     global_engine = context->engine;
@@ -841,8 +901,8 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
 us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port) {
     /* We literally do create a listen socket */
-    context->udp_socket = us_create_udp_socket(context->loop, context->recv_buf, on_udp_socket_data, on_udp_socket_writable, host, port, context);
-    return context->udp_socket;
+    /*context->udp_socket = */us_create_udp_socket(context->loop, /*context->recv_buf*/ NULL, on_udp_socket_data, on_udp_socket_writable, host, port, context);
+    return NULL;//context->udp_socket;
 }
 
 /* A client connection is its own UDP socket, while a server connection makes use of the shared listen UDP socket */
@@ -863,7 +923,7 @@ us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *conte
     addr->sin6_family = AF_INET6;
 
     // Create the UDP socket binding to ephemeral port
-    struct us_udp_socket_t *udp_socket = us_create_udp_socket(context->loop, context->recv_buf, on_udp_socket_data_client, on_udp_socket_writable, 0, 0, context);
+    struct us_udp_socket_t *udp_socket = us_create_udp_socket(context->loop, /*context->recv_buf*/ NULL, on_udp_socket_data_client, on_udp_socket_writable, 0, 0, context);
 
     // Determine what port we got, creating the local sockaddr
     int ephemeral = us_udp_socket_bound_port(udp_socket);
