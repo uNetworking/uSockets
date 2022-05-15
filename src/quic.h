@@ -1,5 +1,8 @@
 #ifdef LIBUS_USE_QUIC
 
+#ifndef LIBUS_QUIC_H
+#define LIBUS_QUIC_H
+
 /* Experimental QUIC functions */
 
 #include "libusockets.h"
@@ -33,11 +36,11 @@ int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int ind
 void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length);
 void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num, int has_body);
 
-us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options);
-us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port);
-us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port);
+us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options, int ext_size);
+us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port, int ext_size);
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port, int ext_size);
 
-void us_quic_socket_create_stream(us_quic_socket_t *s);
+void us_quic_socket_create_stream(us_quic_socket_t *s, int ext_size);
 us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s);
 
 /* This one is ugly and is only used to make clean examples */
@@ -51,4 +54,10 @@ void us_quic_socket_context_on_open(us_quic_socket_context_t *context, void(*on_
 void us_quic_socket_context_on_close(us_quic_socket_context_t *context, void(*on_close)(us_quic_socket_t *s));
 void us_quic_socket_context_on_stream_writable(us_quic_socket_context_t *context, void(*on_stream_writable)(us_quic_stream_t *s));
 
+
+
+void *us_quic_socket_context_ext(us_quic_socket_context_t *context);
+us_quic_socket_context_t *us_quic_socket_context(us_quic_socket_t *s);
+
+#endif
 #endif
