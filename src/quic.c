@@ -334,7 +334,7 @@ lsquic_conn_ctx_t *on_new_conn(void *stream_if_ctx, lsquic_conn_t *c) {
     return context;
 }
 
-void us_quic_socket_create_stream(us_quic_socket_t *s, unsigned int ext_size) {
+void us_quic_socket_create_stream(us_quic_socket_t *s) {
     lsquic_conn_make_stream((lsquic_conn_t *) s);
 }
 
@@ -908,14 +908,14 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     return context;
 }
 
-us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port, unsigned int ext_size) {
+us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port) {
     /* We literally do create a listen socket */
     /*context->udp_socket = */us_create_udp_socket(context->loop, /*context->recv_buf*/ NULL, on_udp_socket_data, on_udp_socket_writable, host, port, context);
     return NULL;//context->udp_socket;
 }
 
 /* A client connection is its own UDP socket, while a server connection makes use of the shared listen UDP socket */
-us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port, unsigned int ext_size) {
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port) {
     printf("Connecting..\n");
 
 

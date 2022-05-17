@@ -37,10 +37,10 @@ void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int in
 void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num, int has_body);
 
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options, unsigned int ext_size);
-us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port, unsigned int ext_size);
-us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port, unsigned int ext_size);
+us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port);
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port);
 
-void us_quic_socket_create_stream(us_quic_socket_t *s, unsigned int ext_size);
+void us_quic_socket_create_stream(us_quic_socket_t *s);
 us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s);
 
 /* This one is ugly and is only used to make clean examples */
