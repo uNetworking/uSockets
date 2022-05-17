@@ -171,7 +171,7 @@ int main() {
     };
 
     /* Create quic socket context (assumes h3 for now) */
-    context = us_create_quic_socket_context(loop, options);
+    context = us_create_quic_socket_context(loop, options, 0);
 
     /* Specify application callbacks */
     us_quic_socket_context_on_stream_data(context, on_stream_data);
