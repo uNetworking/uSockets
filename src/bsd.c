@@ -622,6 +622,7 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, co
             int ret = bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
             freeaddrinfo(interface_result);
             if (ret == LIBUS_SOCKET_ERROR) {
+                bsd_close_socket(fd);
                 freeaddrinfo(result);
                 return LIBUS_SOCKET_ERROR;
             }
