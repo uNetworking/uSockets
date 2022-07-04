@@ -23,7 +23,7 @@
 
 /* Loops */
 struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
-    struct us_loop_t *loop = (struct us_loop_t *) malloc(sizeof(struct us_loop_t) + ext_size);
+    struct us_loop_t *loop = (struct us_loop_t *) us_malloc(sizeof(struct us_loop_t) + ext_size);
 
     // init the queue from hint
 
@@ -39,7 +39,7 @@ void us_loop_free(struct us_loop_t *loop) {
     
     // free queue if different from main
 
-    free(loop);
+    us_free(loop);
 }
 
 /* We don't actually need to include CoreFoundation as we only need one single function,
@@ -87,7 +87,7 @@ void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
     us_poll_change(p, loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
     dispatch_release(p->gcd_read);
     dispatch_release(p->gcd_write);
-    free(p);
+    us_free(p);
 }
 
 void us_poll_start(struct us_poll_t *p, struct us_loop_t *loop, int events) {
@@ -162,7 +162,7 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
 }
 
 struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll_t *poll = (struct us_poll_t *) malloc(sizeof(struct us_poll_t) + ext_size);
+    struct us_poll_t *poll = (struct us_poll_t *) us_malloc(sizeof(struct us_poll_t) + ext_size);
 
     return poll;
 }
@@ -170,7 +170,7 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
 
-    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size + 1024);
+    struct us_poll_t *new_p = us_realloc(p, sizeof(struct us_poll_t) + ext_size + 1024);
     if (p != new_p) {
         /* It is a program error to release suspended filters */
         us_poll_change(new_p, loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
@@ -193,7 +193,7 @@ void gcd_timer_handler(void *t) {
 }
 
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + sizeof(dispatch_source_t) + ext_size);
+    struct us_internal_callback_t *cb = us_malloc(sizeof(struct us_internal_callback_t) + sizeof(dispatch_source_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
@@ -247,7 +247,7 @@ void async_handler(void *c) {
 }
 
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + ext_size);
+    struct us_internal_callback_t *cb = us_malloc(sizeof(struct us_internal_callback_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 1;

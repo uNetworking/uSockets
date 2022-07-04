@@ -237,9 +237,9 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
 /* Lazily inits loop ssl data first time */
 void us_internal_init_loop_ssl_data(struct us_loop_t *loop) {
     if (!loop->data.ssl_data) {
-        struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
+        struct loop_ssl_data *loop_ssl_data = us_malloc(sizeof(struct loop_ssl_data));
 
-        loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
+        loop_ssl_data->ssl_read_output = us_malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
 
         OPENSSL_init_ssl(0, NULL);
 
@@ -252,9 +252,9 @@ void us_internal_free_loop_ssl_data(struct us_loop_t *loop) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     if (loop_ssl_data) {
-        free(loop_ssl_data->ssl_read_output);
+        us_free(loop_ssl_data->ssl_read_output);
 
-        free(loop_ssl_data);
+        us_free(loop_ssl_data);
     }
 }
 

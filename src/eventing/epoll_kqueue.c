@@ -36,7 +36,7 @@
 void us_loop_free(struct us_loop_t *loop) {
     us_internal_loop_data_free(loop);
     close(loop->fd);
-    free(loop);
+    us_free(loop);
 }
 
 /* Poll */
@@ -44,13 +44,13 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
     if (!fallthrough) {
         loop->num_polls++;
     }
-    return malloc(sizeof(struct us_poll_t) + ext_size);
+    return us_malloc(sizeof(struct us_poll_t) + ext_size);
 }
 
 /* Todo: this one should be us_internal_poll_free */
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop) {
     loop->num_polls--;
-    free(p);
+    us_free(p);
 }
 
 void *us_poll_ext(struct us_poll_t *p) {
@@ -94,7 +94,7 @@ struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
 
 /* Loop */
 struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
-    struct us_loop_t *loop = (struct us_loop_t *) malloc(sizeof(struct us_loop_t) + ext_size);
+    struct us_loop_t *loop = (struct us_loop_t *) us_malloc(sizeof(struct us_loop_t) + ext_size);
     loop->num_polls = 0;
     /* These could be accessed if we close a poll before starting the loop */
     loop->num_ready_polls = 0;
@@ -205,7 +205,7 @@ int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_d
 struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
 
-    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
+    struct us_poll_t *new_p = us_realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p && events) {
 #ifdef LIBUS_USE_EPOLL
         /* Hack: forcefully update poll by stripping away already set events */
@@ -303,7 +303,7 @@ struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsi
 }
 #else
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + ext_size);
+    struct us_internal_callback_t *cb = us_malloc(sizeof(struct us_internal_callback_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 0;
@@ -409,7 +409,7 @@ void us_internal_async_wakeup(struct us_internal_async *a) {
 }
 #else
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_internal_callback_t *cb = malloc(sizeof(struct us_internal_callback_t) + ext_size);
+    struct us_internal_callback_t *cb = us_malloc(sizeof(struct us_internal_callback_t) + ext_size);
 
     cb->loop = loop;
     cb->cb_expects_the_loop = 1;

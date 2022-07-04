@@ -353,9 +353,9 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
 /* Lazily inits loop ssl data first time */
 void us_internal_init_loop_ssl_data(struct us_loop_t *loop) {
     if (!loop->data.ssl_data) {
-        struct loop_ssl_data *loop_ssl_data = malloc(sizeof(struct loop_ssl_data));
+        struct loop_ssl_data *loop_ssl_data = us_malloc(sizeof(struct loop_ssl_data));
 
-        loop_ssl_data->ssl_read_output = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
+        loop_ssl_data->ssl_read_output = us_malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
 
         OPENSSL_init_ssl(0, NULL);
 
@@ -379,14 +379,14 @@ void us_internal_free_loop_ssl_data(struct us_loop_t *loop) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
     if (loop_ssl_data) {
-        free(loop_ssl_data->ssl_read_output);
+        us_free(loop_ssl_data->ssl_read_output);
 
         BIO_free(loop_ssl_data->shared_rbio);
         BIO_free(loop_ssl_data->shared_wbio);
 
         BIO_meth_free(loop_ssl_data->shared_biom);
 
-        free(loop_ssl_data);
+        us_free(loop_ssl_data);
     }
 }
 
@@ -426,7 +426,7 @@ void free_ssl_context(SSL_CTX *ssl_context) {
     /* If we have set a password string, free it here */
     void *password = SSL_CTX_get_default_passwd_cb_userdata(ssl_context);
     /* OpenSSL returns NULL if we have no set password */
-    free(password);
+    us_free(password);
 
     SSL_CTX_free(ssl_context);
 }
