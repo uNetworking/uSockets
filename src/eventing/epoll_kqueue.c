@@ -122,7 +122,8 @@ void us_loop_run(struct us_loop_t *loop) {
 #ifdef LIBUS_USE_EPOLL
         loop->num_ready_polls = epoll_wait(loop->fd, loop->ready_polls, 1024, -1);
 #else
-        loop->num_ready_polls = kevent(loop->fd, NULL, 0, loop->ready_polls, 1024, NULL);
+        struct timespec timeout = {.tv_sec = 0, .tv_nsec = loop->num_polls > 2 ? 500000 : 5000000};
+        loop->num_ready_polls = kevent(loop->fd, NULL, 0, loop->ready_polls, 1024, &timeout);
 #endif
 
         /* Iterate ready polls, dispatching them by type */
