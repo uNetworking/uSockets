@@ -15,8 +15,21 @@
  * limitations under the License.
  */
 
+#ifndef us_malloc
+#define us_malloc malloc
+#endif
+
+#ifndef us_realloc
+#define us_realloc realloc
+#endif
+
+#ifndef us_free
+#define us_free free
+#endif
+
 #ifndef LIBUSOCKETS_H
 #define LIBUSOCKETS_H
+
 
 /* 512kb shared receive buffer */
 #define LIBUS_RECV_BUFFER_LENGTH 524288
