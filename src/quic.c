@@ -47,6 +47,9 @@ struct us_quic_socket_context_s {
     lsquic_engine_t *engine;
     lsquic_engine_t *client_engine;
 
+    // we store the options the context was created with here
+    us_quic_socket_context_options_t options;
+
     void(*on_stream_data)(us_quic_stream_t *s, char *data, int length);
     void(*on_stream_headers)(us_quic_stream_t *s);
     void(*on_stream_open)(us_quic_stream_t *s, int is_client);
@@ -153,7 +156,7 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
 void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int packets) {
     
 
-    //printf("UDP socket got data: %p\n", s);
+    printf("UDP socket got data: %p\n", s);
 
     /* We need to lookup the context from the udp socket */
     //us_udpus_udp_socket_context(s);
@@ -336,6 +339,9 @@ lsquic_conn_ctx_t *on_new_conn(void *stream_if_ctx, lsquic_conn_t *c) {
 
 void us_quic_socket_create_stream(us_quic_socket_t *s, int ext_size) {
     lsquic_conn_make_stream((lsquic_conn_t *) s);
+
+    // here we need to allocate and attach the user data
+
 }
 
 void on_conn_closed(lsquic_conn_t *c) {
@@ -351,14 +357,28 @@ lsquic_stream_ctx_t *on_new_stream(void *stream_if_ctx, lsquic_stream_t *s) {
 
     us_quic_socket_context_t *context = stream_if_ctx;
 
+    // the conn's ctx should point at the udp socket and the socket context
+    // the ext size of streams and conn's are set by the listen/connect calls, which
+    // are the calls that create the UDP socket so we need conn to point to the UDP socket
+    // to get that ext_size set in listen/connect calls, back here.
+    // todo: hardcoded for now
+
+    int ext_size = 128;
+
+    void *ext = malloc(ext_size);
+    // yes hello
+    strcpy(ext, "Hello I am ext!");
+
     int is_client = 0;
     if (lsquic_conn_get_engine(lsquic_stream_conn(s)) == context->client_engine) {
         is_client = 1;
     }
 
+    // luckily we can set the ext before we return
+    lsquic_stream_set_ctx(s, ext);
     context->on_stream_open(s, is_client);
 
-    return context;
+    return ext;
 }
 
 //#define V(v) (v), strlen(v)
@@ -436,7 +456,12 @@ us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s) {
 // this function should emit the quic message to the high level application
 static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
-    us_quic_socket_context_t *context = h;
+    //us_quic_socket_context_t *context = h;
+    us_quic_socket_context_t *context = lsquic_conn_get_ctx(lsquic_stream_conn(s));
+
+    if (lsquic_stream_get_ctx(s) == h) {
+        printf("STREAM CTX IS CORRECT!\n");
+    }
 
     //printf("stream is readable\n");
 
@@ -570,11 +595,22 @@ int server_name_cb(SSL *s, int *al, void *arg) {
 
 // this one is required for servers
 struct ssl_ctx_st *get_ssl_ctx(void *peer_ctx, const struct sockaddr *local) {
-    printf("getting ssl ctx now\n");
+    printf("getting ssl ctx now, peer_ctx: %p\n", peer_ctx);
+
+    // peer_ctx point to the us_udp_socket_t that passed the UDP packet in via
+    // lsquic_engine_packet_in (it got passed as peer_ctx)
+    // we want the per-context ssl cert from this udp socket
+    struct us_udp_socket_t *udp_socket = (struct us_udp_socket_t *) peer_ctx;
+
+    // the udp socket of a server points to the context
+    struct us_quic_socket_context_s *context = us_udp_socket_user(udp_socket);
 
     if (old_ctx) {
         return old_ctx;
     }
+
+    // peer_ctx should be the options struct!
+    us_quic_socket_context_options_t *options = &context->options;
 
 
     SSL_CTX *ctx = SSL_CTX_new(TLS_method());
@@ -594,8 +630,11 @@ struct ssl_ctx_st *get_ssl_ctx(void *peer_ctx, const struct sockaddr *local) {
     SSL_CTX_set_tlsext_servername_callback(ctx, server_name_cb);
  //long SSL_CTX_set_tlsext_servername_arg(SSL_CTX *ctx, void *arg);
 
-    int a = SSL_CTX_use_certificate_chain_file(ctx, "/home/alexhultman/uWebSockets.js/misc/cert.pem");
-    int b = SSL_CTX_use_PrivateKey_file(ctx, "/home/alexhultman/uWebSockets.js/misc/key.pem", SSL_FILETYPE_PEM);
+    printf("Key: %s\n", options->key_file_name);
+    printf("Cert: %s\n", options->cert_file_name);
+
+    int a = SSL_CTX_use_certificate_chain_file(ctx, options->cert_file_name);
+    int b = SSL_CTX_use_PrivateKey_file(ctx, options->key_file_name, SSL_FILETYPE_PEM);
 
     printf("loaded cert and key? %d, %d\n", a, b);
 
@@ -622,6 +661,12 @@ int us_quic_stream_shutdown_read(us_quic_stream_t *s) {
     }
 
     return 0;
+}
+
+void *us_quic_stream_ext(us_quic_stream_t *s) {
+    printf("Returning us_quic_stream_ext of stream %p\n");
+
+    return lsquic_stream_get_ctx((lsquic_stream_t *) s);
 }
 
 int us_quic_stream_shutdown(us_quic_stream_t *s) {
@@ -803,6 +848,8 @@ void *us_quic_socket_context_ext(us_quic_socket_context_t *context) {
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options, int ext_size) {
 
 
+    printf("Creating socket context with ssl: %s\n", options.key_file_name);
+
     // every _listen_ call creates a new udp socket that feeds inputs to the engine in the context
     // every context has its own send buffer and udp send socket (not bound to any port or ip?)
 
@@ -811,6 +858,9 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
     /* Holds all callbacks */
     us_quic_socket_context_t *context = malloc(sizeof(struct us_quic_socket_context_s) + ext_size);
+
+    // the option is put on the socket context
+    context->options = options;
 
     context->loop = loop;
     //context->udp_socket = 0;

@@ -8,8 +8,9 @@
 #include "libusockets.h"
 
 typedef struct {
-    char *cert_file_name;
-    char *key_file_name;
+    const char *cert_file_name;
+    const char *key_file_name;
+    const char *passphrase;
 } us_quic_socket_context_options_t;
 
 
@@ -26,6 +27,8 @@ typedef struct us_quic_socket_context_s us_quic_socket_context_t;
 typedef struct us_quic_listen_socket_s us_quic_listen_socket_t;
 typedef struct us_quic_stream_s us_quic_stream_t;
 
+
+void *us_quic_stream_ext(us_quic_stream_t *s);
 int us_quic_stream_write(us_quic_stream_t *s, char *data, int length);
 int us_quic_stream_shutdown(us_quic_stream_t *s);
 int us_quic_stream_shutdown_read(us_quic_stream_t *s);
