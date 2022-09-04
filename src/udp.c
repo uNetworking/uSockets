@@ -101,7 +101,7 @@ void *us_udp_socket_user(struct us_udp_socket_t *s) {
     return udp->user;
 }
 
-WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), char *host, unsigned short port, void *user) {
+WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), const char *host, unsigned short port, void *user) {
     
     LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket(host, port);
     if (fd == LIBUS_SOCKET_ERROR) {

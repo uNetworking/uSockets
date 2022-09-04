@@ -53,6 +53,7 @@ struct us_quic_socket_context_s {
     us_quic_socket_context_options_t options;
 
     void(*on_stream_data)(us_quic_stream_t *s, char *data, int length);
+    void(*on_stream_end)(us_quic_stream_t *s);
     void(*on_stream_headers)(us_quic_stream_t *s);
     void(*on_stream_open)(us_quic_stream_t *s, int is_client);
     void(*on_stream_close)(us_quic_stream_t *s);
@@ -64,6 +65,9 @@ struct us_quic_socket_context_s {
 /* Setters */
 void us_quic_socket_context_on_stream_data(us_quic_socket_context_t *context, void(*on_stream_data)(us_quic_stream_t *s, char *data, int length)) {
     context->on_stream_data = on_stream_data;
+}
+void us_quic_socket_context_on_stream_end(us_quic_socket_context_t *context, void(*on_stream_end)(us_quic_stream_t *s)) {
+    context->on_stream_end = on_stream_end;
 }
 void us_quic_socket_context_on_stream_headers(us_quic_socket_context_t *context, void(*on_stream_headers)(us_quic_stream_t *s)) {
     context->on_stream_headers = on_stream_headers;
@@ -158,7 +162,7 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
 void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int packets) {
     
 
-    printf("UDP socket got data: %p\n", s);
+    //printf("UDP socket got data: %p\n", s);
 
     /* We need to lookup the context from the udp socket */
     //us_udpus_udp_socket_context(s);
@@ -316,7 +320,7 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
             printf("errno is: %d\n", errno);
             errno = EAGAIN;
         }
-        printf("Returning %d of %d\n", sent + ret, n_specs);
+        //printf("Returning %d of %d\n", sent + ret, n_specs);
         return sent + ret;
     }
 
@@ -459,38 +463,51 @@ us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s) {
 
 #include <errno.h>
 
-// this would be the application logic of the echo server
-// this function should emit the quic message to the high level application
+
+// only for servers?
 static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
-    printf("on_read: %p\n", s);
-
-    //us_quic_socket_context_t *context = h;
+    /* The user data of the connection owning the stream, points to the socket context */
     us_quic_socket_context_t *context = (us_quic_socket_context_t *) lsquic_conn_get_ctx(lsquic_stream_conn(s));
 
-    //printf("stream is readable\n");
-
-    // I guess you just get the header set here
+    /* This object is (and must be) fetched from a stream by
+     * calling lsquic_stream_get_hset() before the stream can be read. */
+    /* This call must precede calls to lsquic_stream_read(), lsquic_stream_readv(), and lsquic_stream_readf(). */
     void *header_set = lsquic_stream_get_hset(s);
-    //printf("Header set is: %p\n", header_set);
-
     if (header_set) {
-        printf("on_stream_headers: %p\n", s);
         context->on_stream_headers((us_quic_stream_t *) s);
-
-        leave_all();//free(header_set);
+        // header management is obviously broken and needs to be per-stream
+        leave_all();
     }
 
-    // here we emit a new request if we have headers?
-    // if only data, we probably don't get headers
-
-    //printf("lsquick on_read for stream: %p\n", s);
+    // all of this logic should be moved to uws and WE here should only hand over the data
 
     char temp[4096] = {};
-
-    //printf("stream_reading now\n");
-
     int nr = lsquic_stream_read(s, temp, 4096);
+
+    // emit on_end when we receive fin, regardless of whether we emitted data yet
+    if (nr == 0) {
+        // any time we read EOF we stop reading
+        lsquic_stream_wantread(s, 0);
+        context->on_stream_end((us_quic_stream_t *) s);
+    } else if (nr == -1) {
+        if (errno != EWOULDBLOCK) {
+            // error handling should not be needed if we use lsquic correctly
+            printf("UNHANDLED ON_READ ERROR\n");
+            exit(0);
+        }
+        // if we for some reason could not read even though we were told to read, we just ignore it
+        // this should not really happen but whatever
+    } else {
+        // otherwise if we have data, then emit it
+        context->on_stream_data((us_quic_stream_t *) s, temp, nr);
+    }
+
+    // that's it
+    return;
+
+    //lsquic_stream_readf
+
     printf("read returned: %d\n", nr);
 
     // we will get 9, ebadf if we read from a closed stream
@@ -549,18 +566,21 @@ int us_quic_stream_write(us_quic_stream_t *s, char *data, int length) {
     int ret = lsquic_stream_write((lsquic_stream_t *) s, data, length);
     // just like otherwise, we automatically poll for writable when failed
     if (ret != length) {
-        //printf("failed to write, poll for writable\n");
         lsquic_stream_wantwrite((lsquic_stream_t *) s, 1);
+    } else {
+        lsquic_stream_wantwrite((lsquic_stream_t *) s, 0);
     }
     return ret;
 }
 
 static void on_write (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
-    printf("writable callback internally\n");
 
     us_quic_socket_context_t *context = (us_quic_socket_context_t *) lsquic_conn_get_ctx(lsquic_stream_conn(s));
 
     context->on_stream_writable((us_quic_stream_t *) s);
+
+    // here we might want to check if the user did write to failure or not, and if the user did not write, stop polling for writable
+    // i think that is what we do for http1
 }
 
 static void on_stream_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
@@ -699,8 +719,6 @@ int us_quic_stream_shutdown_read(us_quic_stream_t *s) {
 }
 
 void *us_quic_stream_ext(us_quic_stream_t *s) {
-    printf("Returning us_quic_stream_ext of stream %p\n", s);
-
     return lsquic_stream_get_ctx((lsquic_stream_t *) s);
 }
 
@@ -1009,14 +1027,14 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
     return context;
 }
 
-us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port, int ext_size) {
+us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, const char *host, int port, int ext_size) {
     /* We literally do create a listen socket */
     return (us_quic_listen_socket_t *) us_create_udp_socket(context->loop, /*context->recv_buf*/ NULL, on_udp_socket_data, on_udp_socket_writable, host, port, context);
     //return NULL;
 }
 
 /* A client connection is its own UDP socket, while a server connection makes use of the shared listen UDP socket */
-us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port, int ext_size) {
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, const char *host, int port, int ext_size) {
     printf("Connecting..\n");
 
 

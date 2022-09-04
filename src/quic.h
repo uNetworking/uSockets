@@ -41,8 +41,8 @@ void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int in
 void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num, int has_body);
 
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options, int ext_size);
-us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port, int ext_size);
-us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, char *host, int port, int ext_size);
+us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, const char *host, int port, int ext_size);
+us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *context, const char *host, int port, int ext_size);
 
 void us_quic_socket_create_stream(us_quic_socket_t *s, int ext_size);
 us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s);
@@ -51,6 +51,7 @@ us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s);
 int us_quic_stream_is_client(us_quic_stream_t *s);
 
 void us_quic_socket_context_on_stream_data(us_quic_socket_context_t *context, void(*on_stream_data)(us_quic_stream_t *s, char *data, int length));
+void us_quic_socket_context_on_stream_end(us_quic_socket_context_t *context, void(*on_stream_data)(us_quic_stream_t *s));
 void us_quic_socket_context_on_stream_headers(us_quic_socket_context_t *context, void(*on_stream_headers)(us_quic_stream_t *s));
 void us_quic_socket_context_on_stream_open(us_quic_socket_context_t *context, void(*on_stream_open)(us_quic_stream_t *s, int is_client));
 void us_quic_socket_context_on_stream_close(us_quic_socket_context_t *context, void(*on_stream_close)(us_quic_stream_t *s));
