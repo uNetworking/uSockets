@@ -550,7 +550,7 @@ int us_quic_stream_write(us_quic_stream_t *s, char *data, int length) {
     // just like otherwise, we automatically poll for writable when failed
     if (ret != length) {
         //printf("failed to write, poll for writable\n");
-        lsquic_stream_wantwrite(s, 1);
+        lsquic_stream_wantwrite((lsquic_stream_t *) s, 1);
     }
     return ret;
 }
