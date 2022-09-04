@@ -5,6 +5,8 @@
 
 #include "quic.h"
 
+#include <errno.h>
+
 #include "lsquic.h"
 #include "lsquic_types.h"
 #include "lsxpack_header.h"
@@ -273,10 +275,11 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
             int ret = sendmmsg(us_poll_fd((struct us_poll_t *) last_socket), hdrs, run_length, 0);
             if (ret != run_length) {
                 if (ret == -1) {
-                    printf("backpressure!\n");
+                    printf("unhandled udp backpressure!\n");
                     return sent;
                 } else {
-                    printf("backpressure!\n");
+                    printf("unhandled udp backpressure!\n");
+                    errno = EAGAIN;
                     return sent + ret;
                 }
             }
@@ -305,13 +308,15 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
     if (run_length) {
         int ret = sendmmsg(us_poll_fd((struct us_poll_t *) last_socket), hdrs, run_length, 0);
         if (ret == -1) {
-            printf("backpressure!\n");
+            printf("backpressure! A\n");
             return sent;
         }
         if (sent + ret != n_specs) {
-            printf("backpressure!\n");
+            printf("backpressure! B\n");
+            printf("errno is: %d\n", errno);
+            errno = EAGAIN;
         }
-        //printf("Returning %d\n", sent + ret);
+        printf("Returning %d of %d\n", sent + ret, n_specs);
         return sent + ret;
     }
 
@@ -346,6 +351,8 @@ void us_quic_socket_create_stream(us_quic_socket_t *s, int ext_size) {
 
 void on_conn_closed(lsquic_conn_t *c) {
     us_quic_socket_context_t *context = (us_quic_socket_context_t *) lsquic_conn_get_ctx(c);
+
+    printf("on_conn_closed!\n");
 
     context->on_close((us_quic_socket_t *) c);
 }
@@ -413,7 +420,7 @@ header_set_ptr (struct lsxpack_header *hdr, struct header_buf *header_buf,
 struct header_buf hbuf;
 struct lsxpack_header headers_arr[10];
 
-void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length) {
+void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, const char *key, int key_length, const char *value, int value_length) {
     if (header_set_ptr(&headers_arr[index], &hbuf, key, key_length, value, value_length) != 0) {
         printf("CANNOT FORMAT HEADER!\n");
         exit(0);
@@ -456,6 +463,8 @@ us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s) {
 // this function should emit the quic message to the high level application
 static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
+    printf("on_read: %p\n", s);
+
     //us_quic_socket_context_t *context = h;
     us_quic_socket_context_t *context = (us_quic_socket_context_t *) lsquic_conn_get_ctx(lsquic_stream_conn(s));
 
@@ -466,6 +475,7 @@ static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     //printf("Header set is: %p\n", header_set);
 
     if (header_set) {
+        printf("on_stream_headers: %p\n", s);
         context->on_stream_headers((us_quic_stream_t *) s);
 
         leave_all();//free(header_set);
@@ -481,6 +491,7 @@ static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     //printf("stream_reading now\n");
 
     int nr = lsquic_stream_read(s, temp, 4096);
+    printf("read returned: %d\n", nr);
 
     // we will get 9, ebadf if we read from a closed stream
     if (nr == -1) {
@@ -494,9 +505,28 @@ static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
         return;
     }
 
+    /* We have reached EOF */
     if (nr == 0) {
+
+        /* Are we polling for writable (todo: make this check faster)? */
+        if (lsquic_stream_wantwrite(s, 1)) {
+
+            // we happened to be polling for writable so leave the connection open until on_write eventually closes it
+            printf("we are polling for write, so leaving the stream open!\n");
+
+            // stop reading though!
+            lsquic_stream_wantread(s, 0); // I hope this is fine? half open?
+
+        } else {
+            // we weren't polling for writable so reset it to old value
+            lsquic_stream_wantwrite(s, 0);
+
+            // I guess we can close it since we have called shutdown before this so data should flow out
+            lsquic_stream_close(s);
+        }
+
         // reached the EOF
-        lsquic_stream_close(s);
+        //lsquic_stream_close(s);
         //lsquic_stream_wantread(s, 0);
         return;
     }
@@ -510,18 +540,27 @@ static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
     //lsquic_stream_wantread(s, 0);
     //lsquic_stream_wantwrite(s, 1);
 
-
+    printf("on_stream_data: %d\n", nr);
     context->on_stream_data((us_quic_stream_t *) s, temp, nr);
 }
 
 int us_quic_stream_write(us_quic_stream_t *s, char *data, int length) {
     lsquic_stream_t *stream = (lsquic_stream_t *) s;
     int ret = lsquic_stream_write((lsquic_stream_t *) s, data, length);
+    // just like otherwise, we automatically poll for writable when failed
+    if (ret != length) {
+        //printf("failed to write, poll for writable\n");
+        lsquic_stream_wantwrite(s, 1);
+    }
     return ret;
 }
 
 static void on_write (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    printf("writable callback internally\n");
 
+    us_quic_socket_context_t *context = (us_quic_socket_context_t *) lsquic_conn_get_ctx(lsquic_stream_conn(s));
+
+    context->on_stream_writable((us_quic_stream_t *) s);
 }
 
 static void on_stream_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
@@ -663,6 +702,18 @@ void *us_quic_stream_ext(us_quic_stream_t *s) {
     printf("Returning us_quic_stream_ext of stream %p\n", s);
 
     return lsquic_stream_get_ctx((lsquic_stream_t *) s);
+}
+
+void us_quic_stream_close(us_quic_stream_t *s) {
+    lsquic_stream_t *stream = (lsquic_stream_t *) s;
+
+    int ret = lsquic_stream_close((lsquic_stream_t *) s);
+    if (ret != 0) {
+        printf("cannot close stream!\n");
+        exit(0);
+    }
+
+    return;
 }
 
 int us_quic_stream_shutdown(us_quic_stream_t *s) {
@@ -829,6 +880,10 @@ void timer_cb(struct us_timer_t *t) {
     //printf("Processing conns from timer\n");
     lsquic_engine_process_conns(global_engine);
     lsquic_engine_process_conns(global_client_engine);
+
+    // these are handled by this timer, should be polling for udp writable
+    lsquic_engine_send_unsent_packets(global_engine);
+    lsquic_engine_send_unsent_packets(global_client_engine);
 }
 
 // lsquic_conn
@@ -908,7 +963,7 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
         .ea_hsi_if = &hset_if,
     };
 
-    //printf("log: %d\n", lsquic_set_log_level("debug"));
+    ///printf("log: %d\n", lsquic_set_log_level("debug"));
 
     static struct lsquic_logger_if logger = {
         .log_buf = log_buf_cb,
@@ -956,8 +1011,8 @@ us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, 
 
 us_quic_listen_socket_t *us_quic_socket_context_listen(us_quic_socket_context_t *context, char *host, int port, int ext_size) {
     /* We literally do create a listen socket */
-    /*context->udp_socket = */us_create_udp_socket(context->loop, /*context->recv_buf*/ NULL, on_udp_socket_data, on_udp_socket_writable, host, port, context);
-    return NULL;//context->udp_socket;
+    return (us_quic_listen_socket_t *) us_create_udp_socket(context->loop, /*context->recv_buf*/ NULL, on_udp_socket_data, on_udp_socket_writable, host, port, context);
+    //return NULL;
 }
 
 /* A client connection is its own UDP socket, while a server connection makes use of the shared listen UDP socket */

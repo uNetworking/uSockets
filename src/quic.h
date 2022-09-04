@@ -32,11 +32,12 @@ void *us_quic_stream_ext(us_quic_stream_t *s);
 int us_quic_stream_write(us_quic_stream_t *s, char *data, int length);
 int us_quic_stream_shutdown(us_quic_stream_t *s);
 int us_quic_stream_shutdown_read(us_quic_stream_t *s);
+void us_quic_stream_close(us_quic_stream_t *s);
 
 int us_quic_socket_context_get_header(us_quic_socket_context_t *context, int index, char **name, int *name_length, char **value, int *value_length);
 
 
-void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, char *key, int key_length, char *value, int value_length);
+void us_quic_socket_context_set_header(us_quic_socket_context_t *context, int index, const char *key, int key_length, const char *value, int value_length);
 void us_quic_socket_context_send_headers(us_quic_socket_context_t *context, us_quic_stream_t *s, int num, int has_body);
 
 us_quic_socket_context_t *us_create_quic_socket_context(struct us_loop_t *loop, us_quic_socket_context_options_t options, int ext_size);
