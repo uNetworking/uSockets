@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#ifdef LIBUS_USE_OPENSSL
+#if (defined(LIBUS_USE_OPENSSL) || defined(LIBUS_USE_WOLFSSL))
 
 /* These are in sni_tree.cpp */
 void *sni_new();
@@ -30,11 +30,18 @@ void *sni_find(void *sni, const char *hostname);
 
 /* This module contains the entire OpenSSL implementation
  * of the SSL socket and socket context interfaces. */
-
+#ifdef LIBUS_USE_OPENSSL
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/dh.h>
+#elif LIBUS_USE_WOLFSSL
+#include <wolfssl/options.h>
+#include <wolfssl/openssl/ssl.h>
+#include <wolfssl/openssl/bio.h>
+#include <wolfssl/openssl/err.h>
+#include <wolfssl/openssl/dh.h>
+#endif
 
 struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
