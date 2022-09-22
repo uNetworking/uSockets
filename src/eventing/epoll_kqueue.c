@@ -21,8 +21,17 @@
 
 #if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
 
+void Bun__internal_dispatch_ready_poll(void* loop, void* poll);
+void us_loop_run_bun_tick(struct us_loop_t *loop);
+
 /* Cannot include this one on Windows */
 #include <unistd.h>
+
+/* Pointer tags are used to indicate a Bun pointer versus a uSockets pointer */
+#define UNSET_BITS_49_UNTIL_64 0x0000FFFFFFFFFFFF
+#define CLEAR_POINTER_TAG(p) ((void *) ((uintptr_t) (p) & UNSET_BITS_49_UNTIL_64))
+#define LIKELY(cond) __builtin_expect(cond, 1)
+#define UNLIKELY(cond) __builtin_expect(cond, 0)
 
 #ifdef LIBUS_USE_EPOLL
 #define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_polls[index].data.ptr
@@ -44,7 +53,7 @@ struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsign
     if (!fallthrough) {
         loop->num_polls++;
     }
-    return us_malloc(sizeof(struct us_poll_t) + ext_size);
+    return CLEAR_POINTER_TAG(us_malloc(sizeof(struct us_poll_t) + ext_size));
 }
 
 /* Todo: this one should be us_internal_poll_free */
@@ -100,6 +109,8 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     loop->num_ready_polls = 0;
     loop->current_ready_poll = 0;
 
+    loop->bun_polls = 0;
+
 #ifdef LIBUS_USE_EPOLL
     loop->fd = epoll_create1(EPOLL_CLOEXEC);
 #else
@@ -129,7 +140,11 @@ void us_loop_run(struct us_loop_t *loop) {
         for (loop->current_ready_poll = 0; loop->current_ready_poll < loop->num_ready_polls; loop->current_ready_poll++) {
             struct us_poll_t *poll = GET_READY_POLL(loop, loop->current_ready_poll);
             /* Any ready poll marked with nullptr will be ignored */
-            if (poll) {
+            if (LIKELY(poll)) {
+                if (CLEAR_POINTER_TAG(poll) != poll) {
+                    Bun__internal_dispatch_ready_poll(loop, poll);
+                    continue;
+                }
 #ifdef LIBUS_USE_EPOLL
                 int events = loop->ready_polls[loop->current_ready_poll].events;
                 int error = loop->ready_polls[loop->current_ready_poll].events & (EPOLLERR | EPOLLHUP);
@@ -148,9 +163,54 @@ void us_loop_run(struct us_loop_t *loop) {
                 }
             }
         }
+
         /* Emit post callback */
         us_internal_loop_post(loop);
     }
+}
+
+
+void us_loop_run_bun_tick(struct us_loop_t *loop) {
+    us_loop_integrate(loop);
+
+    /* Fetch ready polls */
+#ifdef LIBUS_USE_EPOLL
+    loop->num_ready_polls = epoll_wait(loop->fd, loop->ready_polls, 1024, 0);
+#else
+    struct timespec ts = {0, 0};
+    loop->num_ready_polls = kevent64(loop->fd, NULL, 0, loop->ready_polls, 1024, 0, &ts);
+#endif
+
+    /* Iterate ready polls, dispatching them by type */
+    for (loop->current_ready_poll = 0; loop->current_ready_poll < loop->num_ready_polls; loop->current_ready_poll++) {
+        struct us_poll_t *poll = GET_READY_POLL(loop, loop->current_ready_poll);
+        /* Any ready poll marked with nullptr will be ignored */
+        if (LIKELY(poll)) {
+            if (CLEAR_POINTER_TAG(poll) != poll) {
+                Bun__internal_dispatch_ready_poll(loop, poll);
+                continue;
+            }
+#ifdef LIBUS_USE_EPOLL
+            int events = loop->ready_polls[loop->current_ready_poll].events;
+            int error = loop->ready_polls[loop->current_ready_poll].events & (EPOLLERR | EPOLLHUP);
+#else
+            /* EVFILT_READ, EVFILT_TIME, EVFILT_USER are all mapped to LIBUS_SOCKET_READABLE */
+            int events = LIBUS_SOCKET_READABLE;
+            if (loop->ready_polls[loop->current_ready_poll].filter == EVFILT_WRITE) {
+                events = LIBUS_SOCKET_WRITABLE;
+            }
+            int error = loop->ready_polls[loop->current_ready_poll].flags & (EV_ERROR | EV_EOF);
+#endif
+            /* Always filter all polls by what they actually poll for (callback polls always poll for readable) */
+            events &= us_poll_events(poll);
+            if (events || error) {
+                us_internal_dispatch_ready_poll(poll, error, events);
+            }
+        }
+    }
+
+    // Always free any closed sockets
+    us_internal_free_closed_sockets(loop);
 }
 
 void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct us_poll_t *old_poll, struct us_poll_t *new_poll, int old_events, int new_events) {

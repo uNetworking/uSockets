@@ -51,6 +51,9 @@ struct us_loop_t {
     /* Loop's own file descriptor */
     int fd;
 
+    /* Number of polls owned by bun */
+    unsigned int bun_polls;
+
     /* The list of ready polls */
 #ifdef LIBUS_USE_EPOLL
     struct epoll_event ready_polls[1024];
