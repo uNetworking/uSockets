@@ -122,8 +122,7 @@ void us_loop_run(struct us_loop_t *loop) {
 #ifdef LIBUS_USE_EPOLL
         loop->num_ready_polls = epoll_wait(loop->fd, loop->ready_polls, 1024, -1);
 #else
-        struct timespec timeout = {.tv_sec = 0, .tv_nsec = loop->num_polls > 2 ? 500000 : 5000000};
-        loop->num_ready_polls = kevent(loop->fd, NULL, 0, loop->ready_polls, 1024, &timeout);
+        loop->num_ready_polls = kevent64(loop->fd, NULL, 0, loop->ready_polls, 1024, 0, NULL);
 #endif
 
         /* Iterate ready polls, dispatching them by type */
@@ -182,20 +181,20 @@ void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct 
 #ifdef LIBUS_USE_KQUEUE
 /* Helper function for setting or updating EVFILT_READ and EVFILT_WRITE */
 int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_data) {
-    struct kevent change_list[2];
+    struct kevent64_s change_list[2];
     int change_length = 0;
 
     /* Do they differ in readable? */
     if ((new_events & LIBUS_SOCKET_READABLE) != (old_events & LIBUS_SOCKET_READABLE)) {
-        EV_SET(&change_list[change_length++], fd, EVFILT_READ, (new_events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, user_data);
+        EV_SET64(&change_list[change_length++], fd, EVFILT_READ, (new_events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, (uintptr_t)user_data, 0, 0);
     }
 
     /* Do they differ in writable? */
     if ((new_events & LIBUS_SOCKET_WRITABLE) != (old_events & LIBUS_SOCKET_WRITABLE)) {
-        EV_SET(&change_list[change_length++], fd, EVFILT_WRITE, (new_events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, user_data);
+        EV_SET64(&change_list[change_length++], fd, EVFILT_WRITE, (new_events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, (uintptr_t)user_data, 0, 0);
     }
 
-    int ret = kevent(kqfd, change_list, change_length, NULL, 0, NULL);
+    int ret = kevent64(kqfd, change_list, change_length, NULL, 0, 0, NULL);
 
     // ret should be 0 in most cases (not guaranteed when removing async)
 
@@ -350,9 +349,9 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 void us_timer_close(struct us_timer_t *timer) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) timer;
 
-    struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_DELETE, 0, 0, internal_cb);
-    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
+    struct kevent64_s event;
+    EV_SET64(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_DELETE, 0, 0, internal_cb, 0, 0);
+    kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
 
     /* (regular) sockets are the only polls which are not freed immediately */
     us_poll_free((struct us_poll_t *) timer, internal_cb->loop);
@@ -364,9 +363,9 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
 
     /* Bug: repeat_ms must be the same as ms, or 0 */
-    struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD | (repeat_ms ? 0 : EV_ONESHOT), 0, ms, internal_cb);
-    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
+    struct kevent64_s event;
+    EV_SET64(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD | (repeat_ms ? 0 : EV_ONESHOT), 0, ms, internal_cb, 0, 0);
+    kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
 }
 #endif
 
@@ -409,6 +408,9 @@ void us_internal_async_wakeup(struct us_internal_async *a) {
     (void)written;
 }
 #else
+
+#define MACHPORT_BUF_LEN 1024
+
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     struct us_internal_callback_t *cb = us_malloc(sizeof(struct us_internal_callback_t) + ext_size);
 
@@ -424,6 +426,13 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
         loop->num_polls++;
     }
 
+    cb->machport_buf = us_malloc(MACHPORT_BUF_LEN);
+    kern_return_t kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &cb->port);
+
+    if (UNLIKELY(kr != KERN_SUCCESS)) {
+        return NULL;
+    }
+
     return (struct us_internal_async *) cb;
 }
 
@@ -431,10 +440,12 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
-    /* Note: This will fail most of the time as there probably is no pending trigger */
-    struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_DELETE, 0, 0, internal_cb);
-    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
+    struct kevent64_s event;
+    EV_SET64(&event, (uintptr_t) internal_cb, EVFILT_MACHPORT, EV_DELETE, 0, 0, (uintptr_t)internal_cb, 0,0);
+    kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
+
+    mach_port_deallocate(mach_task_self(), internal_cb->port);
+    us_free(internal_cb->machport_buf);
 
     /* (regular) sockets are the only polls which are not freed immediately */
     us_poll_free((struct us_poll_t *) a, internal_cb->loop);
@@ -444,15 +455,43 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
     internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
+
+    // EVFILT_MACHPORT benchmarks faster than EVFILT_USER when using multiple threads
+    // Very old versions of macOS required them to be portsets instead of ports
+    // but that is no longer the case
+    // There are not many examples on the internet of using machports this way
+    // you can find one in Chromium's codebase.
+    struct kevent64_s event;
+    event.ident = internal_cb->port;
+    event.filter = EVFILT_MACHPORT;
+    event.flags = EV_ADD | EV_ENABLE;
+    event.fflags = MACH_RCV_MSG | MACH_RCV_OVERWRITE;
+    event.ext[0] = (uintptr_t)internal_cb->machport_buf;
+    event.ext[1] = MACHPORT_BUF_LEN;
+    event.udata = (uintptr_t)internal_cb;
+
+    int ret = kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
+
+    if (UNLIKELY(ret == -1)) {
+       abort();
+    }
 }
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
-
-    /* In kqueue you really only need to add a triggered oneshot event */
-    struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD | EV_ONESHOT, NOTE_TRIGGER, 0, internal_cb);
-    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
+    mach_msg_empty_send_t message;
+    memset(&message, 0, sizeof(message));
+    message.header.msgh_size = sizeof(message);
+    message.header.msgh_bits = MACH_MSGH_BITS_REMOTE(MACH_MSG_TYPE_MAKE_SEND_ONCE);
+    message.header.msgh_remote_port = internal_cb->port;
+    kern_return_t kr = mach_msg_send(&message.header);
+    if (kr != KERN_SUCCESS) {
+        // If us_internal_async_wakeup is being called by other threads faster
+        // than the pump can dispatch work, the kernel message queue for the wakeup
+        // port can fill The kernel does return a SEND_ONCE right in the case of
+        // failure, which must be destroyed to avoid leaking.
+        mach_msg_destroy(&message.header);
+    }
 }
 #endif
 

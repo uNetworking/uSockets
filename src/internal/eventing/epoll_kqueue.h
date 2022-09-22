@@ -32,6 +32,8 @@
  * We therefore have our own bitfield we then translate in every call */
 #define LIBUS_SOCKET_READABLE 1
 #define LIBUS_SOCKET_WRITABLE 2
+
+#include <mach/mach.h>
 #endif
 
 struct us_loop_t {
@@ -53,7 +55,7 @@ struct us_loop_t {
 #ifdef LIBUS_USE_EPOLL
     struct epoll_event ready_polls[1024];
 #else
-    struct kevent ready_polls[1024];
+    struct kevent64_s ready_polls[1024];
 #endif
 };
 

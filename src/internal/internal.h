@@ -18,10 +18,15 @@
 #ifndef INTERNAL_H
 #define INTERNAL_H
 
+
 #if defined(_MSC_VER)
 #define alignas(x) __declspec(align(x))
 #else
 #include <stdalign.h>
+#endif
+
+#if defined(LIBUS_USE_KQUEUE)
+#include <mach/mach.h>
 #endif
 
 /* We only have one networking implementation so far */
@@ -94,6 +99,7 @@ struct us_socket_t {
     unsigned short low_prio_state : 2; /* 0 = not in low-prio queue, 1 = is in low-prio queue, 2 = was in low-prio queue in this iteration */
 };
 
+#if defined(LIBUS_USE_KQUEUE)
 /* Internal callback types are polls just like sockets */
 struct us_internal_callback_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p;
@@ -101,7 +107,20 @@ struct us_internal_callback_t {
     int cb_expects_the_loop;
     int leave_poll_ready;
     void (*cb)(struct us_internal_callback_t *cb);
+    mach_port_t port;
+    void* machport_buf;
 };
+
+#else
+
+struct us_internal_callback_t {
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p;
+    struct us_loop_t *loop;
+    int cb_expects_the_loop;
+    void (*cb)(struct us_internal_callback_t *cb);
+};
+
+#endif
 
 /* Listen sockets are sockets */
 struct us_listen_socket_t {
