@@ -161,7 +161,7 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     /* This path is taken once either way - always BEFORE whatever SSL may do LATER.
      * context_ext_size will however be modified larger in case of SSL, to hold SSL extensions */
 
-    struct us_socket_context_t *context = malloc(sizeof(struct us_socket_context_t) + context_ext_size);
+    struct us_socket_context_t *context = us_malloc(sizeof(struct us_socket_context_t) + context_ext_size);
     context->loop = loop;
     context->head = 0;
     context->iterator = 0;
@@ -190,7 +190,7 @@ void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
      * This is the opposite order compared to when creating the context - SSL code is cleaning up before non-SSL */
 
     us_internal_loop_unlink(context->loop, context);
-    free(context);
+    us_free(context);
 }
 
 struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_context_t *context, const char *host, int port, int options, int socket_ext_size) {

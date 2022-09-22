@@ -239,6 +239,7 @@ WIN32_EXPORT void *us_loop_ext(struct us_loop_t *loop);
 /* Blocks the calling thread and drives the event loop until no more non-fallthrough polls are scheduled */
 WIN32_EXPORT void us_loop_run(struct us_loop_t *loop);
 
+
 /* Signals the loop from any thread to wake up and execute its wakeup handler from the loop's own running thread.
  * This is the only fully thread-safe function and serves as the basis for thread safety */
 WIN32_EXPORT void us_wakeup_loop(struct us_loop_t *loop);
@@ -323,6 +324,10 @@ WIN32_EXPORT int us_socket_local_port(int ssl, struct us_socket_t *s);
 
 /* Copy remote (IP) address of socket, or fail with zero length. */
 WIN32_EXPORT void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);
+
+/* Bun extras */
+WIN32_EXPORT struct us_socket_t *us_socket_detach(int ssl, struct us_socket_t *s);
+WIN32_EXPORT struct us_socket_t *us_socket_attach(int ssl, LIBUS_SOCKET_DESCRIPTOR client_fd, struct us_socket_context_t *ctx);
 
 #ifdef __cplusplus
 }
