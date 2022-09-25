@@ -436,7 +436,7 @@ int main() {
     us_socket_timeout(SSL, (struct us_socket_t *) listen_socket, 16);
 
     if (listen_socket) {
-        printf("Running hammer test\n");
+        printf("Running hammer test over tcpip\n");
         print_progress(0);
         next_connection();
 

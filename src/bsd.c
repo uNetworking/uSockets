@@ -479,6 +479,46 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
     return listenFd;
 }
 
+#ifndef _WIN32
+#include <sys/un.h>
+#else
+#include <afunix.h>
+#include <io.h>
+#endif
+#include <sys/stat.h>
+#include <stddef.h>
+LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket_unix(const char *path, int options) {
+
+    LIBUS_SOCKET_DESCRIPTOR listenFd = LIBUS_SOCKET_ERROR;
+
+    listenFd = bsd_create_socket(AF_UNIX, SOCK_STREAM, 0);
+
+    if (listenFd == LIBUS_SOCKET_ERROR) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
+#ifndef _WIN32
+    // 700 permission by default
+    fchmod(listenFd, S_IRWXU);
+#else
+    _chmod(path, S_IREAD | S_IWRITE | S_IEXEC);
+#endif
+
+    struct sockaddr_un server_address;
+    memset(&server_address, 0, sizeof(server_address));
+    server_address.sun_family = AF_UNIX;
+    strcpy(server_address.sun_path, path);
+    int size = offsetof(struct sockaddr_un, sun_path) + strlen(server_address.sun_path);
+    unlink(path);
+
+    if (bind(listenFd, (struct sockaddr *)&server_address, size) || listen(listenFd, 512)) {
+        bsd_close_socket(listenFd);
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    return listenFd;
+}
+
 LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
     struct addrinfo hints, *result;
     memset(&hints, 0, sizeof(struct addrinfo));
@@ -631,6 +671,25 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, co
 
     connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
     freeaddrinfo(result);
+
+    return fd;
+}
+
+LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket_unix(const char *server_path, int options) {
+
+    struct sockaddr_un server_address;
+    memset(&server_address, 0, sizeof(server_address));
+    server_address.sun_family = AF_UNIX;
+    strcpy(server_address.sun_path, server_path);
+    int size = offsetof(struct sockaddr_un, sun_path) + strlen(server_address.sun_path);
+
+    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_socket(AF_UNIX, SOCK_STREAM, 0);
+
+    if (fd == LIBUS_SOCKET_ERROR) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    connect(fd, (struct sockaddr *)&server_address, size);
 
     return fd;
 }

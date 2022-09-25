@@ -19,7 +19,7 @@ jobs:
     - name: build examples
       run: WITH_LIBUV=1 WITH_ASAN=1 make examples
     - name: run test
-      run: ./hammer_test
+      run: ./hammer_test && ./hammer_test_unix
 
   test_macos_kqueue:
 
@@ -30,8 +30,8 @@ jobs:
     - name: build examples
       run: WITH_ASAN=1 make examples
     - name: run test
-      run: ./hammer_test
-      
+      run: ./hammer_test && ./hammer_test_unix
+
   test_linux_libuv:
 
     runs-on: ubuntu-latest
@@ -43,8 +43,8 @@ jobs:
     - name: build examples
       run: WITH_LIBUV=1 WITH_ASAN=1 make examples
     - name: run test
-      run: ./hammer_test
-      
+      run: ./hammer_test && ./hammer_test_unix
+
   test_linux_epoll:
 
     runs-on: ubuntu-latest
@@ -54,4 +54,4 @@ jobs:
     - name: build examples
       run: WITH_ASAN=1 make examples
     - name: run test
-      run: ./hammer_test
+      run: ./hammer_test && ./hammer_test_unix
