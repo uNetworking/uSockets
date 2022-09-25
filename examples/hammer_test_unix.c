@@ -402,7 +402,8 @@ int main() {
 
 
     // these are ignored for non-SSL
-    struct us_socket_context_options_t options = {};
+    struct us_socket_context_options_t options;
+    memset(&options, 0, sizeof(struct us_socket_context_options_t));
     options.key_file_name = "/home/alexhultman/uWebSockets.js/misc/key.pem";
     options.cert_file_name = "/home/alexhultman/uWebSockets.js/misc/cert.pem";
     options.passphrase = "1234";
