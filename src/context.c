@@ -85,11 +85,31 @@ struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *co
 
 /* Not shared with SSL */
 
-/* Add SNI context */
-void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options) {
+/* Lookup userdata by server name pattern */
+void *us_socket_context_find_server_name_userdata(int ssl, struct us_socket_context_t *context, const char *hostname_pattern) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
-        us_internal_ssl_socket_context_add_server_name((struct us_internal_ssl_socket_context_t *) context, hostname_pattern, options);
+        return us_internal_ssl_socket_context_find_server_name_userdata((struct us_internal_ssl_socket_context_t *) context, hostname_pattern);
+    }
+#endif
+    return NULL;
+}
+
+/* Get userdata attached to this SNI-routed socket, or nullptr if default */
+void *us_socket_server_name_userdata(int ssl, struct us_socket_t *s) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return us_internal_ssl_socket_get_sni_userdata((struct us_internal_ssl_socket_t *) s);
+    }
+#endif
+    return NULL;
+}
+
+/* Add SNI context */
+void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options, void *user) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        us_internal_ssl_socket_context_add_server_name((struct us_internal_ssl_socket_context_t *) context, hostname_pattern, options, user);
     }
 #endif
 }

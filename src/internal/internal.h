@@ -134,9 +134,11 @@ struct us_internal_ssl_socket_context_t;
 struct us_internal_ssl_socket_t;
 
 /* SNI functions */
-void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options);
+void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options, void *user);
 void us_internal_ssl_socket_context_remove_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern);
 void us_internal_ssl_socket_context_on_server_name(struct us_internal_ssl_socket_context_t *context, void (*cb)(struct us_internal_ssl_socket_context_t *, const char *));
+void *us_internal_ssl_socket_get_sni_userdata(struct us_internal_ssl_socket_t *s);
+void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern);
 
 void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *s);
 void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_socket_context_t *context);

@@ -534,11 +534,36 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
     return ssl_context;
 }
 
+/* Returns a servername's userdata if any */
+void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
+    printf("finding %s\n", hostname_pattern);
+    
+    /* We can use sni_find because looking up a "wildcard pattern" will match the exact literal "wildcard pattern" first,
+     * before it matches by the very wildcard itself, so it works fine (exact match is the only thing we care for here) */
+    SSL_CTX *ssl_context = sni_find(context->sni, hostname_pattern);
+
+    if (ssl_context) {
+        return SSL_CTX_get_ex_data(ssl_context, 0);
+    }
+
+    return 0;
+}
+
+/* Returns either nullptr or the previously set user data attached to this SSL's selected SNI context */
+void *us_internal_ssl_socket_get_sni_userdata(struct us_internal_ssl_socket_t *s) {
+    return SSL_CTX_get_ex_data(SSL_get_SSL_CTX(s->ssl), 0);
+}
+
 /* Todo: return error on failure? */
-void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options) {
+void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options, void *user) {
 
     /* Try and construct an SSL_CTX from options */
     SSL_CTX *ssl_context = create_ssl_context_from_options(options);
+
+    /* Attach the user data to this context */
+    if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
+        printf("CANNOT SET EX DATA!\n");
+    }
 
     /* We do not want to hold any nullptr's in our SNI tree */
     if (ssl_context) {
