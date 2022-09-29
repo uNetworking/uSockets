@@ -173,12 +173,18 @@ void us_loop_run(struct us_loop_t *loop) {
 void us_loop_run_bun_tick(struct us_loop_t *loop) {
     us_loop_integrate(loop);
 
+    if (loop->num_polls == 0)
+        return;
+
+    /* Emit pre callback */
+    us_internal_loop_pre(loop);
+
     /* Fetch ready polls */
 #ifdef LIBUS_USE_EPOLL
-    loop->num_ready_polls = epoll_wait(loop->fd, loop->ready_polls, 1024, 0);
+    loop->num_ready_polls = epoll_wait(loop->fd, loop->ready_polls, 1024, -1);
 #else
     struct timespec ts = {0, 0};
-    loop->num_ready_polls = kevent64(loop->fd, NULL, 0, loop->ready_polls, 1024, 0, &ts);
+    loop->num_ready_polls = kevent64(loop->fd, NULL, 0, loop->ready_polls, 1024, 0, NULL);
 #endif
 
     /* Iterate ready polls, dispatching them by type */
@@ -209,8 +215,8 @@ void us_loop_run_bun_tick(struct us_loop_t *loop) {
         }
     }
 
-    // Always free any closed sockets
-    us_internal_free_closed_sockets(loop);
+    /* Emit post callback */
+    us_internal_loop_post(loop);
 }
 
 void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct us_poll_t *old_poll, struct us_poll_t *new_poll, int old_events, int new_events) {
