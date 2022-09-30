@@ -29,6 +29,12 @@
 #include <mach/mach.h>
 #endif
 
+#if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
+#define LIBUS_MAX_READY_POLLS 1024
+
+void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct us_poll_t *old_poll, struct us_poll_t *new_poll, int old_events, int new_events);
+#endif
+
 /* We only have one networking implementation so far */
 #include "internal/networking/bsd.h"
 

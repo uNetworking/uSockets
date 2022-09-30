@@ -109,7 +109,14 @@ struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, vo
         } else {
             us_internal_socket_context_unlink(s->context, s);
         }
-        us_poll_stop((struct us_poll_t *) s, s->context->loop);
+        #ifdef LIBUS_USE_KQUEUE
+            // kqueue automatically removes the fd from the set on close
+            // we can skip the system call for that case
+            us_internal_loop_update_pending_ready_polls(s->context->loop, (struct us_poll_t *)s, 0, us_poll_events((struct us_poll_t*)s), 0);
+        #else
+            /* Disable any instance of us in the pending ready poll list */
+            us_poll_stop((struct us_poll_t *) s, s->context->loop);
+        #endif
         bsd_close_socket(us_poll_fd((struct us_poll_t *) s));
 
         /* Link this socket to the close-list and let it be deleted after this iteration */
