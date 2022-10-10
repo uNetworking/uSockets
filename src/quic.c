@@ -222,48 +222,19 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
 
 }
 
-int send_packets_out_slow(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
-    us_quic_socket_context_t *context = ctx;
-    
-    /* We need to partition outgoing packets per udp_socket */
-    int sent = 0;
-    for (int i = 0; i < n_specs; i++) {
-        struct msghdr hdr = {};
+/* Let's use this on Windows and macOS where it is not defined (todo: put in bsd.h) */
+#ifndef UIO_MAXIOV
+#define UIO_MAXIOV 1024
 
-        hdr.msg_name       = (void *) specs[i].dest_sa;
-        hdr.msg_namelen    = (AF_INET == specs[i].dest_sa->sa_family ?
-                                            sizeof(struct sockaddr_in) :
-                                            sizeof(struct sockaddr_in6)),
-        hdr.msg_iov        = specs[i].iov;
-        hdr.msg_iovlen     = specs[i].iovlen;
-        hdr.msg_flags      = 0;
-
-        struct us_udp_socket_t *udp_socket = (struct us_udp_socket_t *) specs[i].peer_ctx;
-
-        //printf("Sending a packet out on udp socket: %p!\n", udp_socket);
-
-        int fd = us_poll_fd((struct us_poll_t *) udp_socket);
-
-        //printf("Sending on fd: %d\n", fd);
-
-        int ret = sendmsg(fd, &hdr, 0);
-        if (ret == -1) {
-            /* Something did not play along, break before this one */
-            printf("backpressure\n");
-            exit(0);
-            return i;
-        }
-    }
-
-    /* If we come here all specs have been sent */
-    return n_specs;
-}
+struct mmsghdr {
+    struct msghdr msg_hdr;  /* Message header */
+    unsigned int  msg_len;  /* Number of bytes transmitted */
+};
+#endif
 
 /* Server and client packet out is identical */
 int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
     us_quic_socket_context_t *context = ctx;
-
-    //printf("About to send %d datagrams\n", n_specs);
 
     /* A run is at most UIO_MAXIOV datagrams long */
     struct mmsghdr hdrs[UIO_MAXIOV];
@@ -276,7 +247,7 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
     for (int i = 0; i < n_specs; i++) {
         /* Send this run if we need to */
         if (run_length == UIO_MAXIOV || specs[i].peer_ctx != last_socket) {
-            int ret = sendmmsg(us_poll_fd((struct us_poll_t *) last_socket), hdrs, run_length, 0);
+            int ret = bsd_sendmmsg(us_poll_fd((struct us_poll_t *) last_socket), hdrs, run_length, 0);
             if (ret != run_length) {
                 if (ret == -1) {
                     printf("unhandled udp backpressure!\n");
@@ -310,7 +281,7 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
 
     /* Send last run */
     if (run_length) {
-        int ret = sendmmsg(us_poll_fd((struct us_poll_t *) last_socket), hdrs, run_length, 0);
+        int ret = bsd_sendmmsg(us_poll_fd((struct us_poll_t *) last_socket), hdrs, run_length, 0);
         if (ret == -1) {
             printf("backpressure! A\n");
             return sent;
