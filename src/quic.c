@@ -136,7 +136,7 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
         //printf("We received packet on port: %d\n", port);
 
         /* We build our address based on what the dest addr is */
-        struct sockaddr_storage local_addr = {};
+        struct sockaddr_storage local_addr = {0};
         if (ip_length == 16) {
             struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *) &local_addr;
 
@@ -198,7 +198,7 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
         //printf("We received packet on port: %d\n", port);
 
         /* We build our address based on what the dest addr is */
-        struct sockaddr_storage local_addr = {};
+        struct sockaddr_storage local_addr = {0};
         if (ip_length == 16) {
             struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *) &local_addr;
 
@@ -461,7 +461,7 @@ static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
     // all of this logic should be moved to uws and WE here should only hand over the data
 
-    char temp[4096] = {};
+    char temp[4096] = {0};
     int nr = lsquic_stream_read(s, temp, 4096);
 
     // emit on_end when we receive fin, regardless of whether we emitted data yet
@@ -1018,7 +1018,7 @@ us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *conte
 
 
     // localhost 9004 ipv4
-    struct sockaddr_storage storage = {};
+    struct sockaddr_storage storage = {0};
     // struct sockaddr_in *addr = (struct sockaddr_in *) &storage;
     // addr->sin_addr.s_addr = 16777343;
     // addr->sin_port = htons(9004);
@@ -1041,7 +1041,7 @@ us_quic_socket_t *us_quic_socket_context_connect(us_quic_socket_context_t *conte
 
 
     // let's call ourselves an ipv6 client and see if that solves anything
-    struct sockaddr_storage local_storage = {};
+    struct sockaddr_storage local_storage = {0};
     // struct sockaddr_in *local_addr = (struct sockaddr_in *) &local_storage;
     // local_addr->sin_addr.s_addr = 16777343;
     // local_addr->sin_port = htons(ephemeral);
