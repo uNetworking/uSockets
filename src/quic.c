@@ -1,18 +1,19 @@
 #ifdef LIBUS_USE_QUIC
 
-#define _GNU_SOURCE
-#include <sys/socket.h>
+/* Todo: quic layer should not use bsd layer directly (sendmmsg) */
+#include "internal/networking/bsd.h"
 
 #include "quic.h"
 
-#include <errno.h>
+
 
 #include "lsquic.h"
 #include "lsquic_types.h"
 #include "lsxpack_header.h"
 
-/* This one is really only used to set inet addresses */
+/* Todo: remove these */
 #include <netinet/in.h>
+#include <errno.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -432,7 +433,7 @@ us_quic_socket_t *us_quic_stream_socket(us_quic_stream_t *s) {
     return (us_quic_socket_t *) lsquic_stream_conn((lsquic_stream_t *) s);
 }
 
-#include <errno.h>
+//#include <errno.h>
 
 
 // only for servers?
