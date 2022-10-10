@@ -12,8 +12,10 @@
 #include "lsxpack_header.h"
 
 /* Todo: remove these */
+#ifndef _WIN32
 #include <netinet/in.h>
 #include <errno.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -235,6 +237,7 @@ struct mmsghdr {
 
 /* Server and client packet out is identical */
 int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_specs) {
+#ifndef _WIN32
     us_quic_socket_context_t *context = ctx;
 
     /* A run is at most UIO_MAXIOV datagrams long */
@@ -297,6 +300,8 @@ int send_packets_out(void *ctx, const struct lsquic_out_spec *specs, unsigned n_
     }
 
     //printf("Returning %d\n", n_specs);
+
+#endif
 
     return n_specs;
 }
