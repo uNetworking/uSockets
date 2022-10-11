@@ -56,6 +56,11 @@ struct us_internal_udp_packet_buffer {
 int bsd_sendmmsg(LIBUS_SOCKET_DESCRIPTOR fd, void *msgvec, unsigned int vlen, int flags) {
 #if defined(__APPLE__)
 
+struct mmsghdr {
+    struct msghdr msg_hdr;  /* Message header */
+    unsigned int  msg_len;  /* Number of bytes transmitted */
+};
+
     struct mmsghdr *hdrs = (struct mmsghdr *) msgvec;
 
     for (int i = 0; i < vlen; i++) {
