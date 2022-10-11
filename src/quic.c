@@ -353,7 +353,7 @@ lsquic_stream_ctx_t *on_new_stream(void *stream_if_ctx, lsquic_stream_t *s) {
     // to get that ext_size set in listen/connect calls, back here.
     // todo: hardcoded for now
 
-    int ext_size = 128;
+    int ext_size = 256;
 
     void *ext = malloc(ext_size);
     // yes hello
