@@ -56,9 +56,9 @@ struct us_loop_t {
 
     /* The list of ready polls */
 #ifdef LIBUS_USE_EPOLL
-    struct epoll_event ready_polls[1024];
+    alignas(LIBUS_EXT_ALIGNMENT) struct epoll_event ready_polls[1024];
 #else
-    struct kevent64_s ready_polls[1024];
+    alignas(LIBUS_EXT_ALIGNMENT) struct kevent64_s ready_polls[1024];
 #endif
 };
 
