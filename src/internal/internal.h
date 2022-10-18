@@ -123,6 +123,7 @@ struct us_internal_callback_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p;
     struct us_loop_t *loop;
     int cb_expects_the_loop;
+    int leave_poll_ready;
     void (*cb)(struct us_internal_callback_t *cb);
 };
 
