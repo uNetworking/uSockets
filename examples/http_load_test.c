@@ -7,7 +7,7 @@ const int SSL = 1;
 #include <stdlib.h>
 #include <string.h>
 
-char request[] = "GET / HTTP/1.1\r\n\r\n";
+char request[] = "GET / HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\n\r\n";
 char *host;
 int port;
 int connections;
