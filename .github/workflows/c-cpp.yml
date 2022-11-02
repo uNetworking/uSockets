@@ -16,12 +16,19 @@ jobs:
       - name: Build hammer_test
         run: |
           vcpkg install libuv:x64-windows
-          cl /I C:\vcpkg\installed\x64-windows\include /MT /W3 /D WIN32_LEAN_AND_MEAN /D LIBUS_USE_LIBUV /D LIBUS_NO_SSL /std:c11 /I src examples/hammer_test.c src/*.c src/eventing/*.c src/crypto/*.c /EHsc /Ox C:\vcpkg\installed\x64-windows\lib\uv.lib advapi32.lib
-          cl /I C:\vcpkg\installed\x64-windows\include /MT /W3 /D WIN32_LEAN_AND_MEAN /D LIBUS_USE_LIBUV /D LIBUS_NO_SSL /std:c11 /I src examples/hammer_test_unix.c src/*.c src/eventing/*.c src/crypto/*.c /EHsc /Ox C:\vcpkg\installed\x64-windows\lib\uv.lib advapi32.lib
           cp C:\vcpkg\installed\x64-windows\bin\uv.dll uv.dll
-          dir
+          $Env:CFLAGS='-D WIN32_LEAN_AND_MEAN -I C:/vcpkg/packages/libuv_x64-windows/include'
+          $Env:LDFLAGS='-L C:/vcpkg/packages/libuv_x64-windows/lib'
+          $Env:CC='clang'
+          $Env:CXX='clang++'
+          $Env:WITH_LIBUV='1'
+          $Env:EXEC_SUFFIX='.exe'
+          $Env:WITH_LTO='0'
+          make examples
+          ls
           ./hammer_test.exe
           ./hammer_test_unix.exe
+          ./http_load_test.exe
   
   test_macos_libuv:
 
