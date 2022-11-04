@@ -533,7 +533,11 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket_unix(const char *path, int opti
     server_address.sun_family = AF_UNIX;
     strcpy(server_address.sun_path, path);
     int size = offsetof(struct sockaddr_un, sun_path) + strlen(server_address.sun_path);
+#ifdef _WIN32
+    _unlink(path);
+#else
     unlink(path);
+#endif
 
     if (bind(listenFd, (struct sockaddr *)&server_address, size) || listen(listenFd, 512)) {
         bsd_close_socket(listenFd);
