@@ -260,7 +260,7 @@ LIBUS_SOCKET_DESCRIPTOR apple_no_sigpipe(LIBUS_SOCKET_DESCRIPTOR fd) {
 #ifdef __APPLE__
     if (fd != LIBUS_SOCKET_ERROR) {
         int no_sigpipe = 1;
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(int));
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (void *) &no_sigpipe, sizeof(int));
     }
 #endif
     return fd;
@@ -283,7 +283,7 @@ void bsd_socket_flush(LIBUS_SOCKET_DESCRIPTOR fd) {
     // Linux TCP_CORK has the same underlying corking mechanism as with MSG_MORE
 #ifdef TCP_CORK
     int enabled = 0;
-    setsockopt(fd, IPPROTO_TCP, TCP_CORK, &enabled, sizeof(int));
+    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (void *) &enabled, sizeof(int));
 #endif
 }
 
@@ -470,27 +470,27 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int
 #ifdef _WIN32
         if (options & LIBUS_LISTEN_EXCLUSIVE_PORT) {
             int optval2 = 1;
-            setsockopt(listenFd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, &optval2, sizeof(optval2));
+            setsockopt(listenFd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (void *) &optval2, sizeof(optval2));
         } else {
             int optval3 = 1;
-            setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &optval3, sizeof(optval3));
+            setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (void *) &optval3, sizeof(optval3));
         }
 #else
     #if /*defined(__linux) &&*/ defined(SO_REUSEPORT)
         if (!(options & LIBUS_LISTEN_EXCLUSIVE_PORT)) {
             int optval = 1;
-            setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+            setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, (void *) &optval, sizeof(optval));
         }
     #endif
         int enabled = 1;
-        setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+        setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (void *) &enabled, sizeof(enabled));
 #endif
 
     }
     
 #ifdef IPV6_V6ONLY
     int disabled = 0;
-    setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
+    setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &disabled, sizeof(disabled));
 #endif
 
     if (bind(listenFd, listenAddr->ai_addr, (socklen_t) listenAddr->ai_addrlen) || listen(listenFd, 512)) {
@@ -582,12 +582,12 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
     if (port != 0) {
         /* Should this also go for UDP? */
         int enabled = 1;
-        setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_PTR_TYPE) &enabled, sizeof(enabled));
+        setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, (void *) &enabled, sizeof(enabled));
     }
     
 #ifdef IPV6_V6ONLY
     int disabled = 0;
-    setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_PTR_TYPE) &disabled, sizeof(disabled));
+    setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, (void *) &disabled, sizeof(disabled));
 #endif
 
     /* We need destination address for udp packets in both ipv6 and ipv4 */
@@ -598,9 +598,9 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
 #endif
 
     int enabled = 1;
-    if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &enabled, sizeof(enabled)) == -1) {
+    if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVPKTINFO, (void *) &enabled, sizeof(enabled)) == -1) {
         if (errno == 92) {
-            if (setsockopt(listenFd, IPPROTO_IP, IP_PKTINFO, &enabled, sizeof(enabled)) != 0) {
+            if (setsockopt(listenFd, IPPROTO_IP, IP_PKTINFO, (void *) &enabled, sizeof(enabled)) != 0) {
                 printf("Error setting IPv4 pktinfo!\n");
             }
         } else {
@@ -609,9 +609,9 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
     }
 
     /* These are used for getting the ECN */
-    if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVTCLASS, &enabled, sizeof(enabled)) == -1) {
+    if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVTCLASS, (void *) &enabled, sizeof(enabled)) == -1) {
         if (errno == 92) {
-            if (setsockopt(listenFd, IPPROTO_IP, IP_RECVTOS, &enabled, sizeof(enabled)) != 0) {
+            if (setsockopt(listenFd, IPPROTO_IP, IP_RECVTOS, (void *) &enabled, sizeof(enabled)) != 0) {
                 printf("Error setting IPv4 ECN!\n");
             }
         } else {
