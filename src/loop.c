@@ -116,7 +116,7 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
                 context->on_socket_timeout(s);
             }
 
-            if (long_ticks == s->long_timeout) {
+            if (context->iterator == s && long_ticks == s->long_timeout) {
                 s->long_timeout = 255;
                 context->on_socket_long_timeout(s);
             }   
