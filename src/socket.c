@@ -53,9 +53,17 @@ struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
 
 void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
     if (seconds) {
-        s->timeout = 0x2000 | (s->context->timestamp + ((seconds + 3) >> 2));
+        s->timeout = ((unsigned int)s->context->timestamp + ((seconds + 3) >> 2)) % 240;
     } else {
-        s->timeout = 0;
+        s->timeout = 255;
+    }
+}
+
+void us_socket_long_timeout(int ssl, struct us_socket_t *s, unsigned int minutes) {
+    if (minutes) {
+        s->long_timeout = ((unsigned int)s->context->long_timestamp + minutes) % 240;
+    } else {
+        s->long_timeout = 255;
     }
 }
 

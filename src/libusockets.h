@@ -164,6 +164,8 @@ WIN32_EXPORT void us_socket_context_on_writable(int ssl, struct us_socket_contex
     struct us_socket_t *(*on_writable)(struct us_socket_t *s));
 WIN32_EXPORT void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_timeout)(struct us_socket_t *s));
+WIN32_EXPORT void us_socket_context_on_long_timeout(int ssl, struct us_socket_context_t *context,
+    struct us_socket_t *(*on_timeout)(struct us_socket_t *s));
 /* This one is only used for when a connecting socket fails in a late stage. */
 WIN32_EXPORT void us_socket_context_on_connect_error(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_connect_error)(struct us_socket_t *s, int code));
@@ -173,6 +175,8 @@ WIN32_EXPORT void us_socket_context_on_end(int ssl, struct us_socket_context_t *
 
 /* Returns user data extension for this socket context */
 WIN32_EXPORT void *us_socket_context_ext(int ssl, struct us_socket_context_t *context);
+
+void us_socket_context_close(struct us_socket_context_t *context);
 
 /* Listen for connections. Acts as the main driving cog in a server. Will call set async callbacks. */
 WIN32_EXPORT struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_context_t *context,
@@ -278,6 +282,9 @@ WIN32_EXPORT int us_socket_write(int ssl, struct us_socket_t *s, const char *dat
 /* Set a low precision, high performance timer on a socket. A socket can only have one single active timer
  * at any given point in time. Will remove any such pre set timer */
 WIN32_EXPORT void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds);
+
+/* Set a low precision, high performance timer on a socket. Suitable for per-minute precision. */
+WIN32_EXPORT void us_socket_long_timeout(int ssl, struct us_socket_t *s, unsigned int minutes);
 
 /* Return the user data extension of this socket */
 WIN32_EXPORT void *us_socket_ext(int ssl, struct us_socket_t *s);

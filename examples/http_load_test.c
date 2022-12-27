@@ -78,7 +78,16 @@ struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, ch
         printf("Running benchmark now...\n");
 
         us_socket_timeout(SSL, s, LIBUS_TIMEOUT_GRANULARITY);
+        us_socket_long_timeout(SSL, s, 1);
     }
+
+    return s;
+}
+
+struct us_socket_t *on_http_socket_long_timeout(struct us_socket_t *s) {
+    /* Print current statistics */
+    printf("--- Minute mark ---\n");
+    us_socket_long_timeout(SSL, s, 1);
 
     return s;
 }
@@ -127,10 +136,14 @@ int main(int argc, char **argv) {
     us_socket_context_on_writable(SSL, http_context, on_http_socket_writable);
     us_socket_context_on_close(SSL, http_context, on_http_socket_close);
     us_socket_context_on_timeout(SSL, http_context, on_http_socket_timeout);
+    us_socket_context_on_long_timeout(SSL, http_context, on_http_socket_long_timeout);
     us_socket_context_on_end(SSL, http_context, on_http_socket_end);
 
     /* Start making HTTP connections */
     us_socket_context_connect(SSL, http_context, host, port, NULL, 0, sizeof(struct http_socket));
 
     us_loop_run(loop);
+
+    us_socket_context_free(SSL, http_context);
+    us_loop_free(loop);
 }

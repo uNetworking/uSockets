@@ -48,6 +48,10 @@ void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
     /* We cannot immediately free a listen socket as we can be inside an accept loop */
 }
 
+void us_socket_context_close(struct us_socket_context_t *context) {
+
+}
+
 void us_internal_socket_context_unlink(struct us_socket_context_t *context, struct us_socket_t *s) {
     /* We have to properly update the iterator used to sweep sockets for timeouts */
     if (s == context->iterator) {
@@ -170,6 +174,8 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 
     /* Begin at 0 */
     context->timestamp = 0;
+    context->long_timestamp = 0;
+    context->global_tick = 0;
 
     us_internal_loop_link(loop, context);
 
@@ -213,7 +219,8 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
     struct us_listen_socket_t *ls = (struct us_listen_socket_t *) p;
 
     ls->s.context = context;
-    ls->s.timeout = 0;
+    ls->s.timeout = 255;
+    ls->s.long_timeout = 255;
     ls->s.low_prio_state = 0;
     ls->s.next = 0;
     us_internal_socket_context_link(context, &ls->s);
@@ -243,7 +250,8 @@ struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_sock
     struct us_listen_socket_t *ls = (struct us_listen_socket_t *) p;
 
     ls->s.context = context;
-    ls->s.timeout = 0;
+    ls->s.timeout = 255;
+    ls->s.long_timeout = 255;
     ls->s.low_prio_state = 0;
     ls->s.next = 0;
     us_internal_socket_context_link(context, &ls->s);
@@ -274,7 +282,8 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
 
     /* Link it into context so that timeout fires properly */
     connect_socket->context = context;
-    connect_socket->timeout = 0;
+    connect_socket->timeout = 255;
+    connect_socket->long_timeout = 255;
     connect_socket->low_prio_state = 0;
     us_internal_socket_context_link(context, connect_socket);
 
@@ -302,7 +311,8 @@ struct us_socket_t *us_socket_context_connect_unix(int ssl, struct us_socket_con
 
     /* Link it into context so that timeout fires properly */
     connect_socket->context = context;
-    connect_socket->timeout = 0;
+    connect_socket->timeout = 255;
+    connect_socket->long_timeout = 255;
     connect_socket->low_prio_state = 0;
     us_internal_socket_context_link(context, connect_socket);
 
@@ -340,7 +350,8 @@ struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_con
     }
 
     struct us_socket_t *new_s = (struct us_socket_t *) us_poll_resize(&s->p, s->context->loop, sizeof(struct us_socket_t) + ext_size);
-    new_s->timeout = 0;
+    new_s->timeout = 255;
+    new_s->long_timeout = 255;
 
     if (new_s->low_prio_state == 1) {
         /* update pointers in low-priority queue */
@@ -397,6 +408,17 @@ void us_socket_context_on_writable(int ssl, struct us_socket_context_t *context,
 #endif
 
     context->on_writable = on_writable;
+}
+
+void us_socket_context_on_long_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_long_timeout)(struct us_socket_t *)) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        us_internal_ssl_socket_context_on_long_timeout((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *)) on_long_timeout);
+        return;
+    }
+#endif
+
+    context->on_socket_long_timeout = on_long_timeout;
 }
 
 void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_timeout)(struct us_socket_t *)) {

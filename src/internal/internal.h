@@ -87,11 +87,12 @@ void us_internal_socket_context_unlink(struct us_socket_context_t *context, stru
 
 /* Sockets are polls */
 struct us_socket_t {
-    alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p;
+    alignas(LIBUS_EXT_ALIGNMENT) struct us_poll_t p; // 4 bytes
+    unsigned char timeout; // 1 byte
+    unsigned char long_timeout; // 1 byte
+    unsigned short low_prio_state; /* 0 = not in low-prio queue, 1 = is in low-prio queue, 2 = was in low-prio queue in this iteration */
     struct us_socket_context_t *context;
     struct us_socket_t *prev, *next;
-    unsigned short timeout : 14;
-    unsigned short low_prio_state : 2; /* 0 = not in low-prio queue, 1 = is in low-prio queue, 2 = was in low-prio queue in this iteration */
 };
 
 /* Internal callback types are polls just like sockets */
@@ -111,7 +112,9 @@ struct us_listen_socket_t {
 
 struct us_socket_context_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_t *loop;
-    unsigned short timestamp;
+    uint32_t global_tick;
+    unsigned char timestamp;
+    unsigned char long_timestamp;
     struct us_socket_t *head;
     struct us_socket_t *iterator;
     struct us_socket_context_t *prev, *next;
@@ -122,6 +125,7 @@ struct us_socket_context_t {
     struct us_socket_t *(*on_close)(struct us_socket_t *, int code, void *reason);
     //void (*on_timeout)(struct us_socket_context *);
     struct us_socket_t *(*on_socket_timeout)(struct us_socket_t *);
+    struct us_socket_t *(*on_socket_long_timeout)(struct us_socket_t *);
     struct us_socket_t *(*on_end)(struct us_socket_t *);
     struct us_socket_t *(*on_connect_error)(struct us_socket_t *, int code);
     int (*is_low_prio)(struct us_socket_t *);
@@ -160,6 +164,9 @@ void us_internal_ssl_socket_context_on_writable(struct us_internal_ssl_socket_co
     struct us_internal_ssl_socket_t *(*on_writable)(struct us_internal_ssl_socket_t *s));
 
 void us_internal_ssl_socket_context_on_timeout(struct us_internal_ssl_socket_context_t *context,
+    struct us_internal_ssl_socket_t *(*on_timeout)(struct us_internal_ssl_socket_t *s));
+
+void us_internal_ssl_socket_context_on_long_timeout(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_timeout)(struct us_internal_ssl_socket_t *s));
 
 void us_internal_ssl_socket_context_on_end(struct us_internal_ssl_socket_context_t *context,
