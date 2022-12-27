@@ -35,10 +35,10 @@ void us_loop_run_bun_tick(struct us_loop_t *loop);
 
 #ifdef LIBUS_USE_EPOLL
 #define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_polls[index].data.ptr
-#define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].data.ptr = poll
+#define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].data.ptr = (void*)poll
 #else
 #define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_polls[index].udata
-#define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].udata = poll
+#define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].udata = (uint64_t)poll
 #endif
 
 /* Loop */
@@ -235,7 +235,7 @@ void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct 
         if (GET_READY_POLL(loop, i) == old_poll) {
 
             // if new events does not contain the ready events of this poll then remove (no we filter that out later on)
-            SET_READY_POLL(loop, i, (uint64_t)new_poll);
+            SET_READY_POLL(loop, i, new_poll);
 
             num_entries_possibly_remaining--;
         }
