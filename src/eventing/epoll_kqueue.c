@@ -30,8 +30,8 @@ void us_loop_run_bun_tick(struct us_loop_t *loop);
 /* Pointer tags are used to indicate a Bun pointer versus a uSockets pointer */
 #define UNSET_BITS_49_UNTIL_64 0x0000FFFFFFFFFFFF
 #define CLEAR_POINTER_TAG(p) ((void *) ((uintptr_t) (p) & UNSET_BITS_49_UNTIL_64))
-#define LIKELY(cond) __builtin_expect(cond, 1)
-#define UNLIKELY(cond) __builtin_expect(cond, 0)
+#define LIKELY(cond) __builtin_expect((uint64_t)(void*)cond, 1)
+#define UNLIKELY(cond) __builtin_expect((uint64_t)(void*)cond, 0)
 
 #ifdef LIBUS_USE_EPOLL
 #define GET_READY_POLL(loop, index) (struct us_poll_t *) loop->ready_polls[index].data.ptr
@@ -235,7 +235,7 @@ void us_internal_loop_update_pending_ready_polls(struct us_loop_t *loop, struct 
         if (GET_READY_POLL(loop, i) == old_poll) {
 
             // if new events does not contain the ready events of this poll then remove (no we filter that out later on)
-            SET_READY_POLL(loop, i, new_poll);
+            SET_READY_POLL(loop, i, (uint64_t)new_poll);
 
             num_entries_possibly_remaining--;
         }
@@ -252,12 +252,12 @@ int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_d
 
     /* Do they differ in readable? */
     if ((new_events & LIBUS_SOCKET_READABLE) != (old_events & LIBUS_SOCKET_READABLE)) {
-        EV_SET64(&change_list[change_length++], fd, EVFILT_READ, (new_events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, (uintptr_t)user_data, 0, 0);
+        EV_SET64(&change_list[change_length++], fd, EVFILT_READ, (new_events & LIBUS_SOCKET_READABLE) ? EV_ADD : EV_DELETE, 0, 0, (uint64_t)(void*)user_data, 0, 0);
     }
 
     /* Do they differ in writable? */
     if ((new_events & LIBUS_SOCKET_WRITABLE) != (old_events & LIBUS_SOCKET_WRITABLE)) {
-        EV_SET64(&change_list[change_length++], fd, EVFILT_WRITE, (new_events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, (uintptr_t)user_data, 0, 0);
+        EV_SET64(&change_list[change_length++], fd, EVFILT_WRITE, (new_events & LIBUS_SOCKET_WRITABLE) ? EV_ADD : EV_DELETE, 0, 0, (uint64_t)(void*)user_data, 0, 0);
     }
 
     int ret = kevent64(kqfd, change_list, change_length, NULL, 0, 0, NULL);
@@ -416,7 +416,7 @@ void us_timer_close(struct us_timer_t *timer) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) timer;
 
     struct kevent64_s event;
-    EV_SET64(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_DELETE, 0, 0, internal_cb, 0, 0);
+    EV_SET64(&event, (uint64_t) (void*) internal_cb, EVFILT_TIMER, EV_DELETE, 0, 0, (uint64_t)internal_cb, 0, 0);
     kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
 
     /* (regular) sockets are the only polls which are not freed immediately */
@@ -430,7 +430,8 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 
     /* Bug: repeat_ms must be the same as ms, or 0 */
     struct kevent64_s event;
-    EV_SET64(&event, (uintptr_t) internal_cb, EVFILT_TIMER, EV_ADD | (repeat_ms ? 0 : EV_ONESHOT), 0, ms, internal_cb, 0, 0);
+    uint64_t ptr = (uint64_t)(void*)internal_cb;
+    EV_SET64(&event, ptr, EVFILT_TIMER, EV_ADD | (repeat_ms ? 0 : EV_ONESHOT), 0, ms, (uint64_t)internal_cb, 0, 0);
     kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
 }
 #endif
@@ -507,7 +508,8 @@ void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
     struct kevent64_s event;
-    EV_SET64(&event, (uintptr_t) internal_cb, EVFILT_MACHPORT, EV_DELETE, 0, 0, (uintptr_t)internal_cb, 0,0);
+    uint64_t ptr = (uint64_t)(void*)internal_cb;
+    EV_SET64(&event, ptr, EVFILT_MACHPORT, EV_DELETE, 0, 0, (uint64_t)(void*)internal_cb, 0,0);
     kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
 
     mach_port_deallocate(mach_task_self(), internal_cb->port);
@@ -532,9 +534,9 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
     event.filter = EVFILT_MACHPORT;
     event.flags = EV_ADD | EV_ENABLE;
     event.fflags = MACH_RCV_MSG | MACH_RCV_OVERWRITE;
-    event.ext[0] = (uintptr_t)internal_cb->machport_buf;
+    event.ext[0] = (uint64_t)(void*)internal_cb->machport_buf;
     event.ext[1] = MACHPORT_BUF_LEN;
-    event.udata = (uintptr_t)internal_cb;
+    event.udata = (uint64_t)(void*)internal_cb;
 
     int ret = kevent64(internal_cb->loop->fd, &event, 1, NULL, 0, 0, NULL);
 
