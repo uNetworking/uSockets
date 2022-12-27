@@ -693,7 +693,29 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, co
         }
     }
 
+
+#if defined(HAVE_BUILTIN_AVAILABLE)
+      /* while connectx function is available since macOS 10.11 / iOS 9,
+         it did not have the interface declared correctly until
+         Xcode 9 / macOS SDK 10.13 */
+      if(__builtin_available(macOS 10.11, iOS 9.0, tvOS 9.0, watchOS 2.0, *)) {
+        sa_endpoints_t endpoints;
+        endpoints.sae_srcif = 0;
+        endpoints.sae_srcaddr = NULL;
+        endpoints.sae_srcaddrlen = 0;
+        endpoints.sae_dstaddr = result->ai_addr;
+        endpoints.sae_dstaddrlen = result->ai_addrlen;
+
+        connectx(fd, &endpoints, SAE_ASSOCID_ANY,
+                      CONNECT_RESUME_ON_READ_WRITE | CONNECT_DATA_IDEMPOTENT,
+                      NULL, 0, NULL, NULL);
+      }
+      else {
+            connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
+      }
+#else
     connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
+#endif
     freeaddrinfo(result);
 
     return fd;
