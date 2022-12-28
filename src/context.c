@@ -48,8 +48,13 @@ void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
     /* We cannot immediately free a listen socket as we can be inside an accept loop */
 }
 
-void us_socket_context_close(struct us_socket_context_t *context) {
-
+void us_socket_context_close(int ssl, struct us_socket_context_t *context) {
+        struct us_socket_t *s = context->head;
+        while (s) {
+            struct us_socket_t *nextS = s->next;
+            us_socket_close(ssl, s, 0, 0);
+            s = nextS;
+        }
 }
 
 void us_internal_socket_context_unlink(struct us_socket_context_t *context, struct us_socket_t *s) {
