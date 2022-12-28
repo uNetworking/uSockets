@@ -176,7 +176,7 @@ WIN32_EXPORT void us_socket_context_on_end(int ssl, struct us_socket_context_t *
 /* Returns user data extension for this socket context */
 WIN32_EXPORT void *us_socket_context_ext(int ssl, struct us_socket_context_t *context);
 
-/* Closes all open sockets. Does not close listen sockets. Does not invalidate the socket context. */
+/* Closes all open sockets, including listen sockets. Does not invalidate the socket context. */
 void us_socket_context_close(int ssl, struct us_socket_context_t *context);
 
 /* Listen for connections. Acts as the main driving cog in a server. Will call set async callbacks. */

@@ -82,8 +82,8 @@ void us_internal_init_loop_ssl_data(struct us_loop_t *loop);
 void us_internal_free_loop_ssl_data(struct us_loop_t *loop);
 
 /* Socket context related */
-void us_internal_socket_context_link(struct us_socket_context_t *context, struct us_socket_t *s);
-void us_internal_socket_context_unlink(struct us_socket_context_t *context, struct us_socket_t *s);
+void us_internal_socket_context_link_socket(struct us_socket_context_t *context, struct us_socket_t *s);
+void us_internal_socket_context_unlink_socket(struct us_socket_context_t *context, struct us_socket_t *s);
 
 /* Sockets are polls */
 struct us_socket_t {
@@ -110,12 +110,17 @@ struct us_listen_socket_t {
     unsigned int socket_ext_size;
 };
 
+/* Listen sockets are keps in their own list */
+void us_internal_socket_context_link_listen_socket(struct us_socket_context_t *context, struct us_listen_socket_t *s);
+void us_internal_socket_context_unlink_listen_socket(struct us_socket_context_t *context, struct us_listen_socket_t *s);
+
 struct us_socket_context_t {
     alignas(LIBUS_EXT_ALIGNMENT) struct us_loop_t *loop;
     uint32_t global_tick;
     unsigned char timestamp;
     unsigned char long_timestamp;
-    struct us_socket_t *head;
+    struct us_socket_t *head_sockets;
+    struct us_listen_socket_t *head_listen_sockets;
     struct us_socket_t *iterator;
     struct us_socket_context_t *prev, *next;
 

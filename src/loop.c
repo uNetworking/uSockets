@@ -93,7 +93,7 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
         unsigned char long_ticks = context->long_timestamp = (context->global_tick / 15) % 240;
 
         /* Begin at head */
-        struct us_socket_t *s = context->head;
+        struct us_socket_t *s = context->head_sockets;
         while (s) {
             /* Seek until end or timeout found (tightest loop) */
             while (1) {
@@ -152,7 +152,7 @@ void us_internal_handle_low_priority_sockets(struct us_loop_t *loop) {
         if (s->next) s->next->prev = 0;
         s->next = 0;
 
-        us_internal_socket_context_link(s->context, s);
+        us_internal_socket_context_link_socket(s->context, s);
         us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) | LIBUS_SOCKET_READABLE);
 
         s->low_prio_state = 2;
@@ -259,7 +259,7 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                         /* We always use nodelay */
                         bsd_socket_nodelay(client_fd, 1);
 
-                        us_internal_socket_context_link(listen_socket->s.context, s);
+                        us_internal_socket_context_link_socket(listen_socket->s.context, s);
 
                         listen_socket->s.context->on_open(s, 0, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
 
@@ -313,7 +313,7 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                         s->context->loop->data.low_prio_budget--; /* Still having budget for this iteration - do normal processing */
                     } else {
                         us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
-                        us_internal_socket_context_unlink(s->context, s);
+                        us_internal_socket_context_unlink_socket(s->context, s);
 
                         /* Link this socket to the low-priority queue - we use a LIFO queue, to prioritize newer clients that are
                          * maybe not already timeouted - sounds unfair, but works better in real-life with smaller client-timeouts
