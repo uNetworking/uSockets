@@ -22,28 +22,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-WIN32_EXPORT int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, int index) {
+int us_udp_packet_buffer_ecn(struct us_udp_packet_buffer_t *buf, int index) {
     return bsd_udp_packet_buffer_ecn(buf, index);
 }
 
-WIN32_EXPORT int us_udp_packet_buffer_local_ip(struct us_udp_packet_buffer_t *buf, int index, char *ip) {
+int us_udp_packet_buffer_local_ip(struct us_udp_packet_buffer_t *buf, int index, char *ip) {
     return bsd_udp_packet_buffer_local_ip(buf, index, ip);
 }
 
-WIN32_EXPORT char *us_udp_packet_buffer_peer(struct us_udp_packet_buffer_t *buf, int index) {
+char *us_udp_packet_buffer_peer(struct us_udp_packet_buffer_t *buf, int index) {
     return bsd_udp_packet_buffer_peer(buf, index);
 }
 
-WIN32_EXPORT char *us_udp_packet_buffer_payload(struct us_udp_packet_buffer_t *buf, int index) {
+char *us_udp_packet_buffer_payload(struct us_udp_packet_buffer_t *buf, int index) {
     return bsd_udp_packet_buffer_payload(buf, index);
 }
 
-WIN32_EXPORT int us_udp_packet_buffer_payload_length(struct us_udp_packet_buffer_t *buf, int index) {
+int us_udp_packet_buffer_payload_length(struct us_udp_packet_buffer_t *buf, int index) {
     return bsd_udp_packet_buffer_payload_length(buf, index);
 }
 
 // what should we return? number of sent datagrams?
-WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int num) {
+int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf, int num) {
     int fd = us_poll_fd((struct us_poll_t *) s);
 
     // we need to poll out if we failed
@@ -51,16 +51,16 @@ WIN32_EXPORT int us_udp_socket_send(struct us_udp_socket_t *s, struct us_udp_pac
     return bsd_sendmmsg(fd, buf, num, 0);
 }
 
-WIN32_EXPORT int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf) {
+int us_udp_socket_receive(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t *buf) {
     int fd = us_poll_fd((struct us_poll_t *) s);
     return bsd_recvmmsg(fd, buf, LIBUS_UDP_MAX_NUM, 0, 0);
 }
 
-WIN32_EXPORT void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, int offset, void *payload, int length, void *peer_addr) {
+void us_udp_buffer_set_packet_payload(struct us_udp_packet_buffer_t *send_buf, int index, int offset, void *payload, int length, void *peer_addr) {
     bsd_udp_buffer_set_packet_payload(send_buf, index, offset, payload, length, peer_addr);
 }
 
-WIN32_EXPORT struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
+struct us_udp_packet_buffer_t *us_create_udp_packet_buffer() {
     return (struct us_udp_packet_buffer_t *) bsd_create_udp_packet_buffer();
 }
 
@@ -76,7 +76,7 @@ struct us_internal_udp_t {
     int port;
 };
 
-WIN32_EXPORT int us_udp_socket_bound_port(struct us_udp_socket_t *s) {
+int us_udp_socket_bound_port(struct us_udp_socket_t *s) {
     return ((struct us_internal_udp_t *) s)->port;
 }
 
@@ -101,7 +101,7 @@ void *us_udp_socket_user(struct us_udp_socket_t *s) {
     return udp->user;
 }
 
-WIN32_EXPORT struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), const char *host, unsigned short port, void *user) {
+struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_udp_packet_buffer_t *buf, void (*data_cb)(struct us_udp_socket_t *, struct us_udp_packet_buffer_t *, int), void (*drain_cb)(struct us_udp_socket_t *), const char *host, unsigned short port, void *user) {
     
     LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_udp_socket(host, port);
     if (fd == LIBUS_SOCKET_ERROR) {
