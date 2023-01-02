@@ -177,7 +177,7 @@ WIN32_EXPORT void us_socket_context_on_end(int ssl, struct us_socket_context_t *
 WIN32_EXPORT void *us_socket_context_ext(int ssl, struct us_socket_context_t *context);
 
 /* Closes all open sockets, including listen sockets. Does not invalidate the socket context. */
-void us_socket_context_close(int ssl, struct us_socket_context_t *context);
+WIN32_EXPORT void us_socket_context_close(int ssl, struct us_socket_context_t *context);
 
 /* Listen for connections. Acts as the main driving cog in a server. Will call set async callbacks. */
 WIN32_EXPORT struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_context_t *context,
