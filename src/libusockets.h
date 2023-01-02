@@ -34,7 +34,11 @@
 #endif
 #include <winsock2.h>
 #define LIBUS_SOCKET_DESCRIPTOR SOCKET
+#ifdef LIBUS_BUILDING_DLL
 #define WIN32_EXPORT __declspec(dllexport)
+#else
+#define WIN32_EXPORT
+#endif
 #else
 #define LIBUS_SOCKET_DESCRIPTOR int
 #define WIN32_EXPORT
