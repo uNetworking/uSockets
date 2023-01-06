@@ -141,7 +141,7 @@ int server(void* arg) {
 	struct us_listen_socket_t *listen_socket = us_socket_context_listen_direct(SSL, http_context, listen_fd, 0, sizeof(struct http_socket));
 
 	if (listen_socket) {
-		printf("Listening on port 3000...\n");
+		printf("Listening on passed socket...\n");
 		us_loop_run(loop);
 	} else {
 		printf("Failed to listen!\n");
@@ -159,11 +159,12 @@ int main() {
 		printf("Could not bind and listen to port: %s\n", strerror(errno));
 		exit(1);
 	}
+	printf("Listening on port 3000...\n");
 
 	int child_pid = clone(
 		server,
 		child_stack + STACK_SIZE,
-		CLONE_NEWNET | CLONE_FILES,
+		CLONE_NEWNET | CLONE_FILES | SIGCHLD,
 		(void*)&listen_fd);
 	if (child_pid < 0) {
 		printf("Could not create namespaced server process: %s\n", strerror(errno));
@@ -171,6 +172,7 @@ int main() {
 	};
 
 	printf("Started server with pid %d\n", child_pid);
-	return waitpid(child_pid, NULL, 0);
+	int status;
+	waitpid(child_pid, &status, 0);
+	return status;
 }
-
