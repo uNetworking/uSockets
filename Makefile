@@ -89,6 +89,9 @@ boringssl:
 examples: default
 	for f in examples/*.c; do $(CC) -O3 $(CFLAGS) -o $$(basename "$$f" ".c")$(EXEC_SUFFIX) "$$f" $(LDFLAGS); done
 
+linux_examples: 
+	for f in examples/linux/*.c; do $(CC) -O3 $(CFLAGS) -o $$(basename "$$f" ".c")$(EXEC_SUFFIX) "$$f" $(LDFLAGS); done
+       
 swift_examples:
 	swiftc -O -I . examples/swift_http_server/main.swift uSockets.a -o swift_http_server
 
