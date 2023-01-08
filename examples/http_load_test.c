@@ -102,6 +102,12 @@ struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
     return s;
 }
 
+struct us_socket_t *on_http_socket_connect_error(struct us_socket_t *s, int code) {
+    printf("Cannot connect to server\n");
+
+    return s;
+}
+
 int main(int argc, char **argv) {
 
     /* Parse host and port */
@@ -138,9 +144,12 @@ int main(int argc, char **argv) {
     us_socket_context_on_timeout(SSL, http_context, on_http_socket_timeout);
     us_socket_context_on_long_timeout(SSL, http_context, on_http_socket_long_timeout);
     us_socket_context_on_end(SSL, http_context, on_http_socket_end);
+    us_socket_context_on_connect_error(SSL, http_context, on_http_socket_connect_error);
 
     /* Start making HTTP connections */
-    us_socket_context_connect(SSL, http_context, host, port, NULL, 0, sizeof(struct http_socket));
+    if (!us_socket_context_connect(SSL, http_context, host, port, NULL, 0, sizeof(struct http_socket))) {
+        printf("Cannot connect to server\n");
+    }
 
     us_loop_run(loop);
 
