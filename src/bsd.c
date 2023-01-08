@@ -661,6 +661,11 @@ int bsd_udp_packet_buffer_ecn(void *msgvec, int index) {
     return 0; // no ecn defaults to 0
 }
 
+static int bsd_do_connect(struct addrinfo *result, int fd)
+{
+    return connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
+}
+
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options) {
     struct addrinfo hints, *result;
     memset(&hints, 0, sizeof(struct addrinfo));
@@ -692,30 +697,15 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, co
             }
         }
     }
+    
+    do {
+        if (bsd_do_connect(result, fd) != 0 && errno != EINPROGRESS) {
+            bsd_close_socket(fd);
+            freeaddrinfo(result);
+            return LIBUS_SOCKET_ERROR;
+        }
+    } while (errno == EINTR);
 
-
-#if defined(HAVE_BUILTIN_AVAILABLE)
-      /* while connectx function is available since macOS 10.11 / iOS 9,
-         it did not have the interface declared correctly until
-         Xcode 9 / macOS SDK 10.13 */
-      if(__builtin_available(macOS 10.11, iOS 9.0, tvOS 9.0, watchOS 2.0, *)) {
-        sa_endpoints_t endpoints;
-        endpoints.sae_srcif = 0;
-        endpoints.sae_srcaddr = NULL;
-        endpoints.sae_srcaddrlen = 0;
-        endpoints.sae_dstaddr = result->ai_addr;
-        endpoints.sae_dstaddrlen = result->ai_addrlen;
-
-        connectx(fd, &endpoints, SAE_ASSOCID_ANY,
-                      CONNECT_RESUME_ON_READ_WRITE | CONNECT_DATA_IDEMPOTENT,
-                      NULL, 0, NULL, NULL);
-      }
-      else {
-            connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
-      }
-#else
-    connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
-#endif
     freeaddrinfo(result);
 
     return fd;
@@ -735,7 +725,10 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket_unix(const char *server_path, 
         return LIBUS_SOCKET_ERROR;
     }
 
-    connect(fd, (struct sockaddr *)&server_address, size);
+    if (connect(fd, (struct sockaddr *)&server_address, size) != 0 && errno != EINPROGRESS) {
+        bsd_close_socket(fd);
+        return LIBUS_SOCKET_ERROR;
+    }
 
     return fd;
 }
