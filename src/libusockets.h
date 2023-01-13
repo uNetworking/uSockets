@@ -332,8 +332,8 @@ int us_socket_local_port(int ssl, struct us_socket_t *s);
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);
 
 /* Bun extras */
-WIN32_EXPORT struct us_socket_t *us_socket_detach(int ssl, struct us_socket_t *s);
-WIN32_EXPORT struct us_socket_t *us_socket_attach(int ssl, LIBUS_SOCKET_DESCRIPTOR client_fd, struct us_socket_context_t *ctx);
+struct us_socket_t *us_socket_detach(int ssl, struct us_socket_t *s);
+struct us_socket_t *us_socket_attach(int ssl, LIBUS_SOCKET_DESCRIPTOR client_fd, struct us_socket_context_t *ctx);
 
 #ifdef __cplusplus
 }
