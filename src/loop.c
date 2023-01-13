@@ -87,19 +87,18 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
 
         struct us_socket_context_t *context = loop_data->iterator;
 
-        /* Update this context's 15-bit timestamp */
-        context->timestamp = (context->timestamp + 1) & 0x1fff;
-
-        /* Update our 14-bit full timestamp (the needle in the haystack) */
-        unsigned short needle = 0x2000 | context->timestamp;
+        /* Update this context's timestamps (this could be moved to loop and done once) */
+        context->global_tick++;
+        unsigned char short_ticks = context->timestamp = context->global_tick % 240;
+        unsigned char long_ticks = context->long_timestamp = (context->global_tick / 15) % 240;
 
         /* Begin at head */
-        struct us_socket_t *s = context->head;
+        struct us_socket_t *s = context->head_sockets;
         while (s) {
             /* Seek until end or timeout found (tightest loop) */
             while (1) {
                 /* We only read from 1 random cache line here */
-                if (needle == s->timeout) {
+                if (short_ticks == s->timeout || long_ticks == s->long_timeout) {
                     break;
                 }
 
@@ -110,10 +109,17 @@ void us_internal_timer_sweep(struct us_loop_t *loop) {
             }
 
             /* Here we have a timeout to emit (slow path) */
-            s->timeout = 0;
             context->iterator = s;
 
-            context->on_socket_timeout(s);
+            if (short_ticks == s->timeout) {
+                s->timeout = 255;
+                context->on_socket_timeout(s);
+            }
+
+            if (context->iterator == s && long_ticks == s->long_timeout) {
+                s->long_timeout = 255;
+                context->on_socket_long_timeout(s);
+            }   
 
             /* Check for unlink / link (if the event handler did not modify the chain, we step 1) */
             if (s == context->iterator) {
@@ -146,7 +152,7 @@ void us_internal_handle_low_priority_sockets(struct us_loop_t *loop) {
         if (s->next) s->next->prev = 0;
         s->next = 0;
 
-        us_internal_socket_context_link(s->context, s);
+        us_internal_socket_context_link_socket(s->context, s);
         us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) | LIBUS_SOCKET_READABLE);
 
         s->low_prio_state = 2;
@@ -246,13 +252,14 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                         struct us_socket_t *s = (struct us_socket_t *) accepted_p;
 
                         s->context = listen_socket->s.context;
-                        s->timeout = 0;
+                        s->timeout = 255;
+                        s->long_timeout = 255;
                         s->low_prio_state = 0;
 
                         /* We always use nodelay */
                         bsd_socket_nodelay(client_fd, 1);
 
-                        us_internal_socket_context_link(listen_socket->s.context, s);
+                        us_internal_socket_context_link_socket(listen_socket->s.context, s);
 
                         listen_socket->s.context->on_open(s, 0, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
 
@@ -306,7 +313,7 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                         s->context->loop->data.low_prio_budget--; /* Still having budget for this iteration - do normal processing */
                     } else {
                         us_poll_change(&s->p, us_socket_context(0, s)->loop, us_poll_events(&s->p) & LIBUS_SOCKET_WRITABLE);
-                        us_internal_socket_context_unlink(s->context, s);
+                        us_internal_socket_context_unlink_socket(s->context, s);
 
                         /* Link this socket to the low-priority queue - we use a LIFO queue, to prioritize newer clients that are
                          * maybe not already timeouted - sounds unfair, but works better in real-life with smaller client-timeouts

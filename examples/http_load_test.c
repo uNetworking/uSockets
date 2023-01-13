@@ -7,7 +7,7 @@ const int SSL = 1;
 #include <stdlib.h>
 #include <string.h>
 
-char request[] = "GET / HTTP/1.1\r\n\r\n";
+char request[] = "GET / HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\n\r\n";
 char *host;
 int port;
 int connections;
@@ -78,7 +78,16 @@ struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, ch
         printf("Running benchmark now...\n");
 
         us_socket_timeout(SSL, s, LIBUS_TIMEOUT_GRANULARITY);
+        us_socket_long_timeout(SSL, s, 1);
     }
+
+    return s;
+}
+
+struct us_socket_t *on_http_socket_long_timeout(struct us_socket_t *s) {
+    /* Print current statistics */
+    printf("--- Minute mark ---\n");
+    us_socket_long_timeout(SSL, s, 1);
 
     return s;
 }
@@ -89,6 +98,12 @@ struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
 
     responses = 0;
     us_socket_timeout(SSL, s, LIBUS_TIMEOUT_GRANULARITY);
+
+    return s;
+}
+
+struct us_socket_t *on_http_socket_connect_error(struct us_socket_t *s, int code) {
+    printf("Cannot connect to server\n");
 
     return s;
 }
@@ -127,10 +142,17 @@ int main(int argc, char **argv) {
     us_socket_context_on_writable(SSL, http_context, on_http_socket_writable);
     us_socket_context_on_close(SSL, http_context, on_http_socket_close);
     us_socket_context_on_timeout(SSL, http_context, on_http_socket_timeout);
+    us_socket_context_on_long_timeout(SSL, http_context, on_http_socket_long_timeout);
     us_socket_context_on_end(SSL, http_context, on_http_socket_end);
+    us_socket_context_on_connect_error(SSL, http_context, on_http_socket_connect_error);
 
     /* Start making HTTP connections */
-    us_socket_context_connect(SSL, http_context, host, port, NULL, 0, sizeof(struct http_socket));
+    if (!us_socket_context_connect(SSL, http_context, host, port, NULL, 0, sizeof(struct http_socket))) {
+        printf("Cannot connect to server\n");
+    }
 
     us_loop_run(loop);
+
+    us_socket_context_free(SSL, http_context);
+    us_loop_free(loop);
 }

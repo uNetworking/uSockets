@@ -1,3 +1,8 @@
+# By default we use LTO, but Windows does not support it
+ifneq ($(WITH_LTO),0)
+	override CFLAGS += -flto
+endif
+
 # WITH_BORINGSSL=1 enables BoringSSL support, linked statically (preferred over OpenSSL)
 # You need to call "make boringssl" before
 ifeq ($(WITH_BORINGSSL),1)
@@ -58,7 +63,7 @@ endif
 # By default we build the uSockets.a static library
 default:
 	rm -f *.o
-	$(CC) $(CFLAGS) -flto -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
+	$(CC) $(CFLAGS) -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
 # Also link in Boost Asio support
 ifeq ($(WITH_ASIO),1)
 	$(CXX) $(CXXFLAGS) -Isrc -std=c++14 -flto -O3 -c src/eventing/asio.cpp
@@ -71,7 +76,8 @@ endif
 ifeq ($(WITH_BORINGSSL),1)
 	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
 endif
-	$(AR) rvs uSockets.a *.o
+# Create a static library (try windows, then unix)
+	lib.exe /out:uSockets.a *.o || $(AR) rvs uSockets.a *.o
 
 # BoringSSL needs cmake and golang
 .PHONY: boringssl
@@ -81,7 +87,7 @@ boringssl:
 # Builds all examples
 .PHONY: examples
 examples: default
-	for f in examples/*.c; do $(CC) -flto -O3 $(CFLAGS) -o $$(basename "$$f" ".c") "$$f" $(LDFLAGS); done
+	for f in examples/*.c; do $(CC) -O3 $(CFLAGS) -o $$(basename "$$f" ".c")$(EXEC_SUFFIX) "$$f" $(LDFLAGS); done
 
 swift_examples:
 	swiftc -O -I . examples/swift_http_server/main.swift uSockets.a -o swift_http_server
