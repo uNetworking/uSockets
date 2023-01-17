@@ -18,6 +18,7 @@
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <stdlib.h>
+#include <sys/ioctl.h>
 
 /* The loop has 2 fallthrough polls */
 void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct us_loop_t *loop),
@@ -278,14 +279,7 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
             /* We should only use s, no p after this point */
             struct us_socket_t *s = (struct us_socket_t *) p;
 
-            /* Such as epollerr epollhup */
-            if (error) {
-                /* Todo: decide what code we give here */
-                s = us_socket_close(0, s, 0, NULL);
-                return;
-            }
-
-            if (events & LIBUS_SOCKET_WRITABLE) {
+            if (events & LIBUS_SOCKET_WRITABLE && !error) {
                 /* Note: if we failed a write as a socket of one loop then adopted
                  * to another loop, this will be wrong. Absurd case though */
                 s->context->loop->data.last_write_failed = 0;
@@ -345,7 +339,15 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                 } else if (length == LIBUS_SOCKET_ERROR && !bsd_would_block()) {
                     /* Todo: decide also here what kind of reason we should give */
                     s = us_socket_close(0, s, 0, NULL);
+                    return;
                 }
+            }
+
+            /* Such as epollerr epollhup */
+            if (error) {
+                /* Todo: decide what code we give here */
+                s = us_socket_close(0, s, 0, NULL);
+                return;
             }
         }
         break;
