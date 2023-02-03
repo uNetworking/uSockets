@@ -76,6 +76,9 @@ endif
 ifeq ($(WITH_BORINGSSL),1)
 	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
 endif
+ifeq ($(WITH_WOLFSSL),1)
+	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
+endif
 # Create a static library (try windows, then unix)
 	lib.exe /out:uSockets.a *.o || $(AR) rvs uSockets.a *.o
 
