@@ -300,10 +300,17 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, int protocol) {
 }
 
 void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
+    // errno is rewritten by close(fd), and the actual error number is lost.
 #ifdef _WIN32
+    DWORD error;
+    error = GetLastError();
     closesocket(fd);
+    SetLastError(error);
 #else
+    int error; 
+    error = errno;
     close(fd);
+    errno = error;
 #endif
 }
 
