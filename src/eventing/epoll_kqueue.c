@@ -32,13 +32,6 @@
 #define SET_READY_POLL(loop, index, poll) loop->ready_polls[index].udata = poll
 #endif
 
-/* Loop */
-void us_loop_free(struct us_loop_t *loop) {
-    us_internal_loop_data_free(loop);
-    close(loop->fd);
-    free(loop);
-}
-
 /* Poll */
 struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     if (!fallthrough) {

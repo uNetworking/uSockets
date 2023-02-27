@@ -32,11 +32,6 @@ int us_socket_local_port(int ssl, struct us_socket_t *s) {
     }
 }
 
-void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
-    /* This syscall is idempotent so no extra check is needed */
-    bsd_shutdown_socket_read(us_poll_fd((struct us_poll_t *) s));
-}
-
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length) {
     struct bsd_addr_t addr;
     if (bsd_remote_addr(us_poll_fd(&s->p), &addr) || *length < bsd_addr_get_ip_length(&addr)) {
@@ -64,12 +59,6 @@ void us_socket_long_timeout(int ssl, struct us_socket_t *s, unsigned int minutes
         s->long_timeout = ((unsigned int)s->context->long_timestamp + minutes) % 240;
     } else {
         s->long_timeout = 255;
-    }
-}
-
-void us_socket_flush(int ssl, struct us_socket_t *s) {
-    if (!us_socket_is_shut_down(0, s)) {
-        bsd_socket_flush(us_poll_fd((struct us_poll_t *) s));
     }
 }
 

@@ -1,1 +1,4 @@
 *.h linguist-language=C
+examples/* linguist-vendored
+misc/* linguist-vendored
+tests/* linguist-vendored

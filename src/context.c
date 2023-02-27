@@ -20,15 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-int default_is_low_prio_handler(struct us_socket_t *s) {
-    return 0;
-}
+int default_is_low_prio_handler(struct us_socket_t *s);
 
 /* Shared with SSL */
-
-unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context) {
-    return context->timestamp;
-}
 
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
     /* us_listen_socket_t extends us_socket_t so we close in similar ways */
@@ -128,10 +122,6 @@ void us_internal_socket_context_link_socket(struct us_socket_context_t *context,
     context->head_sockets = s;
 }
 
-struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *context) {
-    return context->loop;
-}
-
 /* Not shared with SSL */
 
 /* Lookup userdata by server name pattern */
@@ -196,53 +186,6 @@ void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *c
 
     /* There is no native handle for a non-SSL socket context */
     return 0;
-}
-
-/* Options is currently only applicable for SSL - this will change with time (prefer_low_memory is one example) */
-struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop, int context_ext_size, struct us_socket_context_options_t options) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        /* This function will call us, again, with SSL = false and a bigger ext_size */
-        return (struct us_socket_context_t *) us_internal_create_ssl_socket_context(loop, context_ext_size, options);
-    }
-#endif
-
-    /* This path is taken once either way - always BEFORE whatever SSL may do LATER.
-     * context_ext_size will however be modified larger in case of SSL, to hold SSL extensions */
-
-    struct us_socket_context_t *context = malloc(sizeof(struct us_socket_context_t) + context_ext_size);
-    context->loop = loop;
-    context->head_sockets = 0;
-    context->head_listen_sockets = 0;
-    context->iterator = 0;
-    context->next = 0;
-    context->is_low_prio = default_is_low_prio_handler;
-
-    /* Begin at 0 */
-    context->timestamp = 0;
-    context->long_timestamp = 0;
-    context->global_tick = 0;
-
-    us_internal_loop_link(loop, context);
-
-    /* If we are called from within SSL code, SSL code will make further changes to us */
-    return context;
-}
-
-void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        /* This function will call us again with SSL=false */
-        us_internal_ssl_socket_context_free((struct us_internal_ssl_socket_context_t *) context);
-        return;
-    }
-#endif
-
-    /* This path is taken once either way - always AFTER whatever SSL may do BEFORE.
-     * This is the opposite order compared to when creating the context - SSL code is cleaning up before non-SSL */
-
-    us_internal_loop_unlink(context->loop, context);
-    free(context);
 }
 
 struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_context_t *context, const char *host, int port, int options, int socket_ext_size) {
@@ -410,94 +353,6 @@ struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_con
     }
 
     return new_s;
-}
-
-void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_open((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *, int,  char *, int)) on_open);
-        return;
-    }
-#endif
-
-    context->on_open = on_open;
-}
-
-void us_socket_context_on_close(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_close)(struct us_socket_t *s, int code, void *reason)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_close((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *, int code, void *reason)) on_close);
-        return;
-    }
-#endif
-
-    context->on_close = on_close;
-}
-
-void us_socket_context_on_data(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_data)(struct us_socket_t *s, char *data, int length)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_data((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *, char *, int)) on_data);
-        return;
-    }
-#endif
-
-    context->on_data = on_data;
-}
-
-void us_socket_context_on_writable(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_writable)(struct us_socket_t *s)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_writable((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *)) on_writable);
-        return;
-    }
-#endif
-
-    context->on_writable = on_writable;
-}
-
-void us_socket_context_on_long_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_long_timeout)(struct us_socket_t *)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_long_timeout((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *)) on_long_timeout);
-        return;
-    }
-#endif
-
-    context->on_socket_long_timeout = on_long_timeout;
-}
-
-void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_timeout)(struct us_socket_t *)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_timeout((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *)) on_timeout);
-        return;
-    }
-#endif
-
-    context->on_socket_timeout = on_timeout;
-}
-
-void us_socket_context_on_end(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_end)(struct us_socket_t *)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_end((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *)) on_end);
-        return;
-    }
-#endif
-
-    context->on_end = on_end;
-}
-
-void us_socket_context_on_connect_error(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_connect_error)(struct us_socket_t *s, int code)) {
-#ifndef LIBUS_NO_SSL
-    if (ssl) {
-        us_internal_ssl_socket_context_on_connect_error((struct us_internal_ssl_socket_context_t *) context, (struct us_internal_ssl_socket_t * (*)(struct us_internal_ssl_socket_t *, int)) on_connect_error);
-        return;
-    }
-#endif
-    
-    context->on_connect_error = on_connect_error;
 }
 
 void *us_socket_context_ext(int ssl, struct us_socket_context_t *context) {

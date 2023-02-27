@@ -23,6 +23,7 @@ else
 			override LDFLAGS += -L/usr/local/lib -lwolfssl
 		else
 			override CFLAGS += -DLIBUS_NO_SSL
+			override RUSTFLAGS += --cfg LIBUS_NO_SSL
 		endif
 	endif
 endif
@@ -30,6 +31,7 @@ endif
 # WITH_LIBUV=1 builds with libuv as event-loop
 ifeq ($(WITH_LIBUV),1)
 	override CFLAGS += -DLIBUS_USE_LIBUV
+	override RUSTFLAGS += --cfg LIBUS_USE_LIBUV
 	override LDFLAGS += -luv
 endif
 
@@ -57,12 +59,14 @@ ifeq ($(WITH_QUIC),1)
 	override LDFLAGS += -pthread -lz -lm uSockets.a lsquic/src/liblsquic/liblsquic.a
 else
 	override CFLAGS += -std=c11 -Isrc
-	override LDFLAGS += uSockets.a
+	override LDFLAGS += uSockets.a libflush.a
 endif
 
 # By default we build the uSockets.a static library
 default:
 	rm -f *.o
+	# Do require Rust as experiment
+	rustc $(RUSTFLAGS) src/flush.rs -Clto --crate-type=staticlib -O
 	$(CC) $(CFLAGS) -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
 # Also link in Boost Asio support
 ifeq ($(WITH_ASIO),1)
@@ -78,6 +82,7 @@ ifeq ($(WITH_BORINGSSL),1)
 endif
 # Create a static library (try windows, then unix)
 	lib.exe /out:uSockets.a *.o || $(AR) rvs uSockets.a *.o
+	cp flush.lib libflush.a || echo ok
 
 # BoringSSL needs cmake and golang
 .PHONY: boringssl

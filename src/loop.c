@@ -19,64 +19,8 @@
 #include "internal/internal.h"
 #include <stdlib.h>
 
-/* The loop has 2 fallthrough polls */
-void us_internal_loop_data_init(struct us_loop_t *loop, void (*wakeup_cb)(struct us_loop_t *loop),
-    void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop)) {
-    loop->data.sweep_timer = us_create_timer(loop, 1, 0);
-    loop->data.recv_buf = malloc(LIBUS_RECV_BUFFER_LENGTH + LIBUS_RECV_BUFFER_PADDING * 2);
-    loop->data.ssl_data = 0;
-    loop->data.head = 0;
-    loop->data.iterator = 0;
-    loop->data.closed_head = 0;
-    loop->data.low_prio_head = 0;
-    loop->data.low_prio_budget = 0;
-
-    loop->data.pre_cb = pre_cb;
-    loop->data.post_cb = post_cb;
-    loop->data.iteration_nr = 0;
-
-    loop->data.wakeup_async = us_internal_create_async(loop, 1, 0);
-    us_internal_async_set(loop->data.wakeup_async, (void (*)(struct us_internal_async *)) wakeup_cb);
-}
-
-void us_internal_loop_data_free(struct us_loop_t *loop) {
-#ifndef LIBUS_NO_SSL
-    us_internal_free_loop_ssl_data(loop);
-#endif
-
-    free(loop->data.recv_buf);
-
-    us_timer_close(loop->data.sweep_timer);
-    us_internal_async_close(loop->data.wakeup_async);
-}
-
 void us_wakeup_loop(struct us_loop_t *loop) {
     us_internal_async_wakeup(loop->data.wakeup_async);
-}
-
-void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context_t *context) {
-    /* Insert this context as the head of loop */
-    context->next = loop->data.head;
-    context->prev = 0;
-    if (loop->data.head) {
-        loop->data.head->prev = context;
-    }
-    loop->data.head = context;
-}
-
-/* Unlink is called before free */
-void us_internal_loop_unlink(struct us_loop_t *loop, struct us_socket_context_t *context) {
-    if (loop->data.head == context) {
-        loop->data.head = context->next;
-        if (loop->data.head) {
-            loop->data.head->prev = 0;
-        }
-    } else {
-        context->prev->next = context->next;
-        if (context->next) {
-            context->next->prev = context->prev;
-        }
-    }
 }
 
 /* This functions should never run recursively */
@@ -174,10 +118,6 @@ void us_internal_free_closed_sockets(struct us_loop_t *loop) {
 
 void sweep_timer_cb(struct us_internal_callback_t *cb) {
     us_internal_timer_sweep(cb->loop);
-}
-
-long long us_loop_iteration_number(struct us_loop_t *loop) {
-    return loop->data.iteration_nr;
 }
 
 /* These may have somewhat different meaning depending on the underlying event library */

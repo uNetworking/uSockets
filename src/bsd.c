@@ -299,14 +299,6 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, int protocol) {
     return bsd_set_nonblocking(apple_no_sigpipe(created_fd));
 }
 
-void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
-#ifdef _WIN32
-    closesocket(fd);
-#else
-    close(fd);
-#endif
-}
-
 void bsd_shutdown_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
 #ifdef _WIN32
     shutdown(fd, SD_SEND);
@@ -391,10 +383,6 @@ LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd
     internal_finalize_bsd_addr(addr);
 
     return bsd_set_nonblocking(apple_no_sigpipe(accepted_fd));
-}
-
-int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, int flags) {
-    return recv(fd, buf, length, flags);
 }
 
 int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int msg_more) {
