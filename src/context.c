@@ -162,6 +162,13 @@ void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *cont
     }
 #endif
 }
+void us_bun_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_bun_socket_context_options_t options, void *user) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        us_bun_internal_ssl_socket_context_add_server_name((struct us_internal_ssl_socket_context_t *) context, hostname_pattern, options, user);
+    }
+#endif
+}
 
 /* Remove SNI context */
 void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern) {
@@ -229,6 +236,35 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     return context;
 }
 
+struct us_socket_context_t *us_create_bun_socket_context(int ssl, struct us_loop_t *loop, int context_ext_size, struct us_bun_socket_context_options_t options) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        /* This function will call us, again, with SSL = false and a bigger ext_size */
+        return (struct us_socket_context_t *) us_internal_bun_create_ssl_socket_context(loop, context_ext_size, options);
+    }
+#endif
+
+    /* This path is taken once either way - always BEFORE whatever SSL may do LATER.
+     * context_ext_size will however be modified larger in case of SSL, to hold SSL extensions */
+
+    struct us_socket_context_t *context = us_malloc(sizeof(struct us_socket_context_t) + context_ext_size);
+    context->loop = loop;
+    context->head_sockets = 0;
+    context->head_listen_sockets = 0;
+    context->iterator = 0;
+    context->next = 0;
+    context->is_low_prio = default_is_low_prio_handler;
+
+    /* Begin at 0 */
+    context->timestamp = 0;
+    context->long_timestamp = 0;
+    context->global_tick = 0;
+
+    us_internal_loop_link(loop, context);
+
+    /* If we are called from within SSL code, SSL code will make further changes to us */
+    return context;
+}
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {

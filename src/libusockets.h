@@ -143,12 +143,24 @@ struct us_socket_context_options_t {
     const char *ssl_ciphers;
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
+struct us_bun_socket_context_options_t {
+    const char *key_file_name;
+    const char *cert_file_name;
+    const char *passphrase;
+    const char *dh_params_file_name;
+    const char *ca_file_name;
+    const char *ssl_ciphers;
+    int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
+    const char *key;
+    const char *cert;
+};
 
 /* Return 15-bit timestamp for this context */
 unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context);
 
 /* Adds SNI domain and cert in asn1 format */
 void us_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options, void *user);
+void us_bun_socket_context_add_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern, struct us_bun_socket_context_options_t options, void *user);
 void us_socket_context_remove_server_name(int ssl, struct us_socket_context_t *context, const char *hostname_pattern);
 void us_socket_context_on_server_name(int ssl, struct us_socket_context_t *context, void (*cb)(struct us_socket_context_t *, const char *hostname));
 void *us_socket_server_name_userdata(int ssl, struct us_socket_t *s);
@@ -160,6 +172,8 @@ void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *c
 /* A socket context holds shared callbacks and user data extension for associated sockets */
 struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop,
     int ext_size, struct us_socket_context_options_t options);
+struct us_socket_context_t *us_create_bun_socket_context(int ssl, struct us_loop_t *loop,
+    int ext_size, struct us_bun_socket_context_options_t options);
 
 /* Delete resources allocated at creation time. */
 void us_socket_context_free(int ssl, struct us_socket_context_t *context);

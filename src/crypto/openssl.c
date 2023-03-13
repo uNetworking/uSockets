@@ -534,6 +534,220 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
     return ssl_context;
 }
 
+
+
+int SSL_CTX_use_PrivateKey_content(SSL_CTX *ctx, const char *content, int type) {
+  int reason_code, ret = 0;
+  BIO *in;
+  EVP_PKEY *pkey = NULL;
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+  
+  if (type == SSL_FILETYPE_PEM) {
+    reason_code = ERR_R_PEM_LIB;
+    pkey = PEM_read_bio_PrivateKey(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                                   SSL_CTX_get_default_passwd_cb_userdata(ctx));
+  } else if (type == SSL_FILETYPE_ASN1) {
+    reason_code = ERR_R_ASN1_LIB;
+    pkey = d2i_PrivateKey_bio(in, NULL);
+  } else {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_SSL_FILETYPE);
+    goto end;
+  }
+
+  if (pkey == NULL) {
+    OPENSSL_PUT_ERROR(SSL, reason_code);
+    goto end;
+  }
+  ret = SSL_CTX_use_PrivateKey(ctx, pkey);
+  EVP_PKEY_free(pkey);
+
+end:
+  BIO_free(in);
+  return ret;
+}
+
+
+int SSL_CTX_use_certificate_chain(SSL_CTX *ctx, const char *content) {
+  BIO *in;
+  int ret = 0;
+  X509 *x = NULL;
+
+  ERR_clear_error();  // clear error stack for SSL_CTX_use_certificate()
+
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+
+  x = PEM_read_bio_X509_AUX(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                            SSL_CTX_get_default_passwd_cb_userdata(ctx));
+  if (x == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_PEM_LIB);
+    goto end;
+  }
+
+  ret = SSL_CTX_use_certificate(ctx, x);
+
+  if (ERR_peek_error() != 0) {
+    ret = 0;  // Key/certificate mismatch doesn't imply ret==0 ...
+  }
+
+  if (ret) {
+    // If we could set up our certificate, now proceed to the CA
+    // certificates.
+    X509 *ca;
+    int r;
+    uint32_t err;
+
+    SSL_CTX_clear_chain_certs(ctx);
+
+    while ((ca = PEM_read_bio_X509(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                                   SSL_CTX_get_default_passwd_cb_userdata(ctx))) !=
+           NULL) {
+      r = SSL_CTX_add0_chain_cert(ctx, ca);
+      if (!r) {
+        X509_free(ca);
+        ret = 0;
+        goto end;
+      }
+      // Note that we must not free r if it was successfully added to the chain
+      // (while we must free the main certificate, since its reference count is
+      // increased by SSL_CTX_use_certificate).
+    }
+
+    // When the while loop ends, it's usually just EOF.
+    err = ERR_peek_last_error();
+    if (ERR_GET_LIB(err) == ERR_LIB_PEM &&
+        ERR_GET_REASON(err) == PEM_R_NO_START_LINE) {
+      ERR_clear_error();
+    } else {
+      ret = 0;  // some real error
+    }
+  }
+
+end:
+  X509_free(x);
+  BIO_free(in);
+  return ret;
+}
+
+
+SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_options_t options) {
+    /* Create the context */
+    SSL_CTX *ssl_context = SSL_CTX_new(TLS_method());
+
+    /* Default options we rely on - changing these will break our logic */
+    SSL_CTX_set_read_ahead(ssl_context, 1);
+    SSL_CTX_set_mode(ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
+    /* Anything below TLS 1.2 is disabled */
+    SSL_CTX_set_min_proto_version(ssl_context, TLS1_2_VERSION);
+
+    /* The following are helpers. You may easily implement whatever you want by using the native handle directly */
+
+    /* Important option for lowering memory usage, but lowers performance slightly */
+    if (options.ssl_prefer_low_memory_usage) {
+       SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
+    }
+
+    if (options.passphrase) {
+        /* When freeing the CTX we need to check SSL_CTX_get_default_passwd_cb_userdata and
+         * free it if set */
+        SSL_CTX_set_default_passwd_cb_userdata(ssl_context, (void *) strdup(options.passphrase));
+        SSL_CTX_set_default_passwd_cb(ssl_context, passphrase_cb);
+    }
+
+    /* This one most probably do not need the cert_file_name string to be kept alive */
+    if (options.cert_file_name) {
+        if (SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    } else if (options.cert) {
+        if (SSL_CTX_use_certificate_chain(ssl_context, options.cert) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    }
+
+    /* Same as above - we can discard this string afterwards I suppose */
+    if (options.key_file_name) {
+        if (SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    } else if (options.key) {
+        if (SSL_CTX_use_PrivateKey_content(ssl_context, options.key, SSL_FILETYPE_PEM) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    }
+
+    if (options.ca_file_name) {
+        STACK_OF(X509_NAME) *ca_list;
+        ca_list = SSL_load_client_CA_file(options.ca_file_name);
+        if(ca_list == NULL) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+        SSL_CTX_set_client_CA_list(ssl_context, ca_list);
+        if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+        SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+    }
+
+    if (options.dh_params_file_name) {
+        /* Set up ephemeral DH parameters. */
+        DH *dh_2048 = NULL;
+        FILE *paramfile;
+        paramfile = fopen(options.dh_params_file_name, "r");
+
+        if (paramfile) {
+            dh_2048 = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
+            fclose(paramfile);
+        } else {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        if (dh_2048 == NULL) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        const long set_tmp_dh = SSL_CTX_set_tmp_dh(ssl_context, dh_2048);
+        DH_free(dh_2048);
+
+        if (set_tmp_dh != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
+        if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    }
+
+    if (options.ssl_ciphers) {
+        if (SSL_CTX_set_cipher_list(ssl_context, options.ssl_ciphers) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    }
+
+    /* This must be free'd with free_ssl_context, not SSL_CTX_free */
+    return ssl_context;
+}
+
 /* Returns a servername's userdata if any */
 void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
     printf("finding %s\n", hostname_pattern);
@@ -559,6 +773,25 @@ void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socke
 
     /* Try and construct an SSL_CTX from options */
     SSL_CTX *ssl_context = create_ssl_context_from_options(options);
+
+    /* Attach the user data to this context */
+    if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
+        printf("CANNOT SET EX DATA!\n");
+    }
+
+    /* We do not want to hold any nullptr's in our SNI tree */
+    if (ssl_context) {
+        if (sni_add(context->sni, hostname_pattern, ssl_context)) {
+            /* If we already had that name, ignore */
+            free_ssl_context(ssl_context);
+        }
+    }
+}
+
+void us_bun_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_bun_socket_context_options_t options, void *user) {
+
+    /* Try and construct an SSL_CTX from options */
+    SSL_CTX *ssl_context = create_ssl_context_from_bun_options(options);
 
     /* Attach the user data to this context */
     if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
@@ -645,6 +878,41 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
 
     /* Otherwise ee continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
+
+    /* I guess this is the only optional callback */
+    context->on_server_name = NULL;
+
+    /* Then we extend its SSL parts */
+    context->ssl_context = ssl_context;//create_ssl_context_from_options(options);
+    context->is_parent = 1;
+
+    /* We, as parent context, may ignore data */
+    context->sc.is_low_prio = (int (*)(struct us_socket_t *)) ssl_is_low_prio;
+
+    /* Parent contexts may use SNI */
+    SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+    SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
+
+    /* Also create the SNI tree */
+    context->sni = sni_new();
+
+    return context;
+}
+struct us_internal_ssl_socket_context_t *us_internal_bun_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_bun_socket_context_options_t options) {
+    /* If we haven't initialized the loop data yet, do so .
+     * This is needed because loop data holds shared OpenSSL data and
+     * the function is also responsible for initializing OpenSSL */
+    us_internal_init_loop_ssl_data(loop);
+
+    /* First of all we try and create the SSL context from options */
+    SSL_CTX *ssl_context = create_ssl_context_from_bun_options(options);
+    if (!ssl_context) {
+        /* We simply fail early if we cannot even create the OpenSSL context */
+        return NULL;
+    }
+
+    /* Otherwise ee continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_bun_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
 
     /* I guess this is the only optional callback */
     context->on_server_name = NULL;
