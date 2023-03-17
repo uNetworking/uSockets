@@ -143,6 +143,13 @@ struct us_socket_context_options_t {
     const char *ssl_ciphers;
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
+
+struct us_bun_verify_error_t {
+    long error;
+    const char* code;
+    const char* reason;
+};
+
 struct us_bun_socket_context_options_t {
     const char *key_file_name;
     const char *cert_file_name;
@@ -184,6 +191,7 @@ struct us_socket_context_t *us_create_bun_socket_context(int ssl, struct us_loop
 
 /* Delete resources allocated at creation time. */
 void us_socket_context_free(int ssl, struct us_socket_context_t *context);
+struct us_bun_verify_error_t us_socket_verify_error(int ssl, struct us_socket_context_t *context);
 
 /* Setters of various async callbacks */
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context,

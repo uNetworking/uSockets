@@ -662,6 +662,90 @@ end:
   return ret;
 }
 
+const char* X509ErrorCode(long err) {  // NOLINT(runtime/int)
+  const char* code = "UNSPECIFIED";
+#define CASE_X509_ERR(CODE) case X509_V_ERR_##CODE: code = #CODE; break;
+  switch (err) {
+    // if you modify anything in here, *please* update the respective section in
+    // doc/api/tls.md as well
+    CASE_X509_ERR(UNABLE_TO_GET_ISSUER_CERT)
+    CASE_X509_ERR(UNABLE_TO_GET_CRL)
+    CASE_X509_ERR(UNABLE_TO_DECRYPT_CERT_SIGNATURE)
+    CASE_X509_ERR(UNABLE_TO_DECRYPT_CRL_SIGNATURE)
+    CASE_X509_ERR(UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY)
+    CASE_X509_ERR(CERT_SIGNATURE_FAILURE)
+    CASE_X509_ERR(CRL_SIGNATURE_FAILURE)
+    CASE_X509_ERR(CERT_NOT_YET_VALID)
+    CASE_X509_ERR(CERT_HAS_EXPIRED)
+    CASE_X509_ERR(CRL_NOT_YET_VALID)
+    CASE_X509_ERR(CRL_HAS_EXPIRED)
+    CASE_X509_ERR(ERROR_IN_CERT_NOT_BEFORE_FIELD)
+    CASE_X509_ERR(ERROR_IN_CERT_NOT_AFTER_FIELD)
+    CASE_X509_ERR(ERROR_IN_CRL_LAST_UPDATE_FIELD)
+    CASE_X509_ERR(ERROR_IN_CRL_NEXT_UPDATE_FIELD)
+    CASE_X509_ERR(OUT_OF_MEM)
+    CASE_X509_ERR(DEPTH_ZERO_SELF_SIGNED_CERT)
+    CASE_X509_ERR(SELF_SIGNED_CERT_IN_CHAIN)
+    CASE_X509_ERR(UNABLE_TO_GET_ISSUER_CERT_LOCALLY)
+    CASE_X509_ERR(UNABLE_TO_VERIFY_LEAF_SIGNATURE)
+    CASE_X509_ERR(CERT_CHAIN_TOO_LONG)
+    CASE_X509_ERR(CERT_REVOKED)
+    CASE_X509_ERR(INVALID_CA)
+    CASE_X509_ERR(PATH_LENGTH_EXCEEDED)
+    CASE_X509_ERR(INVALID_PURPOSE)
+    CASE_X509_ERR(CERT_UNTRUSTED)
+    CASE_X509_ERR(CERT_REJECTED)
+    CASE_X509_ERR(HOSTNAME_MISMATCH)
+  }
+#undef CASE_X509_ERR
+  return code;
+}
+
+long us_internal_verify_peer_certificate(  // NOLINT(runtime/int)
+    const SSL* ssl,
+    long def) {  // NOLINT(runtime/int)
+  long err = def;  // NOLINT(runtime/int)
+  X509* peer_cert = SSL_get_peer_certificate(ssl);
+  if (peer_cert) {
+    X509_free(peer_cert);
+    err = SSL_get_verify_result(ssl);
+  } else {
+    const SSL_CIPHER* curr_cipher = SSL_get_current_cipher(ssl);
+    const SSL_SESSION* sess = SSL_get_session(ssl);
+    // Allow no-cert for PSK authentication in TLS1.2 and lower.
+    // In TLS1.3 check that session was reused because TLS1.3 PSK
+    // looks like session resumption.
+    if (SSL_CIPHER_get_auth_nid(curr_cipher) == NID_auth_psk ||
+        (SSL_SESSION_get_protocol_version(sess) == TLS1_3_VERSION &&
+         SSL_session_reused(ssl))) {
+      return X509_V_OK;
+    }
+  }
+  return err;
+}
+
+
+struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_socket_t *s) {
+
+    if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
+        return (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };
+    }
+
+    SSL* ssl = s->ssl;
+  
+    long x509_verify_error =  // NOLINT(runtime/int)
+        us_internal_verify_peer_certificate(
+            ssl,
+            X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT);
+
+    if (x509_verify_error == X509_V_OK)
+        return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = NULL, .reason = NULL };
+
+    const char* reason = X509_verify_cert_error_string(x509_verify_error);
+    const char* code = X509ErrorCode(x509_verify_error);
+
+    return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = code, .reason = reason };
+}
 
 SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_options_t options) {
     /* Create the context */

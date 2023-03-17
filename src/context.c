@@ -265,6 +265,20 @@ struct us_socket_context_t *us_create_bun_socket_context(int ssl, struct us_loop
     /* If we are called from within SSL code, SSL code will make further changes to us */
     return context;
 }
+
+
+struct us_bun_verify_error_t us_socket_verify_error(int ssl, struct us_socket_context_t *context) {
+    #ifndef LIBUS_NO_SSL
+        if (ssl) {
+            /* This function will call us again with SSL=false */
+            return us_internal_verify_error((struct us_internal_ssl_socket_context_t *)context);
+        }
+    #endif
+
+    return (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };    
+}
+
+
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {

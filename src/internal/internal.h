@@ -178,7 +178,7 @@ void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_interna
 
 void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *s);
 void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_socket_context_t *context);
-
+struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_socket_t *s);
 struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop,
     int context_ext_size, struct us_socket_context_options_t options);
 struct us_internal_ssl_socket_context_t *us_internal_bun_create_ssl_socket_context(struct us_loop_t *loop,
