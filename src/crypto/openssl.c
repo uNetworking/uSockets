@@ -570,6 +570,32 @@ end:
   return ret;
 }
 
+X509 * SSL_CTX_get_X509_from(SSL_CTX *ctx, const char *content) {
+  X509 *x = NULL;
+  BIO *in;
+
+  ERR_clear_error();  // clear error stack for SSL_CTX_use_certificate()
+
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+
+  x = PEM_read_bio_X509_AUX(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                            SSL_CTX_get_default_passwd_cb_userdata(ctx));
+  if (x == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_PEM_LIB);
+    goto end;
+  }
+
+  return x;
+
+end:
+  X509_free(x);
+  BIO_free(in);
+  return NULL;
+}
 
 int SSL_CTX_use_certificate_chain(SSL_CTX *ctx, const char *content) {
   BIO *in;
@@ -668,10 +694,12 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             free_ssl_context(ssl_context);
             return NULL;
         }
-    } else if (options.cert) {
-        if (SSL_CTX_use_certificate_chain(ssl_context, options.cert) != 1) {
-            free_ssl_context(ssl_context);
-            return NULL;
+    } else if (options.cert && options.cert_count > 0) {
+        for(unsigned int i = 0; i < options.cert_count; i++){
+            if (SSL_CTX_use_certificate_chain(ssl_context, options.cert[i]) != 1) {
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
         }
     }
 
@@ -681,10 +709,12 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             free_ssl_context(ssl_context);
             return NULL;
         }
-    } else if (options.key) {
-        if (SSL_CTX_use_PrivateKey_content(ssl_context, options.key, SSL_FILETYPE_PEM) != 1) {
-            free_ssl_context(ssl_context);
-            return NULL;
+    } else if (options.key && options.key_count > 0) {
+        for(unsigned int i = 0; i < options.key_count; i++){
+            if (SSL_CTX_use_PrivateKey_content(ssl_context, options.key[i], SSL_FILETYPE_PEM) != 1) {
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
         }
     }
 
@@ -701,6 +731,15 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             return NULL;
         }
         SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+     }else if (options.ca && options.ca_count > 0) {
+        for(unsigned int i = 0; i < options.ca_count; i++){
+            X509* ca_cert = SSL_CTX_get_X509_from(ssl_context, options.ca[i]);
+            if (ca_cert == NULL){
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+            SSL_CTX_add_client_CA(ssl_context, ca_cert);
+        }
     }
 
     if (options.dh_params_file_name) {

@@ -151,8 +151,12 @@ struct us_bun_socket_context_options_t {
     const char *ca_file_name;
     const char *ssl_ciphers;
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
-    const char *key;
-    const char *cert;
+    const char **key;
+    unsigned int key_count; 
+    const char **cert;
+    unsigned int cert_count; 
+    const char **ca;
+    unsigned int ca_count; 
 };
 
 /* Return 15-bit timestamp for this context */
