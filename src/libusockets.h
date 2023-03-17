@@ -157,6 +157,7 @@ struct us_bun_socket_context_options_t {
     unsigned int cert_count; 
     const char **ca;
     unsigned int ca_count; 
+    unsigned int secure_options;
 };
 
 /* Return 15-bit timestamp for this context */

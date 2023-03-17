@@ -787,6 +787,10 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
         }
     }
 
+    if (options.secure_options) {
+        SSL_CTX_set_options(ssl_context, options.secure_options);
+    }
+
     /* This must be free'd with free_ssl_context, not SSL_CTX_free */
     return ssl_context;
 }
