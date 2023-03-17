@@ -681,6 +681,7 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
        SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
     }
 
+
     if (options.passphrase) {
         /* When freeing the CTX we need to check SSL_CTX_get_default_passwd_cb_userdata and
          * free it if set */
@@ -730,7 +731,13 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             free_ssl_context(ssl_context);
             return NULL;
         }
-        SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+        
+        if(options.reject_unauthorized) {
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+        } else {
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+        }
+
      }else if (options.ca && options.ca_count > 0) {
         for(unsigned int i = 0; i < options.ca_count; i++){
             X509* ca_cert = SSL_CTX_get_X509_from(ssl_context, options.ca[i]);
@@ -742,10 +749,22 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
                 free_ssl_context(ssl_context);
                 return NULL;
             }
-            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+         
+            if(options.reject_unauthorized) {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+            } else {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+            }
+        }
+    } else {
+        if(options.request_cert) {
+            if(options.reject_unauthorized) {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+            } else {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+            }
         }
     }
-
     if (options.dh_params_file_name) {
         /* Set up ephemeral DH parameters. */
         DH *dh_2048 = NULL;
