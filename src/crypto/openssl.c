@@ -582,7 +582,7 @@ X509 * SSL_CTX_get_X509_from(SSL_CTX *ctx, const char *content) {
     goto end;
   }
 
-  x = PEM_read_bio_X509_AUX(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+  x = PEM_read_bio_X509(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
                             SSL_CTX_get_default_passwd_cb_userdata(ctx));
   if (x == NULL) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_PEM_LIB);
@@ -711,12 +711,13 @@ long us_internal_verify_peer_certificate(  // NOLINT(runtime/int)
     err = SSL_get_verify_result(ssl);
   } else {
     const SSL_CIPHER* curr_cipher = SSL_get_current_cipher(ssl);
+
     const SSL_SESSION* sess = SSL_get_session(ssl);
     // Allow no-cert for PSK authentication in TLS1.2 and lower.
     // In TLS1.3 check that session was reused because TLS1.3 PSK
     // looks like session resumption.
-    if (SSL_CIPHER_get_auth_nid(curr_cipher) == NID_auth_psk ||
-        (SSL_SESSION_get_protocol_version(sess) == TLS1_3_VERSION &&
+    if ((curr_cipher && SSL_CIPHER_get_auth_nid(curr_cipher) == NID_auth_psk) ||
+        (sess && SSL_SESSION_get_protocol_version(sess) == TLS1_3_VERSION &&
          SSL_session_reused(ssl))) {
       return X509_V_OK;
     }
@@ -732,7 +733,6 @@ struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_soc
     }
 
     SSL* ssl = s->ssl;
-  
     long x509_verify_error =  // NOLINT(runtime/int)
         us_internal_verify_peer_certificate(
             ssl,
@@ -740,7 +740,7 @@ struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_soc
 
     if (x509_verify_error == X509_V_OK)
         return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = NULL, .reason = NULL };
-
+    
     const char* reason = X509_verify_cert_error_string(x509_verify_error);
     const char* code = X509ErrorCode(x509_verify_error);
 
@@ -900,7 +900,6 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
 
 /* Returns a servername's userdata if any */
 void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
-    printf("finding %s\n", hostname_pattern);
     
     /* We can use sni_find because looking up a "wildcard pattern" will match the exact literal "wildcard pattern" first,
      * before it matches by the very wildcard itself, so it works fine (exact match is the only thing we care for here) */

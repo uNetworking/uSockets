@@ -267,11 +267,11 @@ struct us_socket_context_t *us_create_bun_socket_context(int ssl, struct us_loop
 }
 
 
-struct us_bun_verify_error_t us_socket_verify_error(int ssl, struct us_socket_context_t *context) {
+struct us_bun_verify_error_t us_socket_verify_error(int ssl, struct us_socket_t *socket) {
     #ifndef LIBUS_NO_SSL
         if (ssl) {
             /* This function will call us again with SSL=false */
-            return us_internal_verify_error((struct us_internal_ssl_socket_context_t *)context);
+            return us_internal_verify_error((struct us_internal_ssl_socket_t *)socket);
         }
     #endif
 
