@@ -738,7 +738,11 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
                 free_ssl_context(ssl_context);
                 return NULL;
             }
-            SSL_CTX_add_client_CA(ssl_context, ca_cert);
+            if(!SSL_CTX_add_client_CA(ssl_context, ca_cert)){
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
         }
     }
 
