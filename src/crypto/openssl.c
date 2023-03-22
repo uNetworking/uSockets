@@ -209,7 +209,7 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
     
         struct us_bun_verify_error_t verify_error = (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };
         if(on_handshake != NULL) {
-            on_handshake(context, 0, verify_error, custom_data);
+            on_handshake(s, 0, verify_error, custom_data);
         }
         return;
     }
@@ -240,7 +240,7 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
 
             // error
             if(on_handshake != NULL) {
-                on_handshake(context, 0, verify_error, custom_data);
+                on_handshake(s, 0, verify_error, custom_data);
             }
             return;
         } else {
@@ -260,7 +260,7 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         struct us_bun_verify_error_t verify_error = us_internal_verify_error(s);
         // success
         if(on_handshake != NULL) {
-            on_handshake(context, 1, verify_error, custom_data);
+            on_handshake(s, 1, verify_error, custom_data);
         }
     }
 
@@ -332,7 +332,10 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
     if(context->pending_handshake) {
         // printf("SSL_do_handshake on_data\n");
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        return s;
+        // needs to read/write
+        if (context->pending_handshake) {
+            return s;
+        }
     }
 
     // bug checking: this loop needs a lot of attention and clean-ups and check-ups
@@ -438,7 +441,10 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
     if(context->pending_handshake) {
         // printf("SSL_do_handshake on_writable\n");
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        return s;
+        // needs to read/write
+        if (context->pending_handshake) {
+            return s;
+        }
     }
 
     // todo: cork here so that we efficiently output both from reading and from writing?
