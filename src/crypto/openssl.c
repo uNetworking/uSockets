@@ -169,13 +169,15 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
 
     if (is_client) {
         SSL_set_connect_state(s->ssl);
+        // client handshake will happen on next read
     } else {
         SSL_set_accept_state(s->ssl);
-    }
 
-    if(context->pending_handshake) {
-        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        return s;
+        // server will start after accept state
+        if(context->pending_handshake) {
+            us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+            return s;
+        }
     }
 
     return (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
