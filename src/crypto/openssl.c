@@ -117,7 +117,7 @@ long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) BIO_get_data(bio);
 
-    //printf("BIO_s_custom_write\n");
+    // printf("BIO_s_custom_write %p\n", loop_ssl_data);
 
     loop_ssl_data->last_write_was_msg_more = loop_ssl_data->msg_more || length == 16413;
     int written = us_socket_write(0, loop_ssl_data->ssl_socket, data, length, loop_ssl_data->last_write_was_msg_more);
@@ -127,7 +127,7 @@ int BIO_s_custom_write(BIO *bio, const char *data, int length) {
         return -1;
     }
 
-    //printf("BIO_s_custom_write returns: %d\n", ret);
+    // printf("BIO_s_custom_write returns: %d\n", written);
 
     return written;
 }
@@ -167,20 +167,20 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     BIO_up_ref(loop_ssl_data->shared_rbio);
     BIO_up_ref(loop_ssl_data->shared_wbio);
 
+    struct us_internal_ssl_socket_t * result = NULL;
     if (is_client) {
         SSL_set_connect_state(s->ssl);
-        // client handshake will happen on next read
+        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
     } else {
         SSL_set_accept_state(s->ssl);
-
-        // server will start after accept state
+        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+        // Hello Message!
         if(context->pending_handshake) {
+            // printf("handshake on open! client? %d\n", is_client);
             us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-            return s;
         }
     }
-
-    return (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+    return result;
 }
 
 
@@ -195,13 +195,14 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
     
     // will start on_open, on_writable or on_data
     if(!s->ssl) {
+        // printf("handshake without ssl!\n");
         context->pending_handshake = 1;
         context->on_handshake = on_handshake;
         context->handshake_data = custom_data;
         return;
     }
 
-    if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
+   if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
         context->pending_handshake = 0;
         context->on_handshake = NULL;
         context->handshake_data = NULL;
@@ -213,13 +214,20 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         return;
     }
 
+    // printf("SSL_do_handshake %p\n", s->ssl);
+
     int result = SSL_do_handshake(s->ssl);
 
+    // printf("SSL_do_handshake result: %d\n", result);
     if (result <= 0) {
         int err = SSL_get_error(s->ssl, result);
+
         
         // as far as I know these are the only errors we want to handle
         if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+            // printf("SSL_do_handshake failed: %d\n", err);
+
+
             context->pending_handshake = 0;
             context->on_handshake = NULL;
             context->handshake_data = NULL;
@@ -229,18 +237,21 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
             if (err == SSL_ERROR_SSL || err == SSL_ERROR_SYSCALL) {
                 ERR_clear_error();
             }
-            
+
             // error
             if(on_handshake != NULL) {
                 on_handshake(context, 0, verify_error, custom_data);
             }
             return;
         } else {
+            // printf("SSL_do_handshake needs more write/read: %d\n", err);
+
             context->pending_handshake = 1;
             context->on_handshake = on_handshake;
             context->handshake_data = custom_data;
         }
     } else {
+        // printf("SSL_do_handshake success\n");
         context->pending_handshake = 0;
         context->on_handshake = NULL;
         context->handshake_data = NULL;
@@ -282,11 +293,6 @@ struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) 
 struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s, void *data, int length) {
     // note: this context can change when we adopt the socket!
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
-    
-    if(context->pending_handshake) {
-        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        return s;
-    }
 
     struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
@@ -320,6 +326,12 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
         }
 
         // no further processing of data when in shutdown state
+        return s;
+    }
+        
+    if(context->pending_handshake) {
+        // printf("SSL_do_handshake on_data\n");
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
         return s;
     }
 
@@ -424,6 +436,7 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
     if(context->pending_handshake) {
+        // printf("SSL_do_handshake on_writable\n");
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
         return s;
     }
