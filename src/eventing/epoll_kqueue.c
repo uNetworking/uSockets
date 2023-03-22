@@ -22,6 +22,8 @@
 #if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
 
 void Bun__internal_dispatch_ready_poll(void* loop, void* poll);
+// void Bun__internal_dispatch_ready_poll(void* loop, void* poll) {}
+
 void us_loop_run_bun_tick(struct us_loop_t *loop);
 
 /* Cannot include this one on Windows */

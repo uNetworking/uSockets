@@ -77,6 +77,7 @@ struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, ch
 	/* Timeout idle HTTP connections */
 	us_socket_timeout(SSL, s, 30);
 
+
 	// printf("Client connected\n");
 
 	return s;

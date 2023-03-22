@@ -194,6 +194,9 @@ void us_internal_ssl_socket_context_on_close(struct us_internal_ssl_socket_conte
 void us_internal_ssl_socket_context_on_data(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *s, char *data, int length));
 
+void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data);
+void us_internal_on_ssl_handshake(struct us_internal_ssl_socket_context_t * context, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data);
+
 void us_internal_ssl_socket_context_on_writable(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_writable)(struct us_internal_ssl_socket_t *s));
 

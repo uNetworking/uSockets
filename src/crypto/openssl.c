@@ -47,6 +47,7 @@ struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
     unsigned int ssl_read_input_offset;
+
     struct us_socket_t *ssl_socket;
 
     int last_write_was_msg_more;
@@ -77,6 +78,10 @@ struct us_internal_ssl_socket_context_t {
 
     /* Pointer to sni tree, created when the context is created and freed likewise when freed */
     void *sni;
+
+    int pending_handshake;
+    void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data);
+    void* handshake_data;
 };
 
 // same here, should or shouldn't it contain s?
@@ -168,8 +173,86 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
         SSL_set_accept_state(s->ssl);
     }
 
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+        return s;
+    }
+
     return (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
 }
+
+
+void us_internal_on_ssl_handshake(struct us_internal_ssl_socket_context_t * context, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data) {
+    context->pending_handshake = 1;
+    context->on_handshake = on_handshake;
+    context->handshake_data = custom_data;
+}
+
+void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    
+    // will start on_open, on_writable or on_data
+    if(!s->ssl) {
+        context->pending_handshake = 1;
+        context->on_handshake = on_handshake;
+        context->handshake_data = custom_data;
+        return;
+    }
+
+    if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
+        context->pending_handshake = 0;
+        context->on_handshake = NULL;
+        context->handshake_data = NULL;
+    
+        struct us_bun_verify_error_t verify_error = (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };
+        if(on_handshake != NULL) {
+            on_handshake(s, 0, verify_error, custom_data);
+        }
+        return;
+    }
+
+    int result = SSL_do_handshake(s->ssl);
+
+    if (result <= 0) {
+        int err = SSL_get_error(s->ssl, result);
+        
+        // as far as I know these are the only errors we want to handle
+        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+            context->pending_handshake = 0;
+            context->on_handshake = NULL;
+            context->handshake_data = NULL;
+    
+            struct us_bun_verify_error_t verify_error = us_internal_verify_error(s);
+            // clear per thread error queue if it may contain something
+            if (err == SSL_ERROR_SSL || err == SSL_ERROR_SYSCALL) {
+                ERR_clear_error();
+            }
+            
+            // error
+            if(on_handshake != NULL) {
+                on_handshake(s, 0, verify_error, custom_data);
+            }
+            return;
+        } else {
+            context->pending_handshake = 1;
+            context->on_handshake = on_handshake;
+            context->handshake_data = custom_data;
+        }
+    } else {
+        context->pending_handshake = 0;
+        context->on_handshake = NULL;
+        context->handshake_data = NULL;
+
+
+        struct us_bun_verify_error_t verify_error = us_internal_verify_error(s);
+        // success
+        if(on_handshake != NULL) {
+            on_handshake(s, 1, verify_error, custom_data);
+        }
+    }
+
+}
+
 
 /* This one is a helper; it is entirely shared with non-SSL so can be removed */
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
@@ -197,10 +280,16 @@ struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) 
 struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s, void *data, int length) {
     // note: this context can change when we adopt the socket!
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+        return s;
+    }
 
     struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
+  
     // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
     loop_ssl_data->ssl_read_input = data;
     loop_ssl_data->ssl_read_input_length = length;
@@ -332,11 +421,15 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
 
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
-    // todo: cork here so that we efficiently output both from reading and from writing?
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+        return s;
+    }
 
+    // todo: cork here so that we efficiently output both from reading and from writing?
     if (s->ssl_read_wants_write) {
         s->ssl_read_wants_write = 0;
-
+        
         // make sure to update context before we call (context can change if the user adopts the socket!)
         context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
@@ -1035,6 +1128,10 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     context->ssl_context = ssl_context;//create_ssl_context_from_options(options);
     context->is_parent = 1;
 
+    context->pending_handshake = 0;
+    context->on_handshake = NULL;
+    context->handshake_data = NULL;
+
     /* We, as parent context, may ignore data */
     context->sc.is_low_prio = (int (*)(struct us_socket_t *)) ssl_is_low_prio;
 
@@ -1069,6 +1166,9 @@ struct us_internal_ssl_socket_context_t *us_internal_bun_create_ssl_socket_conte
     /* Then we extend its SSL parts */
     context->ssl_context = ssl_context;//create_ssl_context_from_options(options);
     context->is_parent = 1;
+    context->pending_handshake = 0;
+    context->on_handshake = NULL;
+    context->handshake_data = NULL;
 
     /* We, as parent context, may ignore data */
     context->sc.is_low_prio = (int (*)(struct us_socket_t *)) ssl_is_low_prio;
