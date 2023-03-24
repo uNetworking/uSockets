@@ -117,8 +117,6 @@ long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) BIO_get_data(bio);
 
-    // printf("BIO_s_custom_write %p\n", loop_ssl_data);
-
     loop_ssl_data->last_write_was_msg_more = loop_ssl_data->msg_more || length == 16413;
     int written = us_socket_write(0, loop_ssl_data->ssl_socket, data, length, loop_ssl_data->last_write_was_msg_more);
 
@@ -162,23 +160,23 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     s->ssl = SSL_new(context->ssl_context);
     s->ssl_write_wants_read = 0;
     s->ssl_read_wants_write = 0;
+
     SSL_set_bio(s->ssl, loop_ssl_data->shared_rbio, loop_ssl_data->shared_wbio);
 
     BIO_up_ref(loop_ssl_data->shared_rbio);
     BIO_up_ref(loop_ssl_data->shared_wbio);
-    struct us_internal_ssl_socket_t * result = NULL;
+
     if (is_client) {
-        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
         SSL_set_connect_state(s->ssl);
-        // Client will do the handshake in another stage
     } else {
         SSL_set_accept_state(s->ssl);
-        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+    }
 
-        // Hello Message!
-        if(context->pending_handshake) {
-            us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        }
+    struct us_internal_ssl_socket_t * result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+
+    // Hello Message!
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
     }
     return result;
 }
@@ -201,6 +199,11 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         return;
     }
 
+    struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
+    struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
+
+    loop_ssl_data->ssl_socket = &s->s;
+
    if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
         context->pending_handshake = 0;
         context->on_handshake = NULL;
@@ -213,12 +216,11 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         return;
     }
 
-
+    
     int result = SSL_do_handshake(s->ssl);
 
     if (result <= 0) {
         int err = SSL_get_error(s->ssl, result);
-
         
         // as far as I know these are the only errors we want to handle
         if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
@@ -261,20 +263,31 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
 
 /* This one is a helper; it is entirely shared with non-SSL so can be removed */
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    if (context->pending_handshake) {
+        context->pending_handshake = 0;
+    }
+
     return (struct us_internal_ssl_socket_t *) us_socket_close(0, (struct us_socket_t *) s, code, reason);
 }
 
 struct us_internal_ssl_socket_t *ssl_on_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
-
+    if (context->pending_handshake) {
+        context->pending_handshake = 0;
+    }
     SSL_free(s->ssl);
 
     return context->on_close(s, code, reason);
 }
 
 struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) {
-    // struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
-
+    if(&s->s) {
+        struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+        if (context && context->pending_handshake) {
+            context->pending_handshake = 0;
+        }
+    }
     // whatever state we are in, a TCP FIN is always an answered shutdown
 
     /* Todo: this should report CLEANLY SHUTDOWN as reason */
@@ -286,11 +299,15 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
     // note: this context can change when we adopt the socket!
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
+
     struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
-  
-    // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+    }
+
+  // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
     loop_ssl_data->ssl_read_input = data;
     loop_ssl_data->ssl_read_input_length = length;
     loop_ssl_data->ssl_read_input_offset = 0;
@@ -319,14 +336,6 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
 
         // no further processing of data when in shutdown state
         return s;
-    }
-        
-    if(context->pending_handshake) {
-        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        // needs to read/write
-        if (context->pending_handshake) {
-            return s;
-        }
     }
 
     // bug checking: this loop needs a lot of attention and clean-ups and check-ups
@@ -431,10 +440,6 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
 
     if(context->pending_handshake) {
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        // needs to read/write
-        if (context->pending_handshake) {
-            return s;
-        }
     }
 
     // todo: cork here so that we efficiently output both from reading and from writing?
@@ -1302,6 +1307,7 @@ void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *
 }
 
 int us_internal_ssl_socket_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more) {
+
     if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
         return 0;
     }
