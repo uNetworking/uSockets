@@ -167,18 +167,17 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     BIO_up_ref(loop_ssl_data->shared_rbio);
     BIO_up_ref(loop_ssl_data->shared_wbio);
 
-    struct us_internal_ssl_socket_t * result = NULL;
     if (is_client) {
         SSL_set_connect_state(s->ssl);
-        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
     } else {
         SSL_set_accept_state(s->ssl);
-        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
-        // Hello Message!
-        if(context->pending_handshake) {
-            // printf("handshake on open! client? %d\n", is_client);
-            us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
-        }
+    }
+
+    struct us_internal_ssl_socket_t * result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+
+    // Hello Message!
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
     }
     return result;
 }
@@ -195,7 +194,6 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
     
     // will start on_open, on_writable or on_data
     if(!s->ssl) {
-        // printf("handshake without ssl!\n");
         context->pending_handshake = 1;
         context->on_handshake = on_handshake;
         context->handshake_data = custom_data;
@@ -214,19 +212,15 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         return;
     }
 
-    // printf("SSL_do_handshake %p\n", s->ssl);
 
     int result = SSL_do_handshake(s->ssl);
 
-    // printf("SSL_do_handshake result: %d\n", result);
     if (result <= 0) {
         int err = SSL_get_error(s->ssl, result);
 
         
         // as far as I know these are the only errors we want to handle
         if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-            // printf("SSL_do_handshake failed: %d\n", err);
-
 
             context->pending_handshake = 0;
             context->on_handshake = NULL;
@@ -244,14 +238,11 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
             }
             return;
         } else {
-            // printf("SSL_do_handshake needs more write/read: %d\n", err);
-
             context->pending_handshake = 1;
             context->on_handshake = on_handshake;
             context->handshake_data = custom_data;
         }
     } else {
-        // printf("SSL_do_handshake success\n");
         context->pending_handshake = 0;
         context->on_handshake = NULL;
         context->handshake_data = NULL;
@@ -330,7 +321,6 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
     }
         
     if(context->pending_handshake) {
-        // printf("SSL_do_handshake on_data\n");
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
         // needs to read/write
         if (context->pending_handshake) {
@@ -439,7 +429,6 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
     if(context->pending_handshake) {
-        // printf("SSL_do_handshake on_writable\n");
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
         // needs to read/write
         if (context->pending_handshake) {
@@ -861,6 +850,23 @@ struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_soc
     return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = code, .reason = reason };
 }
 
+int VerifyCallback(int preverify_ok, X509_STORE_CTX* ctx) {
+  // From https://www.openssl.org/docs/man1.1.1/man3/SSL_verify_cb:
+  //
+  //   If VerifyCallback returns 1, the verification process is continued. If
+  //   VerifyCallback always returns 1, the TLS/SSL handshake will not be
+  //   terminated with respect to verification failures and the connection will
+  //   be established. The calling process can however retrieve the error code
+  //   of the last verification error using SSL_get_verify_result(3) or by
+  //   maintaining its own error storage managed by VerifyCallback.
+  //
+  // Since we cannot perform I/O quickly enough with X509_STORE_CTX_ APIs in
+  // this callback, we ignore all preverify_ok errors and let the handshake
+  // continue. It is imperative that the user use Connection::VerifyError after
+  // the 'secure' callback has been made.
+  return 1;
+}
+
 SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_options_t options) {
     /* Create the context */
     SSL_CTX *ssl_context = SSL_CTX_new(TLS_method());
@@ -894,7 +900,7 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             return NULL;
         }
     } else if (options.cert && options.cert_count > 0) {
-        for(unsigned int i = 0; i < options.cert_count; i++){
+        for(unsigned int i = 0; i < options.cert_count; i++) {
             if (SSL_CTX_use_certificate_chain(ssl_context, options.cert[i]) != 1) {
                 free_ssl_context(ssl_context);
                 return NULL;
@@ -931,35 +937,44 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
         }
         
         if(options.reject_unauthorized) {
-            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, VerifyCallback);
         } else {
-            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, VerifyCallback);
         }
 
      }else if (options.ca && options.ca_count > 0) {
+        X509_STORE* cert_store = NULL;
+        
         for(unsigned int i = 0; i < options.ca_count; i++){
             X509* ca_cert = SSL_CTX_get_X509_from(ssl_context, options.ca[i]);
             if (ca_cert == NULL){
                 free_ssl_context(ssl_context);
                 return NULL;
             }
+
+            if (cert_store == NULL) {
+                cert_store = X509_STORE_new();
+                X509_STORE_set_default_paths(cert_store);
+                SSL_CTX_set_cert_store(ssl_context, cert_store);
+            }
+    
+            X509_STORE_add_cert(cert_store, ca_cert);
             if(!SSL_CTX_add_client_CA(ssl_context, ca_cert)){
                 free_ssl_context(ssl_context);
                 return NULL;
             }
-         
             if(options.reject_unauthorized) {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, VerifyCallback);
             } else {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, VerifyCallback);
             }
         }
     } else {
         if(options.request_cert) {
             if(options.reject_unauthorized) {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, VerifyCallback);
             } else {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, VerifyCallback);
             }
         }
     }
