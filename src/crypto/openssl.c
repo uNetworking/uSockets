@@ -166,18 +166,19 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
 
     BIO_up_ref(loop_ssl_data->shared_rbio);
     BIO_up_ref(loop_ssl_data->shared_wbio);
-
+    struct us_internal_ssl_socket_t * result = NULL;
     if (is_client) {
+        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
         SSL_set_connect_state(s->ssl);
+        // Client will do the handshake in another stage
     } else {
         SSL_set_accept_state(s->ssl);
-    }
+        result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
 
-    struct us_internal_ssl_socket_t * result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
-
-    // Hello Message!
-    if(context->pending_handshake) {
-        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+        // Hello Message!
+        if(context->pending_handshake) {
+            us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+        }
     }
     return result;
 }
