@@ -176,6 +176,7 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
 
     // Hello Message!
     if(context->pending_handshake) {
+        
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
     }
     return result;
@@ -314,9 +315,14 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
     loop_ssl_data->ssl_socket = &s->s;
     loop_ssl_data->msg_more = 0;
 
-    if (us_internal_ssl_socket_is_shut_down(s)) {
+    if (us_socket_is_closed(0, &s->s)) {
+        return s;
+    }
 
-        int ret;
+    if (us_internal_ssl_socket_is_shut_down(s)) {
+        
+
+        int ret = 0;
         if ((ret = SSL_shutdown(s->ssl)) == 1) {
             // two phase shutdown is complete here
             //printf("Two step SSL shutdown complete\n");
@@ -1361,7 +1367,7 @@ void *us_internal_ssl_socket_ext(struct us_internal_ssl_socket_t *s) {
 }
 
 int us_internal_ssl_socket_is_shut_down(struct us_internal_ssl_socket_t *s) {
-    return us_socket_is_shut_down(0, &s->s) || SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
+    return  us_socket_is_shut_down(0, &s->s) || SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
 }
 
 void us_internal_ssl_socket_shutdown(struct us_internal_ssl_socket_t *s) {
