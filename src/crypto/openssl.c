@@ -276,7 +276,6 @@ struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal
     if (context->pending_handshake) {
         context->pending_handshake = 0;
     }
-    printf("us_internal_ssl_socket_close called!\n");
     return (struct us_internal_ssl_socket_t *) us_socket_close(0, (struct us_socket_t *) s, code, reason);
 }
 
