@@ -271,13 +271,12 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
 }
 
 
-/* This one is a helper; it is entirely shared with non-SSL so can be removed */
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
     if (context->pending_handshake) {
         context->pending_handshake = 0;
     }
-
+    printf("us_internal_ssl_socket_close called!\n");
     return (struct us_internal_ssl_socket_t *) us_socket_close(0, (struct us_socket_t *) s, code, reason);
 }
 
@@ -366,8 +365,23 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
             // as far as I know these are the only errors we want to handle
             if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
 
-                // clear per thread error queue if it may contain something
+                if (err == SSL_ERROR_ZERO_RETURN) {
+                    // zero return can be EOF/FIN, if we have data just signal on_data and close
+                    if (read) {
+                        context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+
+                        s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
+                        if (us_socket_is_closed(0, &s->s)) {
+                            return s;
+                        }
+                    }
+                    // terminate connection here
+                    return us_internal_ssl_socket_close(s, 0, NULL);
+                }
+                
                 if (err == SSL_ERROR_SSL || err == SSL_ERROR_SYSCALL) {
+                    // clear per thread error queue if it may contain something
+                    
                     ERR_clear_error();
                 }
 
