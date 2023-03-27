@@ -674,7 +674,7 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
 
 
 
-int SSL_CTX_use_PrivateKey_content(SSL_CTX *ctx, const char *content, int type) {
+int us_ssl_ctx_use_privatekey_content(SSL_CTX *ctx, const char *content, int type) {
   int reason_code, ret = 0;
   BIO *in;
   EVP_PKEY *pkey = NULL;
@@ -708,7 +708,7 @@ end:
   return ret;
 }
 
-X509 * SSL_CTX_get_X509_from(SSL_CTX *ctx, const char *content) {
+X509 * us_ssl_ctx_get_X509_from(SSL_CTX *ctx, const char *content) {
   X509 *x = NULL;
   BIO *in;
 
@@ -735,7 +735,7 @@ end:
   return NULL;
 }
 
-int SSL_CTX_use_certificate_chain(SSL_CTX *ctx, const char *content) {
+int us_ssl_ctx_use_certificate_chain(SSL_CTX *ctx, const char *content) {
   BIO *in;
   int ret = 0;
   X509 *x = NULL;
@@ -800,7 +800,7 @@ end:
   return ret;
 }
 
-const char* X509ErrorCode(long err) {  // NOLINT(runtime/int)
+const char* us_X509_error_code(long err) {  // NOLINT(runtime/int)
   const char* code = "UNSPECIFIED";
 #define CASE_X509_ERR(CODE) case X509_V_ERR_##CODE: code = #CODE; break;
   switch (err) {
@@ -880,12 +880,12 @@ struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_soc
         return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = NULL, .reason = NULL };
     
     const char* reason = X509_verify_cert_error_string(x509_verify_error);
-    const char* code = X509ErrorCode(x509_verify_error);
+    const char* code = us_X509_error_code(x509_verify_error);
 
     return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = code, .reason = reason };
 }
 
-int VerifyCallback(int preverify_ok, X509_STORE_CTX* ctx) {
+int us_verify_callback(int preverify_ok, X509_STORE_CTX* ctx) {
   // From https://www.openssl.org/docs/man1.1.1/man3/SSL_verify_cb:
   //
   //   If VerifyCallback returns 1, the verification process is continued. If
@@ -936,7 +936,7 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
         }
     } else if (options.cert && options.cert_count > 0) {
         for(unsigned int i = 0; i < options.cert_count; i++) {
-            if (SSL_CTX_use_certificate_chain(ssl_context, options.cert[i]) != 1) {
+            if (us_ssl_ctx_use_certificate_chain(ssl_context, options.cert[i]) != 1) {
                 free_ssl_context(ssl_context);
                 return NULL;
             }
@@ -951,7 +951,7 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
         }
     } else if (options.key && options.key_count > 0) {
         for(unsigned int i = 0; i < options.key_count; i++){
-            if (SSL_CTX_use_PrivateKey_content(ssl_context, options.key[i], SSL_FILETYPE_PEM) != 1) {
+            if (us_ssl_ctx_use_privatekey_content(ssl_context, options.key[i], SSL_FILETYPE_PEM) != 1) {
                 free_ssl_context(ssl_context);
                 return NULL;
             }
@@ -972,16 +972,16 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
         }
         
         if(options.reject_unauthorized) {
-            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, VerifyCallback);
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
         } else {
-            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, VerifyCallback);
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, us_verify_callback);
         }
 
      }else if (options.ca && options.ca_count > 0) {
         X509_STORE* cert_store = NULL;
         
         for(unsigned int i = 0; i < options.ca_count; i++){
-            X509* ca_cert = SSL_CTX_get_X509_from(ssl_context, options.ca[i]);
+            X509* ca_cert = us_ssl_ctx_get_X509_from(ssl_context, options.ca[i]);
             if (ca_cert == NULL){
                 free_ssl_context(ssl_context);
                 return NULL;
@@ -999,17 +999,17 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
                 return NULL;
             }
             if(options.reject_unauthorized) {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, VerifyCallback);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
             } else {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, VerifyCallback);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, us_verify_callback);
             }
         }
     } else {
         if(options.request_cert) {
             if(options.reject_unauthorized) {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, VerifyCallback);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
             } else {
-                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, VerifyCallback);
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, us_verify_callback);
             }
         }
     }
