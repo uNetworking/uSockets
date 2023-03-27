@@ -245,6 +245,11 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
             context->pending_handshake = 1;
             context->on_handshake = on_handshake;
             context->handshake_data = custom_data;
+            // Ensure that we'll cycle through internal openssl's state
+            if (!us_socket_is_closed(0, &s->s) && !us_internal_ssl_socket_is_shut_down(s)) {
+                us_socket_write(1, loop_ssl_data->ssl_socket, "\0", 0, 0);
+            }
+
         }
     } else {
         context->pending_handshake = 0;
@@ -256,6 +261,10 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         // success
         if(on_handshake != NULL) {
             on_handshake(s, 1, verify_error, custom_data);
+        }
+        // Ensure that we'll cycle through internal openssl's state
+        if (!us_socket_is_closed(0, &s->s) && !us_internal_ssl_socket_is_shut_down(s)) {
+            us_socket_write(1, loop_ssl_data->ssl_socket, "\0", 0, 0);
         }
     }
 
@@ -297,6 +306,7 @@ struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) 
 
 // this whole function needs a complete clean-up
 struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s, void *data, int length) {
+
     // note: this context can change when we adopt the socket!
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
@@ -672,7 +682,7 @@ int SSL_CTX_use_PrivateKey_content(SSL_CTX *ctx, const char *content, int type) 
     OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_SSL_FILETYPE);
     goto end;
   }
-
+  
   if (pkey == NULL) {
     OPENSSL_PUT_ERROR(SSL, reason_code);
     goto end;
