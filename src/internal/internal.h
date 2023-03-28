@@ -170,6 +170,7 @@ struct us_internal_ssl_socket_t;
 
 /* SNI functions */
 void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_socket_context_options_t options, void *user);
+void us_bun_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_bun_socket_context_options_t options, void *user);
 void us_internal_ssl_socket_context_remove_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern);
 void us_internal_ssl_socket_context_on_server_name(struct us_internal_ssl_socket_context_t *context, void (*cb)(struct us_internal_ssl_socket_context_t *, const char *));
 void *us_internal_ssl_socket_get_sni_userdata(struct us_internal_ssl_socket_t *s);
@@ -177,9 +178,11 @@ void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_interna
 
 void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *s);
 void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_socket_context_t *context);
-
+struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_socket_t *s);
 struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop,
     int context_ext_size, struct us_socket_context_options_t options);
+struct us_internal_ssl_socket_context_t *us_internal_bun_create_ssl_socket_context(struct us_loop_t *loop,
+    int context_ext_size, struct us_bun_socket_context_options_t options);
 
 void us_internal_ssl_socket_context_free(struct us_internal_ssl_socket_context_t *context);
 void us_internal_ssl_socket_context_on_open(struct us_internal_ssl_socket_context_t *context,
@@ -190,6 +193,9 @@ void us_internal_ssl_socket_context_on_close(struct us_internal_ssl_socket_conte
 
 void us_internal_ssl_socket_context_on_data(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_data)(struct us_internal_ssl_socket_t *s, char *data, int length));
+
+void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data);
+void us_internal_on_ssl_handshake(struct us_internal_ssl_socket_context_t * context, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data);
 
 void us_internal_ssl_socket_context_on_writable(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_writable)(struct us_internal_ssl_socket_t *s));

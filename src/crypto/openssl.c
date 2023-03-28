@@ -47,6 +47,7 @@ struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
     unsigned int ssl_read_input_offset;
+
     struct us_socket_t *ssl_socket;
 
     int last_write_was_msg_more;
@@ -77,6 +78,10 @@ struct us_internal_ssl_socket_context_t {
 
     /* Pointer to sni tree, created when the context is created and freed likewise when freed */
     void *sni;
+
+    int pending_handshake;
+    void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data);
+    void* handshake_data;
 };
 
 // same here, should or shouldn't it contain s?
@@ -112,8 +117,6 @@ long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) BIO_get_data(bio);
 
-    //printf("BIO_s_custom_write\n");
-
     loop_ssl_data->last_write_was_msg_more = loop_ssl_data->msg_more || length == 16413;
     int written = us_socket_write(0, loop_ssl_data->ssl_socket, data, length, loop_ssl_data->last_write_was_msg_more);
 
@@ -122,7 +125,7 @@ int BIO_s_custom_write(BIO *bio, const char *data, int length) {
         return -1;
     }
 
-    //printf("BIO_s_custom_write returns: %d\n", ret);
+    // printf("BIO_s_custom_write returns: %d\n", written);
 
     return written;
 }
@@ -157,6 +160,7 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     s->ssl = SSL_new(context->ssl_context);
     s->ssl_write_wants_read = 0;
     s->ssl_read_wants_write = 0;
+
     SSL_set_bio(s->ssl, loop_ssl_data->shared_rbio, loop_ssl_data->shared_wbio);
 
     BIO_up_ref(loop_ssl_data->shared_rbio);
@@ -168,25 +172,130 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
         SSL_set_accept_state(s->ssl);
     }
 
-    return (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+    struct us_internal_ssl_socket_t * result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
+
+    // Hello Message!
+    if(context->pending_handshake) {
+        
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+    }
+    return result;
 }
 
-/* This one is a helper; it is entirely shared with non-SSL so can be removed */
+
+void us_internal_on_ssl_handshake(struct us_internal_ssl_socket_context_t * context, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data) {
+    context->pending_handshake = 1;
+    context->on_handshake = on_handshake;
+    context->handshake_data = custom_data;
+}
+
+void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_handshake)(struct us_internal_ssl_socket_t *, int success, struct us_bun_verify_error_t verify_error, void* custom_data), void* custom_data) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    
+    // will start on_open, on_writable or on_data
+    if(!s->ssl) {
+        context->pending_handshake = 1;
+        context->on_handshake = on_handshake;
+        context->handshake_data = custom_data;
+        return;
+    }
+
+    struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
+    struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
+
+    loop_ssl_data->ssl_socket = &s->s;
+
+   if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
+        context->pending_handshake = 0;
+        context->on_handshake = NULL;
+        context->handshake_data = NULL;
+    
+        struct us_bun_verify_error_t verify_error = (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };
+        if(on_handshake != NULL) {
+            on_handshake(s, 0, verify_error, custom_data);
+        }
+        return;
+    }
+
+    
+    int result = SSL_do_handshake(s->ssl);
+
+    if (result <= 0) {
+        int err = SSL_get_error(s->ssl, result);
+        
+        // as far as I know these are the only errors we want to handle
+        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+
+            context->pending_handshake = 0;
+            context->on_handshake = NULL;
+            context->handshake_data = NULL;
+    
+            struct us_bun_verify_error_t verify_error = us_internal_verify_error(s);
+            // clear per thread error queue if it may contain something
+            if (err == SSL_ERROR_SSL || err == SSL_ERROR_SYSCALL) {
+                ERR_clear_error();
+            }
+
+            // error
+            if(on_handshake != NULL) {
+                on_handshake(s, 0, verify_error, custom_data);
+            }
+            return;
+        } else {
+            context->pending_handshake = 1;
+            context->on_handshake = on_handshake;
+            context->handshake_data = custom_data;
+            // Ensure that we'll cycle through internal openssl's state
+            if (!us_socket_is_closed(0, &s->s) && !us_internal_ssl_socket_is_shut_down(s)) {
+                us_socket_write(1, loop_ssl_data->ssl_socket, "\0", 0, 0);
+            }
+
+        }
+    } else {
+        context->pending_handshake = 0;
+        context->on_handshake = NULL;
+        context->handshake_data = NULL;
+
+
+        struct us_bun_verify_error_t verify_error = us_internal_verify_error(s);
+        // success
+        if(on_handshake != NULL) {
+            on_handshake(s, 1, verify_error, custom_data);
+        }
+        // Ensure that we'll cycle through internal openssl's state
+        if (!us_socket_is_closed(0, &s->s) && !us_internal_ssl_socket_is_shut_down(s)) {
+            us_socket_write(1, loop_ssl_data->ssl_socket, "\0", 0, 0);
+        }
+    }
+
+}
+
+
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    if (context->pending_handshake) {
+        context->pending_handshake = 0;
+    }
     return (struct us_internal_ssl_socket_t *) us_socket_close(0, (struct us_socket_t *) s, code, reason);
 }
 
 struct us_internal_ssl_socket_t *ssl_on_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
-
+    if (context->pending_handshake) {
+        context->pending_handshake = 0;
+    }
     SSL_free(s->ssl);
 
     return context->on_close(s, code, reason);
 }
 
 struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) {
-    // struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
-
+    if(&s->s) {
+        struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+        if (context && context->pending_handshake) {
+            context->pending_handshake = 0;
+        }
+    }
     // whatever state we are in, a TCP FIN is always an answered shutdown
 
     /* Todo: this should report CLEANLY SHUTDOWN as reason */
@@ -195,22 +304,33 @@ struct us_internal_ssl_socket_t *ssl_on_end(struct us_internal_ssl_socket_t *s) 
 
 // this whole function needs a complete clean-up
 struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s, void *data, int length) {
+
     // note: this context can change when we adopt the socket!
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+
 
     struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) loop->data.ssl_data;
 
-    // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+    }
+
+  // note: if we put data here we should never really clear it (not in write either, it still should be available for SSL_write to read from!)
     loop_ssl_data->ssl_read_input = data;
     loop_ssl_data->ssl_read_input_length = length;
     loop_ssl_data->ssl_read_input_offset = 0;
     loop_ssl_data->ssl_socket = &s->s;
     loop_ssl_data->msg_more = 0;
 
-    if (us_internal_ssl_socket_is_shut_down(s)) {
+    if (us_socket_is_closed(0, &s->s)) {
+        return s;
+    }
 
-        int ret;
+    if (us_internal_ssl_socket_is_shut_down(s)) {
+        
+
+        int ret = 0;
         if ((ret = SSL_shutdown(s->ssl)) == 1) {
             // two phase shutdown is complete here
             //printf("Two step SSL shutdown complete\n");
@@ -244,8 +364,23 @@ struct us_internal_ssl_socket_t *ssl_on_data(struct us_internal_ssl_socket_t *s,
             // as far as I know these are the only errors we want to handle
             if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
 
-                // clear per thread error queue if it may contain something
+                if (err == SSL_ERROR_ZERO_RETURN) {
+                    // zero return can be EOF/FIN, if we have data just signal on_data and close
+                    if (read) {
+                        context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+
+                        s = context->on_data(s, loop_ssl_data->ssl_read_output + LIBUS_RECV_BUFFER_PADDING, read);
+                        if (us_socket_is_closed(0, &s->s)) {
+                            return s;
+                        }
+                    }
+                    // terminate connection here
+                    return us_internal_ssl_socket_close(s, 0, NULL);
+                }
+                
                 if (err == SSL_ERROR_SSL || err == SSL_ERROR_SYSCALL) {
+                    // clear per thread error queue if it may contain something
+                    
                     ERR_clear_error();
                 }
 
@@ -332,11 +467,14 @@ struct us_internal_ssl_socket_t *ssl_on_writable(struct us_internal_ssl_socket_t
 
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
-    // todo: cork here so that we efficiently output both from reading and from writing?
+    if(context->pending_handshake) {
+        us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
+    }
 
+    // todo: cork here so that we efficiently output both from reading and from writing?
     if (s->ssl_read_wants_write) {
         s->ssl_read_wants_write = 0;
-
+        
         // make sure to update context before we call (context can change if the user adopts the socket!)
         context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
@@ -534,9 +672,398 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
     return ssl_context;
 }
 
+
+
+int us_ssl_ctx_use_privatekey_content(SSL_CTX *ctx, const char *content, int type) {
+  int reason_code, ret = 0;
+  BIO *in;
+  EVP_PKEY *pkey = NULL;
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+  
+  if (type == SSL_FILETYPE_PEM) {
+    reason_code = ERR_R_PEM_LIB;
+    pkey = PEM_read_bio_PrivateKey(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                                   SSL_CTX_get_default_passwd_cb_userdata(ctx));
+  } else if (type == SSL_FILETYPE_ASN1) {
+    reason_code = ERR_R_ASN1_LIB;
+    pkey = d2i_PrivateKey_bio(in, NULL);
+  } else {
+    OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_SSL_FILETYPE);
+    goto end;
+  }
+  
+  if (pkey == NULL) {
+    OPENSSL_PUT_ERROR(SSL, reason_code);
+    goto end;
+  }
+  ret = SSL_CTX_use_PrivateKey(ctx, pkey);
+  EVP_PKEY_free(pkey);
+
+end:
+  BIO_free(in);
+  return ret;
+}
+
+X509 * us_ssl_ctx_get_X509_from(SSL_CTX *ctx, const char *content) {
+  X509 *x = NULL;
+  BIO *in;
+
+  ERR_clear_error();  // clear error stack for SSL_CTX_use_certificate()
+
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+
+  x = PEM_read_bio_X509(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                            SSL_CTX_get_default_passwd_cb_userdata(ctx));
+  if (x == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_PEM_LIB);
+    goto end;
+  }
+
+  return x;
+
+end:
+  X509_free(x);
+  BIO_free(in);
+  return NULL;
+}
+
+int us_ssl_ctx_use_certificate_chain(SSL_CTX *ctx, const char *content) {
+  BIO *in;
+  int ret = 0;
+  X509 *x = NULL;
+
+  ERR_clear_error();  // clear error stack for SSL_CTX_use_certificate()
+
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+
+  x = PEM_read_bio_X509_AUX(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                            SSL_CTX_get_default_passwd_cb_userdata(ctx));
+  if (x == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_PEM_LIB);
+    goto end;
+  }
+
+  ret = SSL_CTX_use_certificate(ctx, x);
+
+  if (ERR_peek_error() != 0) {
+    ret = 0;  // Key/certificate mismatch doesn't imply ret==0 ...
+  }
+
+  if (ret) {
+    // If we could set up our certificate, now proceed to the CA
+    // certificates.
+    X509 *ca;
+    int r;
+    uint32_t err;
+
+    SSL_CTX_clear_chain_certs(ctx);
+
+    while ((ca = PEM_read_bio_X509(in, NULL, SSL_CTX_get_default_passwd_cb(ctx),
+                                   SSL_CTX_get_default_passwd_cb_userdata(ctx))) !=
+           NULL) {
+      r = SSL_CTX_add0_chain_cert(ctx, ca);
+      if (!r) {
+        X509_free(ca);
+        ret = 0;
+        goto end;
+      }
+      // Note that we must not free r if it was successfully added to the chain
+      // (while we must free the main certificate, since its reference count is
+      // increased by SSL_CTX_use_certificate).
+    }
+
+    // When the while loop ends, it's usually just EOF.
+    err = ERR_peek_last_error();
+    if (ERR_GET_LIB(err) == ERR_LIB_PEM &&
+        ERR_GET_REASON(err) == PEM_R_NO_START_LINE) {
+      ERR_clear_error();
+    } else {
+      ret = 0;  // some real error
+    }
+  }
+
+end:
+  X509_free(x);
+  BIO_free(in);
+  return ret;
+}
+
+const char* us_X509_error_code(long err) {  // NOLINT(runtime/int)
+  const char* code = "UNSPECIFIED";
+#define CASE_X509_ERR(CODE) case X509_V_ERR_##CODE: code = #CODE; break;
+  switch (err) {
+    // if you modify anything in here, *please* update the respective section in
+    // doc/api/tls.md as well
+    CASE_X509_ERR(UNABLE_TO_GET_ISSUER_CERT)
+    CASE_X509_ERR(UNABLE_TO_GET_CRL)
+    CASE_X509_ERR(UNABLE_TO_DECRYPT_CERT_SIGNATURE)
+    CASE_X509_ERR(UNABLE_TO_DECRYPT_CRL_SIGNATURE)
+    CASE_X509_ERR(UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY)
+    CASE_X509_ERR(CERT_SIGNATURE_FAILURE)
+    CASE_X509_ERR(CRL_SIGNATURE_FAILURE)
+    CASE_X509_ERR(CERT_NOT_YET_VALID)
+    CASE_X509_ERR(CERT_HAS_EXPIRED)
+    CASE_X509_ERR(CRL_NOT_YET_VALID)
+    CASE_X509_ERR(CRL_HAS_EXPIRED)
+    CASE_X509_ERR(ERROR_IN_CERT_NOT_BEFORE_FIELD)
+    CASE_X509_ERR(ERROR_IN_CERT_NOT_AFTER_FIELD)
+    CASE_X509_ERR(ERROR_IN_CRL_LAST_UPDATE_FIELD)
+    CASE_X509_ERR(ERROR_IN_CRL_NEXT_UPDATE_FIELD)
+    CASE_X509_ERR(OUT_OF_MEM)
+    CASE_X509_ERR(DEPTH_ZERO_SELF_SIGNED_CERT)
+    CASE_X509_ERR(SELF_SIGNED_CERT_IN_CHAIN)
+    CASE_X509_ERR(UNABLE_TO_GET_ISSUER_CERT_LOCALLY)
+    CASE_X509_ERR(UNABLE_TO_VERIFY_LEAF_SIGNATURE)
+    CASE_X509_ERR(CERT_CHAIN_TOO_LONG)
+    CASE_X509_ERR(CERT_REVOKED)
+    CASE_X509_ERR(INVALID_CA)
+    CASE_X509_ERR(PATH_LENGTH_EXCEEDED)
+    CASE_X509_ERR(INVALID_PURPOSE)
+    CASE_X509_ERR(CERT_UNTRUSTED)
+    CASE_X509_ERR(CERT_REJECTED)
+    CASE_X509_ERR(HOSTNAME_MISMATCH)
+  }
+#undef CASE_X509_ERR
+  return code;
+}
+
+long us_internal_verify_peer_certificate(  // NOLINT(runtime/int)
+    const SSL* ssl,
+    long def) {  // NOLINT(runtime/int)
+  long err = def;  // NOLINT(runtime/int)
+  X509* peer_cert = SSL_get_peer_certificate(ssl);
+  if (peer_cert) {
+    X509_free(peer_cert);
+    err = SSL_get_verify_result(ssl);
+  } else {
+    const SSL_CIPHER* curr_cipher = SSL_get_current_cipher(ssl);
+
+    const SSL_SESSION* sess = SSL_get_session(ssl);
+    // Allow no-cert for PSK authentication in TLS1.2 and lower.
+    // In TLS1.3 check that session was reused because TLS1.3 PSK
+    // looks like session resumption.
+    if ((curr_cipher && SSL_CIPHER_get_auth_nid(curr_cipher) == NID_auth_psk) ||
+        (sess && SSL_SESSION_get_protocol_version(sess) == TLS1_3_VERSION &&
+         SSL_session_reused(ssl))) {
+      return X509_V_OK;
+    }
+  }
+  return err;
+}
+
+
+struct us_bun_verify_error_t us_internal_verify_error(struct us_internal_ssl_socket_t *s) {
+
+    if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
+        return (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };
+    }
+
+    SSL* ssl = s->ssl;
+    long x509_verify_error =  // NOLINT(runtime/int)
+        us_internal_verify_peer_certificate(
+            ssl,
+            X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT);
+
+    if (x509_verify_error == X509_V_OK)
+        return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = NULL, .reason = NULL };
+    
+    const char* reason = X509_verify_cert_error_string(x509_verify_error);
+    const char* code = us_X509_error_code(x509_verify_error);
+
+    return (struct us_bun_verify_error_t) { .error = x509_verify_error, .code = code, .reason = reason };
+}
+
+int us_verify_callback(int preverify_ok, X509_STORE_CTX* ctx) {
+  // From https://www.openssl.org/docs/man1.1.1/man3/SSL_verify_cb:
+  //
+  //   If VerifyCallback returns 1, the verification process is continued. If
+  //   VerifyCallback always returns 1, the TLS/SSL handshake will not be
+  //   terminated with respect to verification failures and the connection will
+  //   be established. The calling process can however retrieve the error code
+  //   of the last verification error using SSL_get_verify_result(3) or by
+  //   maintaining its own error storage managed by VerifyCallback.
+  //
+  // Since we cannot perform I/O quickly enough with X509_STORE_CTX_ APIs in
+  // this callback, we ignore all preverify_ok errors and let the handshake
+  // continue. It is imperative that the user use Connection::VerifyError after
+  // the 'secure' callback has been made.
+  return 1;
+}
+
+SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_options_t options) {
+    /* Create the context */
+    SSL_CTX *ssl_context = SSL_CTX_new(TLS_method());
+
+    /* Default options we rely on - changing these will break our logic */
+    SSL_CTX_set_read_ahead(ssl_context, 1);
+    SSL_CTX_set_mode(ssl_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
+    /* Anything below TLS 1.2 is disabled */
+    SSL_CTX_set_min_proto_version(ssl_context, TLS1_2_VERSION);
+
+    /* The following are helpers. You may easily implement whatever you want by using the native handle directly */
+
+    /* Important option for lowering memory usage, but lowers performance slightly */
+    if (options.ssl_prefer_low_memory_usage) {
+       SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
+    }
+
+
+    if (options.passphrase) {
+        /* When freeing the CTX we need to check SSL_CTX_get_default_passwd_cb_userdata and
+         * free it if set */
+        SSL_CTX_set_default_passwd_cb_userdata(ssl_context, (void *) strdup(options.passphrase));
+        SSL_CTX_set_default_passwd_cb(ssl_context, passphrase_cb);
+    }
+
+    /* This one most probably do not need the cert_file_name string to be kept alive */
+    if (options.cert_file_name) {
+        if (SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    } else if (options.cert && options.cert_count > 0) {
+        for(unsigned int i = 0; i < options.cert_count; i++) {
+            if (us_ssl_ctx_use_certificate_chain(ssl_context, options.cert[i]) != 1) {
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+        }
+    }
+
+    /* Same as above - we can discard this string afterwards I suppose */
+    if (options.key_file_name) {
+        if (SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    } else if (options.key && options.key_count > 0) {
+        for(unsigned int i = 0; i < options.key_count; i++){
+            if (us_ssl_ctx_use_privatekey_content(ssl_context, options.key[i], SSL_FILETYPE_PEM) != 1) {
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+        }
+    }
+
+    if (options.ca_file_name) {
+        STACK_OF(X509_NAME) *ca_list;
+        ca_list = SSL_load_client_CA_file(options.ca_file_name);
+        if(ca_list == NULL) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+        SSL_CTX_set_client_CA_list(ssl_context, ca_list);
+        if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+        
+        if(options.reject_unauthorized) {
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
+        } else {
+            SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, us_verify_callback);
+        }
+
+     }else if (options.ca && options.ca_count > 0) {
+        X509_STORE* cert_store = NULL;
+        
+        for(unsigned int i = 0; i < options.ca_count; i++){
+            X509* ca_cert = us_ssl_ctx_get_X509_from(ssl_context, options.ca[i]);
+            if (ca_cert == NULL){
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+
+            if (cert_store == NULL) {
+                cert_store = X509_STORE_new();
+                X509_STORE_set_default_paths(cert_store);
+                SSL_CTX_set_cert_store(ssl_context, cert_store);
+            }
+    
+            X509_STORE_add_cert(cert_store, ca_cert);
+            if(!SSL_CTX_add_client_CA(ssl_context, ca_cert)){
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+            if(options.reject_unauthorized) {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
+            } else {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, us_verify_callback);
+            }
+        }
+    } else {
+        if(options.request_cert) {
+            if(options.reject_unauthorized) {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
+            } else {
+                SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, us_verify_callback);
+            }
+        }
+    }
+    if (options.dh_params_file_name) {
+        /* Set up ephemeral DH parameters. */
+        DH *dh_2048 = NULL;
+        FILE *paramfile;
+        paramfile = fopen(options.dh_params_file_name, "r");
+
+        if (paramfile) {
+            dh_2048 = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
+            fclose(paramfile);
+        } else {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        if (dh_2048 == NULL) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        const long set_tmp_dh = SSL_CTX_set_tmp_dh(ssl_context, dh_2048);
+        DH_free(dh_2048);
+
+        if (set_tmp_dh != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
+        if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    }
+
+    if (options.ssl_ciphers) {
+        if (SSL_CTX_set_cipher_list(ssl_context, options.ssl_ciphers) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+    }
+
+    if (options.secure_options) {
+        SSL_CTX_set_options(ssl_context, options.secure_options);
+    }
+
+    /* This must be free'd with free_ssl_context, not SSL_CTX_free */
+    return ssl_context;
+}
+
 /* Returns a servername's userdata if any */
 void *us_internal_ssl_socket_context_find_server_name_userdata(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern) {
-    printf("finding %s\n", hostname_pattern);
     
     /* We can use sni_find because looking up a "wildcard pattern" will match the exact literal "wildcard pattern" first,
      * before it matches by the very wildcard itself, so it works fine (exact match is the only thing we care for here) */
@@ -559,6 +1086,25 @@ void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socke
 
     /* Try and construct an SSL_CTX from options */
     SSL_CTX *ssl_context = create_ssl_context_from_options(options);
+
+    /* Attach the user data to this context */
+    if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
+        printf("CANNOT SET EX DATA!\n");
+    }
+
+    /* We do not want to hold any nullptr's in our SNI tree */
+    if (ssl_context) {
+        if (sni_add(context->sni, hostname_pattern, ssl_context)) {
+            /* If we already had that name, ignore */
+            free_ssl_context(ssl_context);
+        }
+    }
+}
+
+void us_bun_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socket_context_t *context, const char *hostname_pattern, struct us_bun_socket_context_options_t options, void *user) {
+
+    /* Try and construct an SSL_CTX from options */
+    SSL_CTX *ssl_context = create_ssl_context_from_bun_options(options);
 
     /* Attach the user data to this context */
     if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
@@ -652,6 +1198,48 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     /* Then we extend its SSL parts */
     context->ssl_context = ssl_context;//create_ssl_context_from_options(options);
     context->is_parent = 1;
+
+    context->pending_handshake = 0;
+    context->on_handshake = NULL;
+    context->handshake_data = NULL;
+
+    /* We, as parent context, may ignore data */
+    context->sc.is_low_prio = (int (*)(struct us_socket_t *)) ssl_is_low_prio;
+
+    /* Parent contexts may use SNI */
+    SSL_CTX_set_tlsext_servername_callback(context->ssl_context, sni_cb);
+    SSL_CTX_set_tlsext_servername_arg(context->ssl_context, context);
+
+    /* Also create the SNI tree */
+    context->sni = sni_new();
+
+    return context;
+}
+struct us_internal_ssl_socket_context_t *us_internal_bun_create_ssl_socket_context(struct us_loop_t *loop, int context_ext_size, struct us_bun_socket_context_options_t options) {
+    /* If we haven't initialized the loop data yet, do so .
+     * This is needed because loop data holds shared OpenSSL data and
+     * the function is also responsible for initializing OpenSSL */
+    us_internal_init_loop_ssl_data(loop);
+
+    /* First of all we try and create the SSL context from options */
+    SSL_CTX *ssl_context = create_ssl_context_from_bun_options(options);
+    if (!ssl_context) {
+        /* We simply fail early if we cannot even create the OpenSSL context */
+        return NULL;
+    }
+
+    /* Otherwise ee continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_bun_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
+
+    /* I guess this is the only optional callback */
+    context->on_server_name = NULL;
+
+    /* Then we extend its SSL parts */
+    context->ssl_context = ssl_context;//create_ssl_context_from_options(options);
+    context->is_parent = 1;
+    context->pending_handshake = 0;
+    context->on_handshake = NULL;
+    context->handshake_data = NULL;
 
     /* We, as parent context, may ignore data */
     context->sc.is_low_prio = (int (*)(struct us_socket_t *)) ssl_is_low_prio;
@@ -748,6 +1336,7 @@ void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *
 }
 
 int us_internal_ssl_socket_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more) {
+
     if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
         return 0;
     }
@@ -801,7 +1390,7 @@ void *us_internal_ssl_socket_ext(struct us_internal_ssl_socket_t *s) {
 }
 
 int us_internal_ssl_socket_is_shut_down(struct us_internal_ssl_socket_t *s) {
-    return us_socket_is_shut_down(0, &s->s) || SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
+    return  us_socket_is_shut_down(0, &s->s) || SSL_get_shutdown(s->ssl) & SSL_SENT_SHUTDOWN;
 }
 
 void us_internal_ssl_socket_shutdown(struct us_internal_ssl_socket_t *s) {
