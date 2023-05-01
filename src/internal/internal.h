@@ -27,6 +27,10 @@
 /* We only have one networking implementation so far */
 #include "internal/networking/bsd.h"
 
+// WARNING: This MUST be included after bsd.h, otherwise sys/socket includes
+// fail surprisingly.
+#include <stdint.h>
+
 /* We have many different eventing implementations */
 #if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
 #include "internal/eventing/epoll_kqueue.h"
