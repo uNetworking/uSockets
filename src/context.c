@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#ifndef LIBUS_USE_IO_URING
+
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <stdlib.h>
@@ -509,3 +511,5 @@ void *us_socket_context_ext(int ssl, struct us_socket_context_t *context) {
 
     return context + 1;
 }
+
+#endif

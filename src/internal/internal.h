@@ -31,6 +31,8 @@
 // fail surprisingly.
 #include <stdint.h>
 
+#ifndef LIBUS_USE_IO_URING
+
 /* We have many different eventing implementations */
 #if defined(LIBUS_USE_EPOLL) || defined(LIBUS_USE_KQUEUE)
 #include "internal/eventing/epoll_kqueue.h"
@@ -139,6 +141,8 @@ struct us_socket_context_t {
     struct us_socket_t *(*on_connect_error)(struct us_socket_t *, int code);
     int (*is_low_prio)(struct us_socket_t *);
 };
+
+#endif
 
 /* Internal SSL interface */
 #ifndef LIBUS_NO_SSL

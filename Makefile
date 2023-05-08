@@ -27,6 +27,12 @@ else
 	endif
 endif
 
+# WITH_IO_URING=1 builds with io_uring as event-loop and network implementation
+ifeq ($(WITH_IO_URING),1)
+	override CFLAGS += -DLIBUS_USE_IO_URING
+	# override LDFLAGS += -l
+endif
+
 # WITH_LIBUV=1 builds with libuv as event-loop
 ifeq ($(WITH_LIBUV),1)
 	override CFLAGS += -DLIBUS_USE_LIBUV
@@ -63,7 +69,7 @@ endif
 # By default we build the uSockets.a static library
 default:
 	rm -f *.o
-	$(CC) $(CFLAGS) -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
+	$(CC) $(CFLAGS) -O3 -c src/*.c src/eventing/*.c src/crypto/*.c src/io_uring/*.c
 # Also link in Boost Asio support
 ifeq ($(WITH_ASIO),1)
 	$(CXX) $(CXXFLAGS) -Isrc -std=c++14 -flto -O3 -c src/eventing/asio.cpp

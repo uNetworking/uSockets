@@ -322,7 +322,7 @@ void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *le
 #endif
 
 /* Decide what eventing system to use by default */
-#if !defined(LIBUS_USE_EPOLL) && !defined(LIBUS_USE_LIBUV) && !defined(LIBUS_USE_GCD) && !defined(LIBUS_USE_KQUEUE) && !defined(LIBUS_USE_ASIO)
+#if !defined(LIBUS_USE_IO_URING) && !defined(LIBUS_USE_EPOLL) && !defined(LIBUS_USE_LIBUV) && !defined(LIBUS_USE_GCD) && !defined(LIBUS_USE_KQUEUE) && !defined(LIBUS_USE_ASIO)
 #if defined(_WIN32)
 #define LIBUS_USE_LIBUV
 #elif defined(__APPLE__) || defined(__FreeBSD__)

@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#ifndef LIBUS_USE_IO_URING
+
 #include "libusockets.h"
 #include "internal/internal.h"
 
@@ -145,3 +147,5 @@ struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_u
     
     return (struct us_udp_socket_t *) cb;
 }
+
+#endif

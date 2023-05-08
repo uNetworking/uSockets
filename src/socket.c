@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#ifndef LIBUS_USE_IO_URING
+
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <stdlib.h>
@@ -201,3 +203,5 @@ void us_socket_shutdown(int ssl, struct us_socket_t *s) {
         bsd_shutdown_socket(us_poll_fd((struct us_poll_t *) s));
     }
 }
+
+#endif

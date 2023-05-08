@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#ifndef LIBUS_USE_IO_URING
+
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <stdlib.h>
@@ -360,3 +362,5 @@ void us_loop_integrate(struct us_loop_t *loop) {
 void *us_loop_ext(struct us_loop_t *loop) {
     return loop + 1;
 }
+
+#endif
