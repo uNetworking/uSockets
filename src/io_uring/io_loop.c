@@ -22,7 +22,25 @@
 #include <stdlib.h>
 
 /* The loop has 2 fallthrough polls */
+void us_loop_run(struct us_loop_t *loop) {
 
+}
+
+struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+
+}
+
+void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
+
+}
+
+void us_loop_free(struct us_loop_t *loop) {
+
+}
+
+struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
+
+}
 
 void us_internal_loop_data_free(struct us_loop_t *loop) {
 
