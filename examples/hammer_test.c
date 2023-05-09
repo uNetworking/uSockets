@@ -65,12 +65,12 @@ void assume_state(struct us_socket_t *s, int is_http) {
 
     if (hs->pad_invariant != pad_should_always_be || hs->post_pad_invariant != pad_should_always_be) {
         printf("ERROR: Pad invariant is not correct!\n");
-        free((void *) 1);
+        abort();
     }
 
     if (hs->is_http != is_http) {
         printf("ERROR: State is: %d should be: %d. Terminating now!\n", hs->is_http, is_http);
-        free((void *) 1);
+        abort();
     }
 
     // try and cause havoc (different size)
@@ -273,7 +273,7 @@ struct us_socket_t *next_connection() {
 
     if (opened_clients == 5000) {
         printf("ERROR! next_connection called when already having made all!\n");
-        free((void *) -1);
+        abort();
     }
 
     struct us_socket_t *connection_socket;
