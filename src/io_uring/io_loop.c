@@ -81,9 +81,11 @@ void us_loop_run(struct us_loop_t *loop) {
                 }
             } */else if (type == LISTEN_SOCKET_ACCEPT) {
 
-                // we need the listen_socket attached to the accept request to know the ext size
-                struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + 512);
-                s->context = loop->context_head;
+                struct us_listen_socket_t *listen_s = object;
+
+                // we need the listen_socket attached to the accept request to know the ext size and context
+                struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + listen_s->socket_ext_size);
+                s->context = listen_s->context;
                 s->dd = cqe->res;
 
                 int sock_conn_fd = cqe->res;
@@ -103,7 +105,7 @@ void us_loop_run(struct us_loop_t *loop) {
                     //printf("starting to read on new socket: %p\n", s);
                 }
 
-                loop->context_head->on_open(s, 1, 0, 0);
+                s->context->on_open(s, 1, 0, 0);
 
             } else if (type == SOCKET_READ) {
                 int bytes_read = cqe->res;
@@ -131,7 +133,7 @@ void us_loop_run(struct us_loop_t *loop) {
 
                     //printf("emitting read on new socket: %p\n", s);
 
-                    loop->context_head->on_data(s, bufs[bid], bytes_read);
+                    s->context->on_data(s, bufs[bid], bytes_read);
 
                     struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
                     io_uring_prep_provide_buffers(sqe, bufs[bid], MAX_MESSAGE_LEN, 1, group_id, bid);

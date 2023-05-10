@@ -42,7 +42,9 @@ void us_internal_socket_context_unlink_socket(struct us_socket_context_t *contex
 }
 
 struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_context_t *context, struct us_socket_t *s, int ext_size) {
-    return 0;
+    //printf("adopting socket now\n");
+    s->context = context;
+    return s;
 }
 
 /* We always add in the top, so we don't modify any s.next */
@@ -102,7 +104,7 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 
     context->loop = loop;
 
-    loop->context_head = context;
+    //loop->context_head = context;
 
     return context;
 }
@@ -115,9 +117,11 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
 
     struct us_listen_socket_t *listen_s = malloc(sizeof(struct us_listen_socket_t));
 
+    listen_s->context = context;
+    listen_s->socket_ext_size = socket_ext_size;
 
     // some variables we need
-    int portno = strtol("3000", NULL, 10);
+    int portno = port;//strtol("3000", NULL, 10);
     struct sockaddr_in serv_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
 
@@ -125,6 +129,7 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
     int sock_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     const int val = 1;
     setsockopt(sock_listen_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
+    setsockopt(sock_listen_fd, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
 
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -163,7 +168,8 @@ struct us_socket_t *us_socket_context_connect_unix(int ssl, struct us_socket_con
 }
 
 struct us_socket_context_t *us_create_child_socket_context(int ssl, struct us_socket_context_t *context, int context_ext_size) {
-    return 0;
+    struct us_socket_context_options_t opt = {0};
+    return us_create_socket_context(ssl, context->loop, context_ext_size, opt);
 }
 
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length)) {

@@ -43,7 +43,7 @@ struct us_loop_t {
     struct io_uring ring;
 
     // let's say there is only one context for now
-    struct us_socket_context_t *context_head;
+    //struct us_socket_context_t *context_head;
 };
 
 struct us_socket_context_t {
@@ -55,7 +55,8 @@ struct us_socket_context_t {
 };
 
 struct us_listen_socket_t {
-
+    struct us_socket_context_t *context;
+    int socket_ext_size;
 };
 
 struct us_socket_t {
