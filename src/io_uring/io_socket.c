@@ -58,11 +58,11 @@ void us_socket_flush(int ssl, struct us_socket_t *s) {
 }
 
 int us_socket_is_closed(int ssl, struct us_socket_t *s) {
-
+    return 0;
 }
 
 int us_socket_is_established(int ssl, struct us_socket_t *s) {
-
+    return 1;
 }
 
 /* Exactly the same as us_socket_close but does not emit on_close event */
@@ -100,7 +100,7 @@ void *us_socket_ext(int ssl, struct us_socket_t *s) {
 }
 
 int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {
-
+    return 0;
 }
 
 void us_socket_shutdown(int ssl, struct us_socket_t *s) {

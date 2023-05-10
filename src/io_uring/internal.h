@@ -35,6 +35,10 @@ enum pointer_tags {
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *) &enabled, sizeof(enabled));
 }*/
 
+struct us_timer_t {
+
+};
+
 struct us_loop_t {
     struct io_uring ring;
 

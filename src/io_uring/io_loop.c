@@ -82,7 +82,7 @@ void us_loop_run(struct us_loop_t *loop) {
             } */else if (type == LISTEN_SOCKET_ACCEPT) {
 
                 // we need the listen_socket attached to the accept request to know the ext size
-                struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + 128);
+                struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + 512);
                 s->context = loop->context_head;
                 s->dd = cqe->res;
 
@@ -155,10 +155,24 @@ void us_loop_run(struct us_loop_t *loop) {
 }
 
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+    struct us_timer_t *timer = malloc(ext_size + sizeof(struct us_timer_t));
 
+    return timer;
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
+
+}
+
+void *us_timer_ext(struct us_timer_t *timer) {
+    return timer + 1;
+}
+
+void us_timer_close(struct us_timer_t *timer) {
+
+}
+
+struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
 
 }
 
@@ -278,7 +292,7 @@ void us_loop_integrate(struct us_loop_t *loop) {
 }
 
 void *us_loop_ext(struct us_loop_t *loop) {
-
+    return loop + 1;
 }
 
 #endif

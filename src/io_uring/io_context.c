@@ -42,7 +42,7 @@ void us_internal_socket_context_unlink_socket(struct us_socket_context_t *contex
 }
 
 struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_context_t *context, struct us_socket_t *s, int ext_size) {
-
+    return 0;
 }
 
 /* We always add in the top, so we don't modify any s.next */
@@ -56,19 +56,19 @@ void us_internal_socket_context_link_socket(struct us_socket_context_t *context,
 }
 
 struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *context) {
-
+    return context->loop;
 }
 
 /* Not shared with SSL */
 
 /* Lookup userdata by server name pattern */
 void *us_socket_context_find_server_name_userdata(int ssl, struct us_socket_context_t *context, const char *hostname_pattern) {
-
+    return 0;
 }
 
 /* Get userdata attached to this SNI-routed socket, or nullptr if default */
 void *us_socket_server_name_userdata(int ssl, struct us_socket_t *s) {
-
+    return 0;
 }
 
 /* Add SNI context */
@@ -93,7 +93,7 @@ void us_socket_context_on_server_name(int ssl, struct us_socket_context_t *conte
 /* Todo: get native context from SNI pattern */
 
 void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *context) {
-
+    return 0;
 }
 
 /* Options is currently only applicable for SSL - this will change with time (prefer_low_memory is one example) */
@@ -151,19 +151,19 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
 }
 
 struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_socket_context_t *context, const char *path, int options, int socket_ext_size) {
-
+    return 0;
 }
 
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {
-
+    return 0;
 }
 
 struct us_socket_t *us_socket_context_connect_unix(int ssl, struct us_socket_context_t *context, const char *server_path, int options, int socket_ext_size) {
-
+    return 0;
 }
 
 struct us_socket_context_t *us_create_child_socket_context(int ssl, struct us_socket_context_t *context, int context_ext_size) {
-
+    return 0;
 }
 
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length)) {
