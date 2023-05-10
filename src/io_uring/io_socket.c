@@ -30,7 +30,7 @@
 /* Shared with SSL */
 
 int us_socket_local_port(int ssl, struct us_socket_t *s) {
-
+    return 0;
 }
 
 void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
@@ -67,18 +67,18 @@ int us_socket_is_established(int ssl, struct us_socket_t *s) {
 
 /* Exactly the same as us_socket_close but does not emit on_close event */
 struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s) {
-
+    return s;
 }
 
 /* Same as above but emits on_close */
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason) {
-
+    return s;
 }
 
 /* Not shared with SSL */
 
 void *us_socket_get_native_handle(int ssl, struct us_socket_t *s) {
-
+    return 0;
 }
 
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {

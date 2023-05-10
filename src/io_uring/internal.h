@@ -26,6 +26,7 @@ enum pointer_tags {
     SOCKET_READ,
     SOCKET_WRITE,
     LISTEN_SOCKET_ACCEPT,
+    SOCKET_CONNECT,
 
 };
 
@@ -36,7 +37,7 @@ enum pointer_tags {
 }*/
 
 struct us_timer_t {
-
+    struct us_loop_t *loop;
 };
 
 struct us_loop_t {

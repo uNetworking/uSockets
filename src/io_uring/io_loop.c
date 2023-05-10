@@ -149,6 +149,21 @@ void us_loop_run(struct us_loop_t *loop) {
                 //add_provide_buf(&loop->ring, conn_i.bid, group_id);
                 // add a new read for the existing connection
                 
+            } else if (type == SOCKET_CONNECT) {
+                printf("we are connectred: %d\n", cqe->res);
+
+                struct us_socket_t *s = object;
+
+
+                struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
+                io_uring_prep_recv_multishot(sqe, s->dd, NULL, 0/*message_size*/, 0);
+                io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT | IOSQE_FIXED_FILE);
+                sqe->buf_group = group_id;
+
+                io_uring_sqe_set_data(sqe, (char *)s + SOCKET_READ);
+
+
+                s->context->on_open(s, 1, 0, 0);
             }
         }
 
@@ -158,6 +173,8 @@ void us_loop_run(struct us_loop_t *loop) {
 
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     struct us_timer_t *timer = malloc(ext_size + sizeof(struct us_timer_t));
+
+    timer->loop = loop;
 
     return timer;
 }
@@ -175,7 +192,7 @@ void us_timer_close(struct us_timer_t *timer) {
 }
 
 struct us_loop_t *us_timer_loop(struct us_timer_t *t) {
-
+    return t->loop;
 }
 
 void us_loop_free(struct us_loop_t *loop) {
@@ -276,7 +293,7 @@ void us_internal_free_closed_sockets(struct us_loop_t *loop) {
 }
 
 long long us_loop_iteration_number(struct us_loop_t *loop) {
-
+    return 0;
 }
 
 /* These may have somewhat different meaning depending on the underlying event library */

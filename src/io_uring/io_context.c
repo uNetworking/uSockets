@@ -23,6 +23,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+       #include <sys/types.h>
+       #include <sys/socket.h>
+       #include <netdb.h>
+
 /* Shared with SSL */
 
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls) {
@@ -159,8 +163,65 @@ struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_sock
     return 0;
 }
 
+
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {
-    return 0;
+    
+
+    struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + socket_ext_size);
+    s->context = context;
+
+
+    struct addrinfo hints, *result;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    char port_string[16];
+    snprintf(port_string, 16, "%d", port);
+
+    if (getaddrinfo(host, port_string, &hints, &result) != 0) {
+        return NULL;
+    }
+
+    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if (fd == LIBUS_SOCKET_ERROR) {
+        freeaddrinfo(result);
+        return NULL;
+    }
+
+    if (source_host) {
+        struct addrinfo *interface_result;
+        if (!getaddrinfo(source_host, NULL, NULL, &interface_result)) {
+            int ret = bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
+            freeaddrinfo(interface_result);
+            if (ret == LIBUS_SOCKET_ERROR) {
+                bsd_close_socket(fd);
+                freeaddrinfo(result);
+                return NULL;
+            }
+        }
+    }
+
+    struct io_uring_sqe *sqe = io_uring_get_sqe(&context->loop->ring);
+    io_uring_prep_connect(sqe, fd, result->ai_addr, (socklen_t) result->ai_addrlen);
+
+        static int num_sockets;
+
+    // register this file add
+    io_uring_register_files_update(&context->loop->ring, num_sockets, &fd, 1);
+
+
+
+    s->dd = num_sockets++;
+
+    io_uring_sqe_set_data(sqe, (char *)s + SOCKET_CONNECT);
+
+
+    freeaddrinfo(result);
+    
+    
+    
+    return s;
 }
 
 struct us_socket_t *us_socket_context_connect_unix(int ssl, struct us_socket_context_t *context, const char *server_path, int options, int socket_ext_size) {
