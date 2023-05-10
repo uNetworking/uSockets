@@ -37,7 +37,7 @@ void add_socket_write(struct io_uring *ring, int fd, __u16 bid, size_t message_s
 void add_provide_buf(struct io_uring *ring, __u16 bid, unsigned gid) {
     struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
     io_uring_prep_provide_buffers(sqe, bufs[bid], MAX_MESSAGE_LEN, 1, gid, bid);
-    io_uring_sqe_set_flags(sqe, IORING_MSG_RING_CQE_SKIP);
+    io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
 
     io_uring_sqe_set_data64(sqe, 6);
 }
@@ -63,8 +63,8 @@ void us_loop_run(struct us_loop_t *loop) {
             void *object = (void *)((uintptr_t)io_uring_cqe_get_data(cqe) & (uintptr_t)0xFFFFFFFFFFFFFFF8ull);
 
             if (pointer_tag == 6) {
-                //printf("uuuuuuuuh: %d\n", cqe->res);
-                //exit(1);
+                printf("uuuuuuuuh: %d\n", cqe->res);
+                exit(1);
             }
 
             //printf("pointer tag is %d\n", pointer_tag);
@@ -122,6 +122,7 @@ void us_loop_run(struct us_loop_t *loop) {
                     s->context->on_close(s, 0, 0);
 
                     io_uring_prep_close_direct(sqe, s->dd);
+                    io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
                     io_uring_sqe_set_data64(sqe, 5);
                 } else {
 
@@ -133,9 +134,8 @@ void us_loop_run(struct us_loop_t *loop) {
                     loop->context_head->on_data(s, bufs[bid], bytes_read);
 
                     struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
-                    //sqe->msg_ring_flags = IORING_MSG_RING_CQE_SKIP;
                     io_uring_prep_provide_buffers(sqe, bufs[bid], MAX_MESSAGE_LEN, 1, group_id, bid);
-                    //io_uring_sqe_set_ring_flags(sqe, IORING_MSG_RING_CQE_SKIP);
+                    io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
 
                     io_uring_sqe_set_data64(sqe, 6); // nothing we handle
 
@@ -175,7 +175,7 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     //struct io_uring ring;
     memset(&params, 0, sizeof(params));
 
-    //params.flags = IORING_SETUP_SQPOLL;
+    params.flags = IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER;//IORING_SETUP_SQPOLL;
     //params.sq_thread_idle = 10000;
 
     if (io_uring_queue_init_params(2048, &loop->ring, &params) < 0) {
