@@ -18,9 +18,14 @@
 #ifdef LIBUS_USE_IO_URING
 
 #include "libusockets.h"
+#include "internal/internal.h"
+#include "internal.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
+
+
 
 /* Shared with SSL */
 
@@ -37,7 +42,7 @@ void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *le
 }
 
 struct us_socket_context_t *us_socket_context(int ssl, struct us_socket_t *s) {
-
+    return s->context;
 }
 
 void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds) {
@@ -78,10 +83,20 @@ void *us_socket_get_native_handle(int ssl, struct us_socket_t *s) {
 
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
 
+    //printf("writing on socket now\n");
+
+    memcpy(s->sendBuf, data, length);
+    struct io_uring_sqe *sqe = io_uring_get_sqe(&s->context->loop->ring);
+    io_uring_prep_send(sqe, s->dd, s->sendBuf, length, 0);
+    io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+    io_uring_sqe_set_data(sqe, (char *)s + SOCKET_WRITE);
+
+    return length;
+
 }
 
 void *us_socket_ext(int ssl, struct us_socket_t *s) {
-
+    return s + 1;
 }
 
 int us_socket_is_shut_down(int ssl, struct us_socket_t *s) {

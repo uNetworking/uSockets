@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef LIBUS_USE_IO_URING
+
 /* This one we allow here since we use it to create the peer addr.
  * We should remove this and replace it with bsd_addr_t and a builder function */
 #include <netinet/in.h>
@@ -146,3 +148,11 @@ int main(int argc, char **argv) {
     /* Send packets from one UDP socket to the next, starting the loop */
     us_loop_run(loop);
 }
+
+#else
+
+int main() {
+    printf("Not yet available with io_uring backend\n");
+}
+
+#endif

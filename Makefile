@@ -66,6 +66,11 @@ else
 	override LDFLAGS += uSockets.a
 endif
 
+# Also link liburing for io_uring support
+ifeq ($(WITH_IO_URING),1)
+	override LDFLAGS += /usr/lib/liburing.a
+endif
+
 # By default we build the uSockets.a static library
 default:
 	rm -f *.o
