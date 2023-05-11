@@ -147,6 +147,9 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
 
     // setup socket
     int sock_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    bsd_socket_nodelay(sock_listen_fd, 1);
+
     const int val = 1;
     setsockopt(sock_listen_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(sock_listen_fd, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
@@ -205,6 +208,7 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
     }
 
     LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    bsd_socket_nodelay(fd, 1);
     if (fd == LIBUS_SOCKET_ERROR) {
         freeaddrinfo(result);
         return NULL;
