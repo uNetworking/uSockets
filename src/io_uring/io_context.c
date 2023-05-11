@@ -58,7 +58,13 @@ void us_internal_socket_context_link_listen_socket(struct us_socket_context_t *c
 
 /* We always add in the top, so we don't modify any s.next */
 void us_internal_socket_context_link_socket(struct us_socket_context_t *context, struct us_socket_t *s) {
-
+    s->context = context;
+    s->next = context->head_sockets;
+    s->prev = 0;
+    if (context->head_sockets) {
+        context->head_sockets->prev = s;
+    }
+    context->head_sockets = s;
 }
 
 struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *context) {
@@ -108,7 +114,17 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 
     context->loop = loop;
 
-    //loop->context_head = context;
+    context->head_sockets = 0;
+    context->head_listen_sockets = 0;
+    context->iterator = 0;
+    context->next = 0;
+
+    /* Begin at 0 */
+    context->timestamp = 0;
+    context->long_timestamp = 0;
+    context->global_tick = 0;
+
+    us_internal_loop_link(loop, context);
 
     return context;
 }
@@ -169,6 +185,11 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
 
     struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + socket_ext_size);
     s->context = context;
+
+    s->timeout = 255;
+    s->long_timeout = 255;
+
+    us_internal_socket_context_link_socket(context, s);
 
 
     struct addrinfo hints, *result;
@@ -250,11 +271,11 @@ void us_socket_context_on_writable(int ssl, struct us_socket_context_t *context,
 }
 
 void us_socket_context_on_long_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_long_timeout)(struct us_socket_t *)) {
-
+    context->on_socket_long_timeout = on_long_timeout;
 }
 
 void us_socket_context_on_timeout(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_timeout)(struct us_socket_t *)) {
-
+    context->on_socket_timeout = on_timeout;
 }
 
 void us_socket_context_on_end(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_end)(struct us_socket_t *)) {

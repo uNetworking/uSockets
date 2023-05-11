@@ -26,13 +26,7 @@
 char bufs[BUFFERS_COUNT][MAX_MESSAGE_LEN] = {0};
 int group_id = 1337;
 
-/*
-void add_socket_write(struct io_uring *ring, int fd, __u16 bid, size_t message_size, unsigned flags) {
-    struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
-    io_uring_prep_send(sqe, fd, &bufs[bid], message_size, 0);
-    io_uring_sqe_set_flags(sqe, flags);
-    io_uring_sqe_set_data(sqe, );
-}*/
+
 
 void add_provide_buf(struct io_uring *ring, __u16 bid, unsigned gid) {
     struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
@@ -42,9 +36,77 @@ void add_provide_buf(struct io_uring *ring, __u16 bid, unsigned gid) {
     io_uring_sqe_set_data64(sqe, 6);
 }
 
+/* This functions should never run recursively */
+void us_internal_timer_sweep(struct us_loop_t *loop) {
+    struct us_loop_t *loop_data = loop;
+    /* For all socket contexts in this loop */
+    for (loop_data->iterator = loop_data->head; loop_data->iterator; loop_data->iterator = loop_data->iterator->next) {
+
+
+        struct us_socket_context_t *context = loop_data->iterator;
+
+        /* Update this context's timestamps (this could be moved to loop and done once) */
+        context->global_tick++;
+        unsigned char short_ticks = context->timestamp = context->global_tick % 240;
+        unsigned char long_ticks = context->long_timestamp = (context->global_tick / 15) % 240;
+
+        /* Begin at head */
+        struct us_socket_t *s = context->head_sockets;
+        while (s) {
+            /* Seek until end or timeout found (tightest loop) */
+            while (1) {
+                /* We only read from 1 random cache line here */
+                if (short_ticks == s->timeout || long_ticks == s->long_timeout) {
+                    break;
+                }
+
+                /* Did we reach the end without a find? */
+                if ((s = s->next) == 0) {
+                    goto next_context;
+                }
+            }
+
+            /* Here we have a timeout to emit (slow path) */
+            context->iterator = s;
+
+            if (short_ticks == s->timeout) {
+                s->timeout = 255;
+                context->on_socket_timeout(s);
+            }
+
+            if (context->iterator == s && long_ticks == s->long_timeout) {
+                s->long_timeout = 255;
+                context->on_socket_long_timeout(s);
+            }   
+
+            /* Check for unlink / link (if the event handler did not modify the chain, we step 1) */
+            if (s == context->iterator) {
+                s = s->next;
+            } else {
+                /* The iterator was changed by event handler */
+                s = context->iterator;
+            }
+        }
+        /* We always store a 0 to context->iterator here since we are no longer iterating this context */
+        next_context:
+        context->iterator = 0;
+    }
+}
+
 
 /* The loop has 2 fallthrough polls */
 void us_loop_run(struct us_loop_t *loop) {
+
+    us_timer_set(loop->timer, NULL, LIBUS_TIMEOUT_GRANULARITY * 1000, LIBUS_TIMEOUT_GRANULARITY * 1000);
+
+    // // register a timeout
+    // struct __kernel_timespec ts;
+    // ts.tv_sec = 4;
+    // ts.tv_nsec = 0;
+
+    // struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
+    // io_uring_prep_timeout(sqe, &ts, 1, IORING_TIMEOUT_REALTIME | IORING_TIMEOUT_ETIME_SUCCESS);
+    // io_uring_sqe_set_data(sqe, (char *)loop + LOOP_TIMER);
 
     while (1) {
         io_uring_submit_and_wait(&loop->ring, 1);
@@ -87,6 +149,12 @@ void us_loop_run(struct us_loop_t *loop) {
                 struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + listen_s->socket_ext_size);
                 s->context = listen_s->context;
                 s->dd = cqe->res;
+                s->timeout = 255;
+                s->long_timeout = 255;
+                s->prev = s->next = 0;
+
+                us_internal_socket_context_link_socket(listen_s->context, s);
+
 
                 int sock_conn_fd = cqe->res;
                 // only read when there is no error, >= 0
@@ -164,6 +232,25 @@ void us_loop_run(struct us_loop_t *loop) {
 
 
                 s->context->on_open(s, 1, 0, 0);
+            } else if (type == LOOP_TIMER) {
+                //if (cqe->res == 0) {
+                    //printf("timer tick %d\n", cqe->res);
+                    us_internal_timer_sweep(loop);
+                //}
+
+                struct us_timer_t *t = object;
+
+                    struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
+                io_uring_prep_read(sqe, t->fd, &t->buf, 8, 0);
+                io_uring_sqe_set_data(sqe, (char *)t + LOOP_TIMER);
+
+                // struct __kernel_timespec ts;
+                // ts.tv_sec = 4;
+                // ts.tv_nsec = 0;
+
+                // struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
+                // io_uring_prep_timeout(sqe, &ts, 1, IORING_TIMEOUT_REALTIME | IORING_TIMEOUT_ETIME_SUCCESS);
+                // io_uring_sqe_set_data(sqe, (char *)loop + LOOP_TIMER);
             }
         }
 
@@ -171,15 +258,38 @@ void us_loop_run(struct us_loop_t *loop) {
     }
 }
 
+#include <sys/timerfd.h>
+
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     struct us_timer_t *timer = malloc(ext_size + sizeof(struct us_timer_t));
 
     timer->loop = loop;
 
+    int timerfd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (timerfd == -1) {
+      return NULL;
+    }
+
+    timer->fd = timerfd;
+
     return timer;
 }
 
 void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms, int repeat_ms) {
+
+
+    struct itimerspec timer_spec = {
+        {repeat_ms / 1000, (long) (repeat_ms % 1000) * (long) 1000000},
+        {ms / 1000, (long) (ms % 1000) * (long) 1000000}
+    };
+
+    timerfd_settime(t->fd, 0, &timer_spec, NULL);
+
+    // prep read into uint64_t of timer
+
+    struct io_uring_sqe *sqe = io_uring_get_sqe(&t->loop->ring);
+    io_uring_prep_read(sqe, t->fd, &t->buf, 8, 0);
+    io_uring_sqe_set_data(sqe, (char *)t + LOOP_TIMER);
 
 }
 
@@ -202,6 +312,18 @@ void us_loop_free(struct us_loop_t *loop) {
 struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
 
     struct us_loop_t *loop = malloc(ext_size + sizeof(struct us_loop_t));
+
+    loop->timer = us_create_timer(loop, 1, 0);
+
+    loop->head = 0;
+    loop->iterator = 0;
+    //loop->closed_head = 0;
+    //loop->low_prio_head = 0;
+    //loop->low_prio_budget = 0;
+
+    //loop->pre_cb = pre_cb;
+    //loop->post_cb = post_cb;
+    //loop->iteration_nr = 0;
 
 // initialize io_uring
     struct io_uring_params params;
@@ -243,7 +365,6 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     io_uring_prep_provide_buffers(sqe, bufs, MAX_MESSAGE_LEN, BUFFERS_COUNT, group_id, 0);
 
     // also register these buffers as fixed
-    
 
     io_uring_submit(&loop->ring);
     io_uring_wait_cqe(&loop->ring, &cqe);
@@ -265,16 +386,17 @@ void us_wakeup_loop(struct us_loop_t *loop) {
 }
 
 void us_internal_loop_link(struct us_loop_t *loop, struct us_socket_context_t *context) {
-
+    /* Insert this context as the head of loop */
+    context->next = loop->head;
+    context->prev = 0;
+    if (loop->head) {
+        loop->head->prev = context;
+    }
+    loop->head = context;
 }
 
 /* Unlink is called before free */
 void us_internal_loop_unlink(struct us_loop_t *loop, struct us_socket_context_t *context) {
-
-}
-
-/* This functions should never run recursively */
-void us_internal_timer_sweep(struct us_loop_t *loop) {
 
 }
 
