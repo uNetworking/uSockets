@@ -58,6 +58,9 @@ struct us_poll_t;
 struct us_udp_socket_t;
 struct us_udp_packet_buffer_t;
 
+/* Extra for io_uring */
+char *us_socket_send_buffer(int ssl, struct us_socket_t *s);
+
 /* Public interface for UDP sockets */
 
 /* Peeks data and length of UDP payload */

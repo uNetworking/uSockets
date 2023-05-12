@@ -78,6 +78,14 @@ struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s) {
     return s;
 }
 
+int us_socket_write2(int ssl, struct us_socket_t *s, const char *header, int header_length, const char *payload, int payload_length) {
+    exit(1);
+}
+
+char *us_socket_send_buffer(int ssl, struct us_socket_t *s) {
+    return s->sendBuf;
+}
+
 /* Same as above but emits on_close */
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason) {
     return s;
@@ -93,9 +101,18 @@ int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length
 
     //printf("writing on socket now\n");
 
-    memcpy(s->sendBuf, data, length);
+    if (data != s->sendBuf) {
+        //printf("WHAT THE HECK!\n");
+        memcpy(s->sendBuf, data, length);
+    }
+    
+    
     struct io_uring_sqe *sqe = io_uring_get_sqe(&s->context->loop->ring);
+
     io_uring_prep_send(sqe, s->dd, s->sendBuf, length, 0);
+
+    //io_uring_prep_write_fixed(sqe, s->dd, s->sendBuf, length, 0, s->dd);
+
     io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
     io_uring_sqe_set_data(sqe, (char *)s + SOCKET_WRITE);
 

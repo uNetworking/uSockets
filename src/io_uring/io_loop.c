@@ -156,6 +156,10 @@ void us_loop_run(struct us_loop_t *loop) {
                 us_internal_socket_context_link_socket(listen_s->context, s);
 
 
+                // register this send buffer as registered buffer (using the DD of the socket as index!)
+                struct iovec iovecs = {s->sendBuf, 16 * 1024};
+                printf("register: %d\n", io_uring_register_buffers_update_tag(&loop->ring, s->dd, &iovecs, 0, 1));
+
                 int sock_conn_fd = cqe->res;
                 // only read when there is no error, >= 0
                 if (sock_conn_fd >= 0) {
@@ -330,7 +334,7 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     //struct io_uring ring;
     memset(&params, 0, sizeof(params));
 
-    params.flags = IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER;//IORING_SETUP_SQPOLL;
+    params.flags = IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER;
     //params.sq_thread_idle = 10000;
 
     if (io_uring_queue_init_params(2048, &loop->ring, &params) < 0) {
@@ -339,6 +343,10 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     }
 
     if (io_uring_register_files_sparse(&loop->ring, 1024)) {
+        exit(1);
+    }
+
+    if (io_uring_register_buffers_sparse(&loop->ring, 1024)) {
         exit(1);
     }
 
