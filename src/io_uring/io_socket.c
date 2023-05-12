@@ -101,10 +101,10 @@ int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length
 
     //printf("writing on socket now\n");
 
-    if (data != s->sendBuf) {
+    //if (data != s->sendBuf) {
         //printf("WHAT THE HECK!\n");
         memcpy(s->sendBuf, data, length);
-    }
+    //}
     
     
     struct io_uring_sqe *sqe = io_uring_get_sqe(&s->context->loop->ring);

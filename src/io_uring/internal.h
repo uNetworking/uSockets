@@ -47,7 +47,10 @@ struct us_timer_t {
 
 struct us_loop_t {
     struct io_uring ring;
+    struct io_uring_buf_ring *buf_ring;
+    
     struct us_timer_t *timer;
+    
 
     struct us_socket_context_t *head;
     struct us_socket_context_t *iterator;
