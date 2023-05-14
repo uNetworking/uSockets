@@ -13,7 +13,7 @@
 
 #define MAX_CONNECTIONS     4096
 #define BACKLOG             512
-#define MAX_MESSAGE_LEN     2048
+#define MAX_MESSAGE_LEN     (64 * 1024)
 #define BUFFERS_COUNT       MAX_CONNECTIONS
 
 void add_accept(struct io_uring *ring, int fd, struct sockaddr *client_addr, socklen_t *client_len, unsigned flags);
@@ -94,5 +94,6 @@ struct us_socket_t {
     unsigned char long_timeout; // 1 byte
     int dd;
 
-    char sendBuf[16 * 1024];
+    char *sendBuf;
+    //char sendBuf[16 * 1024];
 };

@@ -240,6 +240,10 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
     s->dd = num_sockets++;
 
 
+    extern char *sendBufs;
+    s->sendBuf = &sendBufs[s->dd * 16 * 1024];
+
+
     struct iovec iovecs = {s->sendBuf, 16 * 1024};
     //printf("register: %d\n", io_uring_register_buffers_update_tag(&context->loop->ring, s->dd, &iovecs, 0, 1));
 

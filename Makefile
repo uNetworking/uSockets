@@ -1,6 +1,6 @@
 # By default we use LTO, but Windows does not support it
 ifneq ($(WITH_LTO),0)
-	override CFLAGS += -flto
+	override CFLAGS += -flto -march=native
 endif
 
 # WITH_BORINGSSL=1 enables BoringSSL support, linked statically (preferred over OpenSSL)

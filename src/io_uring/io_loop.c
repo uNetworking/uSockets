@@ -23,8 +23,11 @@
 #include "internal.h"
 #include <stdlib.h>
 
-char bufs[BUFFERS_COUNT][MAX_MESSAGE_LEN] = {0};
+//char bufs[BUFFERS_COUNT][MAX_MESSAGE_LEN] = {0};
 int group_id = 1337;
+
+char *bufs;
+char *sendBufs;
 
 
 /* This functions should never run recursively */
@@ -144,6 +147,9 @@ void us_loop_run(struct us_loop_t *loop) {
                 s->long_timeout = 255;
                 s->prev = s->next = 0;
 
+                    extern char *sendBufs;
+    s->sendBuf = &sendBufs[s->dd * 16 * 1024];
+
                 us_internal_socket_context_link_socket(listen_s->context, s);
 
 
@@ -178,7 +184,7 @@ void us_loop_run(struct us_loop_t *loop) {
                     
                     //add_provide_buf(&loop->ring, bid, group_id);
 
-                    io_uring_buf_ring_add(loop->buf_ring, bufs[bid], MAX_MESSAGE_LEN, bid, io_uring_buf_ring_mask(4096), 0);
+                    io_uring_buf_ring_add(loop->buf_ring, &bufs[bid * MAX_MESSAGE_LEN], MAX_MESSAGE_LEN, bid, io_uring_buf_ring_mask(4096), 0);
                     loop->buf_ring->tail++;
 
 
@@ -202,10 +208,14 @@ void us_loop_run(struct us_loop_t *loop) {
 
                     //printf("emitting read on new socket: %p\n", s);
 
-                    s->context->on_data(s, bufs[bid], bytes_read);
+                    if (bytes_read < 15000) {
+                        printf("got data chunk of size: %d\n", bytes_read);
+                    }
+
+                    s->context->on_data(s, &bufs[bid * MAX_MESSAGE_LEN], bytes_read);
 
 
-                    io_uring_buf_ring_add(loop->buf_ring, bufs[bid], MAX_MESSAGE_LEN, bid, io_uring_buf_ring_mask(4096), 0);
+                    io_uring_buf_ring_add(loop->buf_ring, &bufs[bid * MAX_MESSAGE_LEN], MAX_MESSAGE_LEN, bid, io_uring_buf_ring_mask(4096), 0);
                     loop->buf_ring->tail++;
 
 
@@ -239,7 +249,7 @@ void us_loop_run(struct us_loop_t *loop) {
 
                 struct us_timer_t *t = object;
 
-                    struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
+                struct io_uring_sqe *sqe = io_uring_get_sqe(&loop->ring);
                 io_uring_prep_read(sqe, t->fd, &t->buf, 8, 0);
                 io_uring_sqe_set_data(sqe, (char *)t + LOOP_TIMER);
 
@@ -289,7 +299,6 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     struct io_uring_sqe *sqe = io_uring_get_sqe(&t->loop->ring);
     io_uring_prep_read(sqe, t->fd, &t->buf, 8, 0);
     io_uring_sqe_set_data(sqe, (char *)t + LOOP_TIMER);
-
 }
 
 void *us_timer_ext(struct us_timer_t *timer) {
@@ -308,7 +317,40 @@ void us_loop_free(struct us_loop_t *loop) {
 
 }
 
+#include <sys/mman.h>
+
 struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t *loop), void (*pre_cb)(struct us_loop_t *loop), void (*post_cb)(struct us_loop_t *loop), unsigned int ext_size) {
+
+    
+    
+    //bufs = malloc(256 * MAX_MESSAGE_LEN);
+
+    //bufs = mmap(NULL, 256 * MAX_MESSAGE_LEN, PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS/* | MAP_HUGETLB*/, -1, 0);
+    //printf("alloc: %p, errno: %d\n", bufs, errno);
+    //printf("alloc: %d\n", posix_memalign(&bufs, /*2 * 1024*/ 4 * 1024, 4096 * MAX_MESSAGE_LEN));
+    
+    bufs = mmap(NULL, 4096 * MAX_MESSAGE_LEN, PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+    
+    
+    //madvise(bufs, 256 * MAX_MESSAGE_LEN, MADV_HUGEPAGE);
+    //bufs = malloc(4096 * MAX_MESSAGE_LEN);
+    
+    //posix_memalign(&sendBufs, 4096, 200 * 16 * 1024);
+
+
+
+
+    //tab[0] = 'k';
+
+
+    //sendBufs = mmap(NULL, 256 * MAX_MESSAGE_LEN, PROT_WRITE | PROT_READ, MAP_SHARED | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+    posix_memalign(&sendBufs, 4096, 256 * MAX_MESSAGE_LEN);
+    printf("sendbufs: %p\n", sendBufs);
+
+    memset(sendBufs, 1, 256 * MAX_MESSAGE_LEN);
+
+
+    //sendBufs = //malloc(4096 * 16 * 1024);
 
     struct us_loop_t *loop = malloc(ext_size + sizeof(struct us_loop_t));
 
@@ -326,7 +368,7 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
 
     struct io_uring_params params;
     memset(&params, 0, sizeof(params));
-    params.flags = IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER;
+    params.flags = IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER /*| IORING_SETUP_TASKRUN_FLAG*/ | IORING_SETUP_DEFER_TASKRUN;
     if (io_uring_queue_init_params(2048, &loop->ring, &params) < 0) {
         perror("io_uring_init_failed...\n");
         exit(1);
@@ -335,6 +377,9 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     if (io_uring_register_files_sparse(&loop->ring, 1024)) {
         exit(1);
     }
+
+    struct iovec iovecs[2] = {{sendBufs, 200 * 16 * 1024}, {bufs, 4096 * MAX_MESSAGE_LEN}};
+    //printf("registered: %d\n", io_uring_register_buffers(&loop->ring, &iovecs, 1));
 
     io_uring_register_ring_fd(&loop->ring);
 
@@ -353,7 +398,7 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
     io_uring_buf_ring_init(loop->buf_ring);
 
     for (int i = 0; i < 4096; i++) {
-        io_uring_buf_ring_add(loop->buf_ring, bufs[i], MAX_MESSAGE_LEN, i, io_uring_buf_ring_mask(4096), i);
+        io_uring_buf_ring_add(loop->buf_ring, &bufs[i * MAX_MESSAGE_LEN], MAX_MESSAGE_LEN, i, io_uring_buf_ring_mask(4096), i);
     }
     io_uring_buf_ring_advance(loop->buf_ring, 4096);
 

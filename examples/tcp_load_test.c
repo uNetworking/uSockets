@@ -5,7 +5,7 @@ const int SSL = 0;
 #include <stdlib.h>
 #include <string.h>
 
-char request[] = "Hello there!";
+char request[16000] = "Hello there!";
 char *host;
 int port;
 int connections;
@@ -40,7 +40,7 @@ struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
 
 struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int length) {
 
-    us_socket_write(SSL, s, request, sizeof(request) - 1, 0);
+    us_socket_write(SSL, s, request, sizeof(request), 0);
 
     responses++;
 
@@ -50,7 +50,7 @@ struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int l
 struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, char *ip, int ip_length) {
 
     /* Send a request */
-    us_socket_write(SSL, s, request, sizeof(request) - 1, 0);
+    us_socket_write(SSL, s, request, sizeof(request), 0);
 
     if (--connections) {
         us_socket_context_connect(SSL, us_socket_context(SSL, s), host, port, NULL, 0, 0);
@@ -89,6 +89,7 @@ struct us_socket_t *on_http_socket_connect_error(struct us_socket_t *s, int code
 }
 
 int main(int argc, char **argv) {
+    memset(request, 1, sizeof(request));
 
     /* Parse host and port */
     if (argc != 4) {

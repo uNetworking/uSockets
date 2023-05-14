@@ -33,9 +33,11 @@ struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
 	return us_socket_close(0, s, 0, NULL);
 }
 
+char req[16000];
+
 struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int length) {
 
-	us_socket_write(0, s, "Hello short message!", 20, 0);
+	us_socket_write(0, s, req, sizeof(req), 0);
 	return s;
 }
 
@@ -50,6 +52,8 @@ struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
 }
 
 int main() {
+	memset(req, 1, sizeof(req));
+
 	/* Create the event loop */
 	struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);
 

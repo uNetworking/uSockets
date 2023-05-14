@@ -97,27 +97,25 @@ void *us_socket_get_native_handle(int ssl, struct us_socket_t *s) {
     return 0;
 }
 
-int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
-
-    //printf("writing on socket now\n");
-
-    if (data != s->sendBuf) {
-        //printf("WHAT THE HECK!\n");
-        memcpy(s->sendBuf, data, length);
-    }
-    
-    
+int us_socket_write_send_buffer(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
     struct io_uring_sqe *sqe = io_uring_get_sqe(&s->context->loop->ring);
-
     io_uring_prep_send(sqe, s->dd, s->sendBuf, length, 0);
-
-    //io_uring_prep_write_fixed(sqe, s->dd, s->sendBuf, length, 0, s->dd);
-
     io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
     io_uring_sqe_set_data(sqe, (char *)s + SOCKET_WRITE);
-
     return length;
+}
 
+// write permanent is from a static buffer held - so like zero_copy
+int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
+    //memcpy(s->sendBuf, data, length);
+    struct io_uring_sqe *sqe = io_uring_get_sqe(&s->context->loop->ring);
+    io_uring_prep_send(sqe, s->dd, s->sendBuf, length, 0);
+    //io_uring_prep_write_fixed(sqe, s->dd, s->sendBuf/*data*/, length, 0, 0);
+    //io_uring_prep_send_zc_fixed(sqe, s->dd, s->sendBuf, length, 0, 0, 0);
+    //io_uring_prep_write_fixed(sqe, s->dd, s->sendBuf, length, 0, 0);
+    io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE/* | IORING_RECVSEND_POLL_FIRST*/);
+    io_uring_sqe_set_data(sqe, (char *)s + SOCKET_WRITE);
+    return length;
 }
 
 void *us_socket_ext(int ssl, struct us_socket_t *s) {
