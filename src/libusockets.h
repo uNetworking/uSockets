@@ -192,7 +192,6 @@ struct us_socket_context_t *us_create_bun_socket_context(int ssl, struct us_loop
 /* Delete resources allocated at creation time. */
 void us_socket_context_free(int ssl, struct us_socket_context_t *context);
 struct us_bun_verify_error_t us_socket_verify_error(int ssl, struct us_socket_t *context);
-
 /* Setters of various async callbacks */
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length));

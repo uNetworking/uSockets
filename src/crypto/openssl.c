@@ -43,6 +43,13 @@ void *sni_find(void *sni, const char *hostname);
 #include <wolfssl/openssl/dh.h>
 #endif
 
+#include "./root_certs.h"
+#include <stdatomic.h>
+static const root_certs_size = sizeof(root_certs) / sizeof(root_certs[0]);
+static X509* root_cert_instances[root_certs_size]  = {NULL};
+static atomic_flag root_cert_instances_lock = ATOMIC_FLAG_INIT;
+static atomic_bool root_cert_instances_initialized = 0;
+
 struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
@@ -114,6 +121,8 @@ long BIO_s_custom_ctrl(BIO *bio, int cmd, long num, void *user) {
     }
 }
 
+
+
 int BIO_s_custom_write(BIO *bio, const char *data, int length) {
     struct loop_ssl_data *loop_ssl_data = (struct loop_ssl_data *) BIO_get_data(bio);
 
@@ -152,6 +161,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
 }
 
 struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s, int is_client, char *ip, int ip_length) {
+
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
     struct us_loop_t *loop = us_socket_context_loop(0, &context->sc);
@@ -175,10 +185,10 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     struct us_internal_ssl_socket_t * result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
 
     // Hello Message!
-    if(context->pending_handshake) {
-        
+    if(context->pending_handshake) {    
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
     }
+    
     return result;
 }
 
@@ -194,6 +204,7 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
     
     // will start on_open, on_writable or on_data
     if(!s->ssl) {
+        
         context->pending_handshake = 1;
         context->on_handshake = on_handshake;
         context->handshake_data = custom_data;
@@ -222,10 +233,8 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
 
     if (result <= 0) {
         int err = SSL_get_error(s->ssl, result);
-        
         // as far as I know these are the only errors we want to handle
         if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-
             context->pending_handshake = 0;
             context->on_handshake = NULL;
             context->handshake_data = NULL;
@@ -573,6 +582,86 @@ void free_ssl_context(SSL_CTX *ssl_context) {
     SSL_CTX_free(ssl_context);
 }
 
+
+
+// This callback is used to avoid the default passphrase callback in OpenSSL
+// which will typically prompt for the passphrase. The prompting is designed
+// for the OpenSSL CLI, but works poorly for this case because it involves
+// synchronous interaction with the controlling terminal, something we never
+// want, and use this function to avoid it.
+int us_no_password_callback(char* buf, int size, int rwflag, void* u) {
+  return 0;
+}
+
+
+static X509 * us_ssl_ctx_get_X509_without_callback_from(const char *content) {
+  X509 *x = NULL;
+  BIO *in;
+
+  ERR_clear_error();  // clear error stack for SSL_CTX_use_certificate()
+
+  in = BIO_new_mem_buf(content, strlen(content));
+  if (in == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
+    goto end;
+  }
+
+  x = PEM_read_bio_X509(in, NULL, us_no_password_callback, NULL);
+  if (x == NULL) {
+    OPENSSL_PUT_ERROR(SSL, ERR_R_PEM_LIB);
+    goto end;
+  }
+
+  return x;
+
+end:
+  X509_free(x);
+  BIO_free(in);
+  return NULL;
+}
+
+void us_internal_init_root_certs() {
+    if(atomic_load(&root_cert_instances_initialized) == 1) return;
+
+    while(atomic_flag_test_and_set_explicit(&root_cert_instances_lock, memory_order_acquire));
+
+    // if some thread already created it after we acquired the lock we skip and release the lock
+    if(atomic_load(&root_cert_instances_initialized) == 0) {
+        for (size_t i = 0; i < root_certs_size; i++) {
+            root_cert_instances[i] = us_ssl_ctx_get_X509_without_callback_from(root_certs[i]);
+        }
+        
+        atomic_store(&root_cert_instances_initialized, 1);
+    }
+
+    atomic_flag_clear_explicit(&root_cert_instances_lock, memory_order_release);
+}
+
+X509_STORE* us_get_default_ca_store() {
+    X509_STORE *store = X509_STORE_new();
+    if (store == NULL) {
+        return NULL;
+    }
+    
+    if (!X509_STORE_set_default_paths(store)) {
+        X509_STORE_free(store);
+        return NULL;
+    }
+    
+    us_internal_init_root_certs();
+
+    // load all root_cert_instances on the default ca store
+    for (size_t i = 0; i < root_certs_size; i++) {
+        X509* cert = root_cert_instances[i];
+        if(cert == NULL) continue;
+        X509_up_ref(cert);
+        X509_STORE_add_cert(store, cert);       
+    }
+    
+    return store;
+}
+
+
 /* This function should take any options and return SSL_CTX - which has to be free'd with
  * our destructor function - free_ssl_context() */
 SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t options) {
@@ -615,6 +704,8 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
             return NULL;
         }
     }
+
+    SSL_CTX_set_cert_store(ssl_context, us_get_default_ca_store());
 
     if (options.ca_file_name) {
         STACK_OF(X509_NAME) *ca_list;
@@ -963,12 +1054,15 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
     }
 
     if (options.ca_file_name) {
+        SSL_CTX_set_cert_store(ssl_context, us_get_default_ca_store());
+
         STACK_OF(X509_NAME) *ca_list;
         ca_list = SSL_load_client_CA_file(options.ca_file_name);
         if(ca_list == NULL) {
             free_ssl_context(ssl_context);
             return NULL;
         }
+    
         SSL_CTX_set_client_CA_list(ssl_context, ca_list);
         if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
             free_ssl_context(ssl_context);
@@ -992,8 +1086,7 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             }
 
             if (cert_store == NULL) {
-                cert_store = X509_STORE_new();
-                X509_STORE_set_default_paths(cert_store);
+                cert_store = us_get_default_ca_store();
                 SSL_CTX_set_cert_store(ssl_context, cert_store);
             }
     
@@ -1009,6 +1102,7 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             }
         }
     } else {
+        SSL_CTX_set_cert_store(ssl_context, us_get_default_ca_store());
         if(options.request_cert) {
             if(options.reject_unauthorized) {
                 SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
