@@ -1,4 +1,31 @@
+// Maintaining the root certificates 
+//
+// `src/crypto/root_certs.h` contains a compiled-in set of root certificates used as trust anchors
+// for TLS certificate validation.
+//
+// The certificates come from Mozilla, specifically NSS's `certdata.txt` file.
+//
+// The PEM encodings of the certificates are converted to C strings, and committed
+// in `src/crypto/root_certs.h`.
+//
+// When to update
+//
+// Root certificates should be updated sometime after Mozilla makes an NSS release,
+// check the NSS release schedule in https://wiki.mozilla.org/NSS:Release_Versions.
+//
+// Process
+//
+// The `generate-root-certs.js` script automates the update of
+// the root certificates, including:
+//
+//  * Downloading `certdata.txt` from Mozilla's source control repository.
+//  * Running `generate-ca-bundle.pl` to convert the certificates and generate
+//    `src/crypto/root_certs.h`.
+//  * Using `git diff-files` to determine which certificate have been added and/or
+//    removed.
+//  
 static const char* const root_certs[] = {
+
 /* GlobalSign Root CA */
 "-----BEGIN CERTIFICATE-----\n"
 "MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkGA1UEBhMC\n"

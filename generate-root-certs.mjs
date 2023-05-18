@@ -189,7 +189,7 @@ if (values.verbose) {
 }
 await pipeline(certdata.body, createWriteStream(certdataFile));
 
-// Run generate-root-certs.pl to generate src/crypto/node_root_certs.h.
+// Run generate-root-certs.pl to generate src/crypto/root_certs.h.
 if (values.verbose) {
   console.log('Running generate-root-certs.pl');
 }
@@ -203,7 +203,7 @@ if (values.verbose) {
 }
 
 // Determine certificates added and/or removed.
-const certHeaderFile = relative(process.cwd(), join(checkoutDir, 'src', 'crypto', 'node_root_certs.h'));
+const certHeaderFile = relative(process.cwd(), join(checkoutDir, 'src', 'crypto', 'root_certs.h'));
 const diff = execFileSync('git', [ 'diff-files', '-u', '--', certHeaderFile ], opts);
 if (values.verbose) {
   console.log(diff);

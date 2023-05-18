@@ -186,7 +186,7 @@ sub should_output_cert(%) {
   return 0;
 }
 
-my $crt = $ARGV[0] || dirname(__FILE__) . '/src/crypto/node_root_certs.h';
+my $crt = $ARGV[0] || dirname(__FILE__) . '/src/crypto/root_certs.h';
 my $txt = dirname(__FILE__) . '/certdata.txt';
 
 my $stdout = $crt eq '-';
@@ -205,13 +205,13 @@ my $start_of_cert = 0;
 open(TXT,"$txt") or die "Couldn't open $txt: $!\n";
 print CRT "// Maintaining the root certificates \n";
 print CRT "//\n";
-print CRT "// `src/crypto/node_root_certs.h` contains a compiled-in set of root certificates used as trust anchors\n";
+print CRT "// `src/crypto/root_certs.h` contains a compiled-in set of root certificates used as trust anchors\n";
 print CRT "// for TLS certificate validation.\n";
 print CRT "//\n";
 print CRT "// The certificates come from Mozilla, specifically NSS's `certdata.txt` file.\n";
 print CRT "//\n";
 print CRT "// The PEM encodings of the certificates are converted to C strings, and committed\n";
-print CRT "// in `src/crypto/node_root_certs.h`.\n";
+print CRT "// in `src/crypto/root_certs.h`.\n";
 print CRT "//\n";
 print CRT "// When to update\n";
 print CRT "//\n";
@@ -225,7 +225,7 @@ print CRT "// the root certificates, including:\n";
 print CRT "//\n";
 print CRT "//  * Downloading `certdata.txt` from Mozilla's source control repository.\n";
 print CRT "//  * Running `generate-ca-bundle.pl` to convert the certificates and generate\n";
-print CRT "//    `src/crypto/node_root_certs.h`.\n";
+print CRT "//    `src/crypto/root_certs.h`.\n";
 print CRT "//  * Using `git diff-files` to determine which certificate have been added and/or\n";
 print CRT "//    removed.\n";
 print CRT "//  \n";
