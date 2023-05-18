@@ -161,7 +161,6 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
 }
 
 struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s, int is_client, char *ip, int ip_length) {
-    // printf("ssl_on_open\n");
 
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
 
@@ -186,7 +185,6 @@ struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s,
     struct us_internal_ssl_socket_t * result = (struct us_internal_ssl_socket_t *) context->on_open(s, is_client, ip, ip_length);
 
     // Hello Message!
-    // printf("pending_handshake %d\n", context->pending_handshake);
     if(context->pending_handshake) {    
         us_internal_ssl_handshake(s, context->on_handshake, context->handshake_data);
     }
@@ -210,7 +208,6 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         context->pending_handshake = 1;
         context->on_handshake = on_handshake;
         context->handshake_data = custom_data;
-        // printf("no s->ssl\n");
         return;
     }
 
@@ -223,7 +220,6 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         context->pending_handshake = 0;
         context->on_handshake = NULL;
         context->handshake_data = NULL;
-        // printf("us_socket_is_closed\n");
     
         struct us_bun_verify_error_t verify_error = (struct us_bun_verify_error_t) { .error = 0, .code = NULL, .reason = NULL };
         if(on_handshake != NULL) {
@@ -239,7 +235,6 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
         int err = SSL_get_error(s->ssl, result);
         // as far as I know these are the only errors we want to handle
         if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-            // printf("handshake done\n");
             context->pending_handshake = 0;
             context->on_handshake = NULL;
             context->handshake_data = NULL;
@@ -256,7 +251,6 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
             }
             return;
         } else {
-            // printf("wanna read or write\n");
             context->pending_handshake = 1;
             context->on_handshake = on_handshake;
             context->handshake_data = custom_data;
@@ -267,7 +261,6 @@ void us_internal_ssl_handshake(struct us_internal_ssl_socket_t *s, void (*on_han
 
         }
     } else {
-        // printf("handshake done\n");
         context->pending_handshake = 0;
         context->on_handshake = NULL;
         context->handshake_data = NULL;
@@ -1089,9 +1082,6 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             }
 
             if (cert_store == NULL) {
-                // cert_store = X509_STORE_new();
-                // X509_STORE_set_default_paths(cert_store);
-                // SSL_CTX_set_cert_store(ssl_context, cert_store);
                 cert_store = us_get_default_ca_store();
                 SSL_CTX_set_cert_store(ssl_context, cert_store);
             }
