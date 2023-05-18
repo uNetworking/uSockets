@@ -586,7 +586,7 @@ void free_ssl_context(SSL_CTX *ssl_context) {
 
 // This callback is used to avoid the default passphrase callback in OpenSSL
 // which will typically prompt for the passphrase. The prompting is designed
-// for the OpenSSL CLI, but works poorly for Node.js because it involves
+// for the OpenSSL CLI, but works poorly for this case because it involves
 // synchronous interaction with the controlling terminal, something we never
 // want, and use this function to avoid it.
 int us_no_password_callback(char* buf, int size, int rwflag, void* u) {
