@@ -625,11 +625,15 @@ void us_internal_init_root_certs() {
 
     while(atomic_flag_test_and_set_explicit(&root_cert_instances_lock, memory_order_acquire));
 
-    for (size_t i = 0; i < root_certs_size; i++) {
-        root_cert_instances[i] = us_ssl_ctx_get_X509_without_callback_from(root_certs[i]);
+    // if some thread already created it after we acquired the lock we skip and release the lock
+    if(atomic_load(&root_cert_instances_initialized) == 0) {
+        for (size_t i = 0; i < root_certs_size; i++) {
+            root_cert_instances[i] = us_ssl_ctx_get_X509_without_callback_from(root_certs[i]);
+        }
+        
+        atomic_store(&root_cert_instances_initialized, 1);
     }
-    
-    atomic_store(&root_cert_instances_initialized, 1);
+
     atomic_flag_clear_explicit(&root_cert_instances_lock, memory_order_release);
 }
 
