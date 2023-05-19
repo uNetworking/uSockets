@@ -705,8 +705,6 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
         }
     }
 
-    SSL_CTX_set_cert_store(ssl_context, us_get_default_ca_store());
-
     if (options.ca_file_name) {
         STACK_OF(X509_NAME) *ca_list;
         ca_list = SSL_load_client_CA_file(options.ca_file_name);
@@ -1102,8 +1100,9 @@ SSL_CTX *create_ssl_context_from_bun_options(struct us_bun_socket_context_option
             }
         }
     } else {
-        SSL_CTX_set_cert_store(ssl_context, us_get_default_ca_store());
         if(options.request_cert) {
+            SSL_CTX_set_cert_store(ssl_context, us_get_default_ca_store());
+            
             if(options.reject_unauthorized) {
                 SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, us_verify_callback);
             } else {
