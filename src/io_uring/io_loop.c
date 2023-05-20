@@ -148,13 +148,13 @@ void us_loop_run(struct us_loop_t *loop) {
                 s->prev = s->next = 0;
 
                     extern char *sendBufs;
-    s->sendBuf = &sendBufs[s->dd * 16 * 1024];
+    s->sendBuf = &sendBufs[s->dd * 32 * 1024];
 
                 us_internal_socket_context_link_socket(listen_s->context, s);
 
 
                 // register this send buffer as registered buffer (using the DD of the socket as index!)
-                struct iovec iovecs = {s->sendBuf, 16 * 1024};
+                //struct iovec iovecs = {s->sendBuf, 16 * 1024 * 256};
                 //printf("register: %d\n", io_uring_register_buffers_update_tag(&loop->ring, s->dd, &iovecs, 0, 1));
 
                 int sock_conn_fd = cqe->res;
@@ -209,7 +209,7 @@ void us_loop_run(struct us_loop_t *loop) {
                     //printf("emitting read on new socket: %p\n", s);
 
                     if (bytes_read < 15000) {
-                        printf("got data chunk of size: %d\n", bytes_read);
+                        //printf("got data chunk of size: %d\n", bytes_read);
                     }
 
                     s->context->on_data(s, &bufs[bid * MAX_MESSAGE_LEN], bytes_read);

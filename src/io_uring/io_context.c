@@ -241,7 +241,7 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
 
 
     extern char *sendBufs;
-    s->sendBuf = &sendBufs[s->dd * 16 * 1024];
+    s->sendBuf = &sendBufs[s->dd * 32 * 1024];
 
 
     struct iovec iovecs = {s->sendBuf, 16 * 1024};

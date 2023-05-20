@@ -161,6 +161,10 @@ int us_socket_write2(int ssl, struct us_socket_t *s, const char *header, int hea
     return written < 0 ? 0 : written;
 }
 
+int us_socket_write_ref_counted(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
+    return us_socket_write(ssl, s, data, length, msg_more);
+}
+
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {

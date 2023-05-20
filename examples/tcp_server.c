@@ -33,11 +33,11 @@ struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
 	return us_socket_close(0, s, 0, NULL);
 }
 
-char req[16000];
+char req[16 * 1024] = {0};
 
 struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int length) {
 
-	us_socket_write(0, s, req, sizeof(req), 0);
+	us_socket_write_ref_counted(0, s, req, /*sizeof(req)*/ length, 0);
 	return s;
 }
 

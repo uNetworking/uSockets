@@ -5,11 +5,11 @@ const int SSL = 0;
 #include <stdlib.h>
 #include <string.h>
 
-char request[16000] = "Hello there!";
+char request[16 * 1024] = {0};
 char *host;
 int port;
 int connections;
-
+int payload_length = 512;
 int responses;
 
 /* We don't need any of these */
@@ -40,7 +40,7 @@ struct us_socket_t *on_http_socket_end(struct us_socket_t *s) {
 
 struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int length) {
 
-    us_socket_write(SSL, s, request, sizeof(request), 0);
+    us_socket_write_ref_counted(SSL, s, request, /*sizeof(request)*/ payload_length, 0);
 
     responses++;
 
@@ -50,7 +50,7 @@ struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int l
 struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, char *ip, int ip_length) {
 
     /* Send a request */
-    us_socket_write(SSL, s, request, sizeof(request), 0);
+    us_socket_write_ref_counted(SSL, s, request, /*sizeof(request)*/ payload_length, 0);
 
     if (--connections) {
         us_socket_context_connect(SSL, us_socket_context(SSL, s), host, port, NULL, 0, 0);
@@ -92,8 +92,8 @@ int main(int argc, char **argv) {
     memset(request, 1, sizeof(request));
 
     /* Parse host and port */
-    if (argc != 4) {
-        printf("Usage: connections host port\n");
+    if (argc != 5) {
+        printf("Usage: connections host port message_length_in_bytes\n");
         return 0;
     }
 
@@ -101,6 +101,7 @@ int main(int argc, char **argv) {
     host = malloc(strlen(argv[2]) + 1);
     memcpy(host, argv[2], strlen(argv[2]) + 1);
     connections = atoi(argv[1]);
+    payload_length = atoi(argv[4]);
 
     /* Create the event loop */
     struct us_loop_t *loop = us_create_loop(0, on_wakeup, on_pre, on_post, 0);

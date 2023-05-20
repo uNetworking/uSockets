@@ -61,6 +61,7 @@ struct us_udp_packet_buffer_t;
 /* Extra for io_uring */
 char *us_socket_send_buffer(int ssl, struct us_socket_t *s);
 int us_socket_write_send_buffer(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more);
+int us_socket_write_ref_counted(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more);
 
 /* Public interface for UDP sockets */
 
