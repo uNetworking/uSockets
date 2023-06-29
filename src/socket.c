@@ -261,3 +261,35 @@ void us_socket_shutdown(int ssl, struct us_socket_t *s) {
         bsd_shutdown_socket(us_poll_fd((struct us_poll_t *) s));
     }
 }
+
+/* 
+    Note: this assumes that the socket is non-TLS and will be adopted and wrapped with a new TLS context
+          context ext will not be copied to the new context, new context will contain us_wrapped_socket_context_t on ext
+*/
+struct us_socket_t *us_socket_wrap_with_tls(int ssl, struct us_socket_t *s, struct us_bun_socket_context_options_t options, struct us_socket_events_t events, int socket_ext_size) {
+    // only accepts non-TLS sockets
+    if (ssl) {
+        return NULL; 
+    }
+
+    return(struct us_socket_t *) us_internal_ssl_socket_wrap_with_tls(s, options, events, socket_ext_size);
+}  
+
+// if a TLS socket calls this, it will start SSL call open event and TLS handshake if required
+// will have no effect if the socket is closed or is not TLS
+struct us_socket_t* us_socket_open(int ssl, struct us_socket_t * s, int is_client, char* ip, int ip_length) {
+    if (ssl) {
+        return(struct us_socket_t *) us_internal_ssl_socket_open((struct us_internal_ssl_socket_t *)s, is_client, ip, ip_length);
+    }
+    return s;
+}
+
+int us_socket_raw_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return us_internal_ssl_socket_raw_write((struct us_internal_ssl_socket_t *) s, data, length, msg_more);
+    }
+#endif
+ // non-TLS is always raw
+ return us_socket_write(ssl, s, data, length, msg_more);
+}
