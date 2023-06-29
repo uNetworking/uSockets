@@ -144,6 +144,19 @@ struct us_socket_context_options_t {
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
 
+struct us_socket_events_t {
+    struct us_socket_t *(*on_open)(struct us_socket_t *, int is_client, char *ip, int ip_length);
+    struct us_socket_t *(*on_data)(struct us_socket_t *, char *data, int length);
+    struct us_socket_t *(*on_writable)(struct us_socket_t *);
+    struct us_socket_t *(*on_close)(struct us_socket_t *, int code, void *reason);
+    //void (*on_timeout)(struct us_socket_context *);
+    struct us_socket_t *(*on_timeout)(struct us_socket_t *);
+    struct us_socket_t *(*on_long_timeout)(struct us_socket_t *);
+    struct us_socket_t *(*on_end)(struct us_socket_t *);
+    struct us_socket_t *(*on_connect_error)(struct us_socket_t *, int code);
+    void (*on_handshake)(struct us_socket_t*, int success, struct us_bun_verify_error_t verify_error, void* custom_data);
+};
+
 struct us_bun_verify_error_t {
     long error;
     const char* code;
@@ -364,6 +377,9 @@ void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *le
 /* Bun extras */
 struct us_socket_t *us_socket_detach(int ssl, struct us_socket_t *s);
 struct us_socket_t *us_socket_attach(int ssl, LIBUS_SOCKET_DESCRIPTOR client_fd, struct us_socket_context_t *ctx);
+struct us_socket_t *us_socket_wrap_with_tls(int ssl, struct us_socket_t *s, struct us_bun_socket_context_options_t options, struct us_socket_events_t events, int socket_ext_size);
+int us_socket_raw_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more);
+struct us_socket_t* us_socket_open(int ssl, struct us_socket_t * s, int is_client, char* ip, int ip_length);
 
 #ifdef __cplusplus
 }

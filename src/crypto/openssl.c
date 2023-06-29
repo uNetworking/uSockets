@@ -160,6 +160,7 @@ int BIO_s_custom_read(BIO *bio, char *dst, int length) {
     return length;
 }
 
+
 struct us_internal_ssl_socket_t *ssl_on_open(struct us_internal_ssl_socket_t *s, int is_client, char *ip, int ip_length) {
 
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
@@ -1432,7 +1433,16 @@ void *us_internal_ssl_socket_get_native_handle(struct us_internal_ssl_socket_t *
     return s->ssl;
 }
 
+int us_internal_ssl_socket_raw_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more) {
+    
+    if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
+        return 0;
+    }
+    return us_socket_write(0, &s->s, data, length, msg_more);
+}
+
 int us_internal_ssl_socket_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more) {
+
 
     if (us_socket_is_closed(0, &s->s) || us_internal_ssl_socket_is_shut_down(s)) {
         return 0;
@@ -1534,5 +1544,184 @@ struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_adopt_socket(str
     // todo: this is completely untested
     return (struct us_internal_ssl_socket_t *) us_socket_context_adopt_socket(0, &context->sc, &s->s, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + ext_size);
 }
+
+
+
+struct us_internal_ssl_socket_t * ssl_wrapped_context_on_close(struct us_internal_ssl_socket_t *s, int code, void *reason) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+
+    if (wrapped_context->events.on_close) {
+        wrapped_context->events.on_close((struct us_socket_t*)s, code, reason);
+    }
+
+    // writting here can cause the context to not be writable anymore but its the user responsability to check for that
+    if (wrapped_context->old_events.on_close) {
+        wrapped_context->old_events.on_close((struct us_socket_t*)s, code, reason);
+    }
+
+    return s;
+}
+
+
+struct us_internal_ssl_socket_t * ssl_wrapped_context_on_writable(struct us_internal_ssl_socket_t *s) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+
+    if (wrapped_context->events.on_writable) {
+        wrapped_context->events.on_writable((struct us_socket_t*)s);
+    }
+
+    // writting here can cause the context to not be writable anymore but its the user responsability to check for that
+    if (wrapped_context->old_events.on_writable) {
+        wrapped_context->old_events.on_writable((struct us_socket_t*)s);
+    }
+
+    return s;
+}
+
+
+struct us_internal_ssl_socket_t * ssl_wrapped_context_on_data(struct us_internal_ssl_socket_t *s, char *data, int length) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+    // raw data if needed
+    if (wrapped_context->old_events.on_data) {
+        wrapped_context->old_events.on_data((struct us_socket_t*)s, data, length);
+    }
+    // ssl wrapped data
+    return ssl_on_data(s, data, length);
+}
+
+struct us_internal_ssl_socket_t * ssl_wrapped_context_on_timeout(struct us_internal_ssl_socket_t * s) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+
+    if (wrapped_context->events.on_timeout) {
+        wrapped_context->events.on_timeout((struct us_socket_t*)s);
+    }
+
+    if (wrapped_context->old_events.on_timeout) {
+        wrapped_context->old_events.on_timeout((struct us_socket_t*)s);
+    }
+
+    return s;
+}
+
+struct us_internal_ssl_socket_t *  ssl_wrapped_context_on_long_timeout(struct us_internal_ssl_socket_t * s) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+
+    if (wrapped_context->events.on_long_timeout) {
+        wrapped_context->events.on_long_timeout((struct us_socket_t*)s);
+    }
+
+    if (wrapped_context->old_events.on_long_timeout) {
+        wrapped_context->old_events.on_long_timeout((struct us_socket_t*)s);
+    }
+
+    return s;
+}
+
+struct us_internal_ssl_socket_t *  ssl_wrapped_context_on_end(struct us_internal_ssl_socket_t * s) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+
+    if (wrapped_context->events.on_end) {
+        wrapped_context->events.on_end((struct us_socket_t*)s);
+    }
+
+    if (wrapped_context->old_events.on_end) {
+        wrapped_context->old_events.on_end((struct us_socket_t*)s);
+    }
+    return s;
+}
+
+struct us_internal_ssl_socket_t * ssl_wrapped_on_connect_error(struct us_internal_ssl_socket_t * s, int code) {
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_socket_context(0, &s->s);
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(context);
+
+    if (wrapped_context->events.on_connect_error) {
+        wrapped_context->events.on_connect_error((struct us_socket_t*)s, code);
+    }
+
+    if (wrapped_context->old_events.on_connect_error) {
+        wrapped_context->old_events.on_connect_error((struct us_socket_t*)s, code);
+    }
+    return s;
+}
+
+struct us_internal_ssl_socket_t* us_internal_ssl_socket_open(struct us_internal_ssl_socket_t * s, int is_client, char* ip, int ip_length) {
+    // closed
+    if (us_socket_is_closed(0, &s->s)) {
+        return s;
+    }
+    // already opened
+    if (s->ssl) return s;
+
+    // start SSL open
+    return ssl_on_open(s, is_client, ip, ip_length);
+}
+
+struct us_internal_ssl_socket_t *us_internal_ssl_socket_wrap_with_tls(struct us_socket_t *s, struct us_bun_socket_context_options_t options, struct us_socket_events_t events, int socket_ext_size) {
+    /* Cannot wrap a closed socket */
+    if (us_socket_is_closed(0, s)) {
+        return NULL;
+    }
+
+    struct us_socket_context_t * old_context = us_socket_context(0, s);
+    
+    struct us_socket_context_t * context = us_create_bun_socket_context(1, old_context->loop, sizeof(struct us_wrapped_socket_context_t), options);
+    struct us_internal_ssl_socket_context_t *tls_context = (struct us_internal_ssl_socket_context_t *) context;
+
+    struct us_wrapped_socket_context_t* wrapped_context = (struct us_wrapped_socket_context_t *)us_internal_ssl_socket_context_ext(tls_context);
+    // we need to fire this events on the old context
+    struct us_socket_events_t old_events = (struct us_socket_events_t) {
+        .on_close = old_context->on_close,
+        .on_data = old_context->on_data,
+        .on_writable = old_context->on_writable,
+        .on_timeout = old_context->on_socket_timeout,
+        .on_long_timeout = old_context->on_socket_long_timeout,
+        .on_end = old_context->on_end,
+        .on_connect_error = old_context->on_connect_error,
+    };
+    wrapped_context->old_events = old_events;
+    wrapped_context->events = events;
+
+
+    // no need to wrap open because socket is already open (only new context will be called so we can configure hostname and ssl stuff normally here before handshake)
+    tls_context->on_open = (struct us_internal_ssl_socket_t *(*)(struct us_internal_ssl_socket_t *, int, char *, int))events.on_open;
+        
+    // on handshake is not available on the old context so we just add this
+    if(events.on_handshake){
+        us_internal_on_ssl_handshake(tls_context, (void (*)(struct us_internal_ssl_socket_t *, int, struct us_bun_verify_error_t, void*))events.on_handshake, NULL);
+    }
+
+    // we need to wrap these events because we need to call the old context events as well
+    us_socket_context_on_connect_error(0, context, (struct us_socket_t *(*)(struct us_socket_t *, int)) ssl_wrapped_on_connect_error);
+    us_socket_context_on_end(0, context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_wrapped_context_on_end);
+    us_socket_context_on_long_timeout(0, context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_wrapped_context_on_long_timeout);
+    us_socket_context_on_timeout(0, context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_wrapped_context_on_timeout);
+    
+    // special case this will be called after ssl things are done
+
+    // called from ssl_on_data handler is called inside ssl_wrapped_context_on_data
+    tls_context->on_data = (struct us_internal_ssl_socket_t *(*)(struct us_internal_ssl_socket_t *, char *, int))events.on_data;
+    us_socket_context_on_data(0, context, (struct us_socket_t *(*)(struct us_socket_t *, char *, int)) ssl_wrapped_context_on_data);
+    
+    // here is the inverse of the above ssl_on_writable will call ssl_wrapped_context_on_writable
+    tls_context->on_writable = ssl_wrapped_context_on_writable;
+    us_socket_context_on_writable(0, context, (struct us_socket_t *(*)(struct us_socket_t *)) ssl_on_writable);
+
+    tls_context->on_close = ssl_wrapped_context_on_close;
+    us_socket_context_on_close(0, context, (struct us_socket_t *(*)(struct us_socket_t *, int, void *)) ssl_on_close);
+    
+    // will resize to tls + ext size
+    struct us_internal_ssl_socket_t * socket = (struct us_internal_ssl_socket_t *) us_socket_context_adopt_socket(0, context, s, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
+    socket->ssl = NULL;
+    socket->ssl_write_wants_read = 0;
+    socket->ssl_read_wants_write = 0;
+
+    return socket;
+}   
 
 #endif
