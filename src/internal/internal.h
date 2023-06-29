@@ -106,6 +106,11 @@ struct us_socket_t {
     struct us_socket_t *prev, *next;
 };
 
+struct us_wrapped_socket_context_t {
+    struct us_socket_events_t events;
+    struct us_socket_events_t old_events;
+};
+
 #if defined(LIBUS_USE_KQUEUE)
 /* Internal callback types are polls just like sockets */
 struct us_internal_callback_t {
@@ -226,6 +231,8 @@ struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect_unix(str
     const char *server_path, int options, int socket_ext_size);
 
 int us_internal_ssl_socket_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more);
+int us_internal_ssl_socket_raw_write(struct us_internal_ssl_socket_t *s, const char *data, int length, int msg_more);
+
 void us_internal_ssl_socket_timeout(struct us_internal_ssl_socket_t *s, unsigned int seconds);
 void *us_internal_ssl_socket_context_ext(struct us_internal_ssl_socket_context_t *s);
 struct us_internal_ssl_socket_context_t *us_internal_ssl_socket_get_context(struct us_internal_ssl_socket_t *s);
@@ -236,9 +243,10 @@ void us_internal_ssl_socket_shutdown(struct us_internal_ssl_socket_t *s);
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_adopt_socket(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *s, int ext_size);
 
+struct us_internal_ssl_socket_t *us_internal_ssl_socket_wrap_with_tls(struct us_socket_t *s, struct us_bun_socket_context_options_t options, struct us_socket_events_t events, int socket_ext_size);
 struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size);
 struct us_loop_t *us_internal_ssl_socket_context_loop(struct us_internal_ssl_socket_context_t *context);
-
+struct us_internal_ssl_socket_t* us_internal_ssl_socket_open(struct us_internal_ssl_socket_t * s, int is_client, char* ip, int ip_length);
 #endif
 
 #endif // INTERNAL_H
