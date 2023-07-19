@@ -595,13 +595,13 @@ int us_no_password_callback(char* buf, int size, int rwflag, void* u) {
 }
 
 
-static X509 * us_ssl_ctx_get_X509_without_callback_from(const char *content) {
+static X509 * us_ssl_ctx_get_X509_without_callback_from(struct us_cert_string_t content) {
   X509 *x = NULL;
   BIO *in;
 
   ERR_clear_error();  // clear error stack for SSL_CTX_use_certificate()
 
-  in = BIO_new_mem_buf(content, strlen(content));
+  in = BIO_new_mem_buf(content.str, content.len);
   if (in == NULL) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_BUF_LIB);
     goto end;
@@ -621,7 +621,7 @@ end:
   return NULL;
 }
 
-int us_internal_raw_root_certs(const char* const ** out) {
+int us_internal_raw_root_certs(struct us_cert_string_t** out) {
     *out = root_certs;
     return root_certs_size;
 }
