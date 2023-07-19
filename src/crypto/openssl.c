@@ -621,6 +621,11 @@ end:
   return NULL;
 }
 
+int us_internal_raw_root_certs(char **out) {
+    *out = root_certs;
+    return root_certs_size;
+}
+
 void us_internal_init_root_certs() {
     if(atomic_load(&root_cert_instances_initialized) == 1) return;
 
