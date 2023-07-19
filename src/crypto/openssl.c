@@ -621,7 +621,7 @@ end:
   return NULL;
 }
 
-int us_internal_raw_root_certs(char **out) {
+int us_internal_raw_root_certs(const char* const ** out) {
     *out = root_certs;
     return root_certs_size;
 }

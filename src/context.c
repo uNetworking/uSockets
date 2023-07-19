@@ -30,7 +30,7 @@ unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *
     return context->timestamp;
 }
 
-int us_raw_root_certs(char **out) {
+int us_raw_root_certs(const char* const **out) {
     return us_internal_raw_root_certs(out);
 }
 
