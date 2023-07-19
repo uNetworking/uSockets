@@ -247,6 +247,8 @@ struct us_internal_ssl_socket_t *us_internal_ssl_socket_wrap_with_tls(struct us_
 struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size);
 struct us_loop_t *us_internal_ssl_socket_context_loop(struct us_internal_ssl_socket_context_t *context);
 struct us_internal_ssl_socket_t* us_internal_ssl_socket_open(struct us_internal_ssl_socket_t * s, int is_client, char* ip, int ip_length);
+
+int us_internal_raw_root_certs(char **out);
 #endif
 
 #endif // INTERNAL_H

@@ -380,7 +380,7 @@ struct us_socket_t *us_socket_attach(int ssl, LIBUS_SOCKET_DESCRIPTOR client_fd,
 struct us_socket_t *us_socket_wrap_with_tls(int ssl, struct us_socket_t *s, struct us_bun_socket_context_options_t options, struct us_socket_events_t events, int socket_ext_size);
 int us_socket_raw_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more);
 struct us_socket_t* us_socket_open(int ssl, struct us_socket_t * s, int is_client, char* ip, int ip_length);
-
+int us_raw_root_certs(char **out);
 #ifdef __cplusplus
 }
 #endif
