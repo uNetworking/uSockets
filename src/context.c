@@ -29,8 +29,7 @@ int default_is_low_prio_handler(struct us_socket_t *s) {
 unsigned short us_socket_context_timestamp(int ssl, struct us_socket_context_t *context) {
     return context->timestamp;
 }
-
-int us_raw_root_certs(const char* const **out) {
+int us_raw_root_certs(struct us_cert_string_t**out){
     return us_internal_raw_root_certs(out);
 }
 

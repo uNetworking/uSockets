@@ -248,7 +248,7 @@ struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_con
 struct us_loop_t *us_internal_ssl_socket_context_loop(struct us_internal_ssl_socket_context_t *context);
 struct us_internal_ssl_socket_t* us_internal_ssl_socket_open(struct us_internal_ssl_socket_t * s, int is_client, char* ip, int ip_length);
 
-int us_internal_raw_root_certs(const char* const **out);
+int us_raw_root_certs(struct us_cert_string_t**out);
 #endif
 
 #endif // INTERNAL_H

@@ -229,7 +229,8 @@ print CRT "//    `src/crypto/root_certs.h`.\n";
 print CRT "//  * Using `git diff-files` to determine which certificate have been added and/or\n";
 print CRT "//    removed.\n";
 print CRT "//  \n";
-print CRT "static const char* const root_certs[] = {\n";
+print CRT "#include \"libusockets.h\"\n";
+print CRT "static struct us_cert_string_t root_certs[] = {\n";
 while (<TXT>) {
   if (/\*\*\*\*\* BEGIN LICENSE BLOCK \*\*\*\*\*/) {
     print CRT;
@@ -290,10 +291,15 @@ while (<TXT>) {
       $skipnum ++;
     } else {
       my $encoded = MIME::Base64::encode_base64($data, '');
+      my $encoded_len = length($encoded);
+      my $cert_len = $encoded_len + int($encoded_len/$opt_w) + 54;
       $encoded =~ s/(.{1,${opt_w}})/"$1\\n"\n/g;
-      my $pem = "\"-----BEGIN CERTIFICATE-----\\n\"\n"
+      
+      my $pem = "{.str=\"-----BEGIN CERTIFICATE-----\\n\"\n"
               . $encoded
-              . "\"-----END CERTIFICATE-----\",\n";
+              . "\"-----END CERTIFICATE-----\",.len="
+              . $cert_len
+              ."},\n";
       print CRT "\n/* $caname */\n";
 
       my $maxStringLength = length($caname);
