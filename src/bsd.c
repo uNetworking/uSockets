@@ -675,6 +675,7 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, co
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags |= AI_ADDRCONFIG;
 
     char port_string[16];
     snprintf(port_string, 16, "%d", port);
