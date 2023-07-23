@@ -667,7 +667,13 @@ int bsd_udp_packet_buffer_ecn(void *msgvec, int index) {
 
 static int bsd_do_connect(struct addrinfo *result, int fd)
 {
-    return connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
+    do {
+        int err = connect(fd, result->ai_addr, (socklen_t) result->ai_addrlen);
+        if (err == 0 || errno == EINPROGRESS) {
+            return 0;
+        }
+    } while (errno == EINTR);
+    return errno;
 }
 
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options) {
@@ -702,16 +708,24 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, co
             }
         }
     }
-    
-    do {
-        if (bsd_do_connect(result, fd) != 0 && errno != EINPROGRESS) {
-            bsd_close_socket(fd);
-            freeaddrinfo(result);
-            return LIBUS_SOCKET_ERROR;
+
+    int connected = 0;
+
+    // Try all the addresses
+    for (struct addrinfo *a = result; a; a = a->ai_next) {
+        if (bsd_do_connect(a, fd) == 0) {
+            connected = 1;
+            break;
         }
-    } while (errno == EINTR);
+        bsd_close_socket(fd);
+        fd = bsd_create_socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+    }
 
     freeaddrinfo(result);
+    if (!connected) {
+        bsd_close_socket(fd);
+        return LIBUS_SOCKET_ERROR;
+    }
 
     return fd;
 }
