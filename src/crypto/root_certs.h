@@ -141,7 +141,7 @@ static struct us_cert_string_t root_certs[] = {
 "w8M0Ayx9lt1awg6nCpnBBYurDC/zXDrPbDdVCYfeU0BsWO/8tqtlbgT2G9w84FoVxp7Z8VlI\n"
 "MCFlA2zs6SFz7JsDoeA3raAVGI/6ugLOpyypEBMs1OUIJqsil2D4kF501KKaU73yqWjgom7C\n"
 "12yxow+ev+to51byrvLjKzg6CYG1a4XXvi3tPxq3smPi9WIsgtRqAEFQ8TmDn5XpNpaYbg==\n"
-"-----END CERTIFICATE-----",.len=1514},
+"-----END CERTIFICATE-----",.len=1513},
 
 /* QuoVadis Root CA 2 */
 {.str="-----BEGIN CERTIFICATE-----\n"
@@ -229,7 +229,7 @@ static struct us_cert_string_t root_certs[] = {
 "aEIkQmywszo+zenaSMQVy+n5Bw+SUEmK3TGXX8npN6o7WWWXlDLJs58+OmJYxUmtYg5xpTKq\n"
 "L8aJdkNAExNnPaJUJRDL8Try2frbSVa7pv6nQTXD4IhhyYjH3zYQIphZ6rBK+1YWc26sTfci\n"
 "oU+tHXotRSflMMFe8toTyyVCUZVHA4xsIcx0Qu1T/zOLjw9XARYvz6buyXAiFL39vmwLAw==\n"
-"-----END CERTIFICATE-----",.len=1222},
+"-----END CERTIFICATE-----",.len=1221},
 
 /* XRamp Global CA Root */
 {.str="-----BEGIN CERTIFICATE-----\n"
@@ -1120,7 +1120,7 @@ static struct us_cert_string_t root_certs[] = {
 "Aqxva2ssJSRyoWXuJVrl5jLn8t+rSfrzkGkj2wTZ51xY/GXUl77M/C4KzCUqNQT4YJEVdT1B\n"
 "/yMfGchs64JTBKbkTCJNjYy6zltz7GRUUG3RnFX7acM2w4y8PIWmawomDeCTmGCufsYkl4ph\n"
 "X5GOZpIJhzbNi5stPvZR1FDUWSi9g/LMKHtThm3YJohw1+qRzT65ysCQblrGXnRl11z+o+I=\n"
-"-----END CERTIFICATE-----",.len=1514},
+"-----END CERTIFICATE-----",.len=1513},
 
 /* D-TRUST Root Class 3 CA 2 EV 2009 */
 {.str="-----BEGIN CERTIFICATE-----\n"
@@ -1246,7 +1246,7 @@ static struct us_cert_string_t root_certs[] = {
 "iI7E8UuDEq3mi4TWnsLrgxifarsbJGAzcMzs9zLzXNl5fe+epP7JI8Mk7hWSsT2RTyaGvWZz\n"
 "JBPqpK5jwa19hAM8EHiGG3njxPPyBJUgriOCxLM6AGK/5jYk4Ve6xx6QddVfP5VhK8E7zeWz\n"
 "aGHQRiapIVJpLesux+t3zqY6tQMzT3bR51xUAV3LePTJDL/PEo4XLSNolOer/qmyKwbQBM0=\n"
-"-----END CERTIFICATE-----",.len=1879},
+"-----END CERTIFICATE-----",.len=1878},
 
 /* TeliaSonera Root CA v1 */
 {.str="-----BEGIN CERTIFICATE-----\n"
@@ -2013,7 +2013,7 @@ static struct us_cert_string_t root_certs[] = {
 "9Kr5v2c69BoVYh63n749sSmvZ6ES8lgQGVMDMBu4Gon2nL2XA46jCfMdiyHxtN/kHNGfZQIG\n"
 "6lzWE7OE76KlXIx3KadowGuuQNKotOrN8I1LOJwZmhsoVLiJkO/KdYE+HvJkJMcYr07/R54H\n"
 "9jVlpNMKVv/1F2Rs76giJUmTtt8AF9pYfl3uxRuw0dFfIRDH+fO6AgonB8Xx1sfT4PsJYGw=\n"
-"-----END CERTIFICATE-----",.len=1879},
+"-----END CERTIFICATE-----",.len=1878},
 
 /* Amazon Root CA 3 */
 {.str="-----BEGIN CERTIFICATE-----\n"
@@ -2374,7 +2374,7 @@ static struct us_cert_string_t root_certs[] = {
 "zhccLikenEhjQjAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD\n"
 "AwNpADBmAjEAvvNhzwIQHWSVB7gYboiFBS+DCBeQyh+KTOgNG3qxrdWBCUfvO6wIBHxcmbHt\n"
 "RwfSAjEAnbpV/KlK6O3t5nYBQnvI+GDZjVGLVTv7jHvrZQnD+JbNR6iC8hZVdyR+EhCVBCyj\n"
-"-----END CERTIFICATE-----",.len=857},
+"-----END CERTIFICATE-----",.len=856},
 
 /* emSign Root CA - C1 */
 {.str="-----BEGIN CERTIFICATE-----\n"
