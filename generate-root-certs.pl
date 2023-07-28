@@ -291,8 +291,10 @@ while (<TXT>) {
       $skipnum ++;
     } else {
       my $encoded = MIME::Base64::encode_base64($data, '');
-      my $encoded_len = length($encoded);
-      my $cert_len = $encoded_len + int($encoded_len/$opt_w) + 54;
+      my $encoded_len_calc = $encoded;
+      $encoded_len_calc =~ s/(.{1,${opt_w}})/$1\n/g;
+
+      my $cert_len = length($encoded_len_calc) + 53;
       $encoded =~ s/(.{1,${opt_w}})/"$1\\n"\n/g;
       
       my $pem = "{.str=\"-----BEGIN CERTIFICATE-----\\n\"\n"
