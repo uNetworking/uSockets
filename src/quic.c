@@ -229,7 +229,7 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
 #ifndef UIO_MAXIOV
 #define UIO_MAXIOV 1024
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__FreeBSD__)
 struct mmsghdr {
     struct msghdr msg_hdr;  /* Message header */
     unsigned int  msg_len;  /* Number of bytes transmitted */
