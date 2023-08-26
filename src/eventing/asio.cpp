@@ -41,7 +41,7 @@ using error_code = std::error_code;
 namespace chronons = asio::chrono;
 #else
 namespace net = boost::asio;
-namespace error_code = boost::system::error_code;
+using error_code = boost::system::error_code;
 namespace chronons = boost::posix_time;
 #endif
 
