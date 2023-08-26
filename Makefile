@@ -39,11 +39,15 @@ ifeq ($(WITH_LIBUV),1)
 	override LDFLAGS += -luv
 endif
 
-# WITH_ASIO builds with boot asio event-loop
+# WITH_ASIO builds with asio/boost::asio event-loop
 ifeq ($(WITH_ASIO),1)
 	override CFLAGS += -DLIBUS_USE_ASIO
+	ifeq ($(ASIO_STANDALONE),1)
+		override CXXFLAGS += -pthread -DLIBUS_USE_ASIO -DASIO_STANDALONE
+	else
+		override CXXFLAGS += -pthread -DLIBUS_USE_ASIO
+	endif
 	override LDFLAGS += -lstdc++ -lpthread
-	override CXXFLAGS += -pthread -DLIBUS_USE_ASIO
 endif
 
 # WITH_GCD=1 builds with libdispatch as event-loop
