@@ -320,6 +320,9 @@ struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, vo
 /* Returns local port or -1 on failure. */
 int us_socket_local_port(int ssl, struct us_socket_t *s);
 
+/* Returns remote ephemeral port or -1 on failure. */
+int us_socket_remote_port(int ssl, struct us_socket_t *s);
+
 /* Copy remote (IP) address of socket, or fail with zero length. */
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);
 

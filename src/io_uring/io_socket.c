@@ -33,6 +33,10 @@ int us_socket_local_port(int ssl, struct us_socket_t *s) {
     return 0;
 }
 
+int us_socket_remote_port(int ssl, struct us_socket_t *s) {
+    return 0;
+}
+
 void us_socket_shutdown_read(int ssl, struct us_socket_t *s) {
 
 }
