@@ -194,6 +194,9 @@ struct us_listen_socket_t *us_internal_ssl_socket_context_listen(struct us_inter
 struct us_listen_socket_t *us_internal_ssl_socket_context_listen_unix(struct us_internal_ssl_socket_context_t *context,
     const char *path, int options, int socket_ext_size);
 
+struct us_listen_socket_t *us_internal_ssl_socket_context_listen_direct(struct us_internal_ssl_socket_context_t *context,
+    LIBUS_SOCKET_DESCRIPTOR listen_socket_fd, int options, int socket_ext_size);
+
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context,
     const char *host, int port, const char *source_host, int options, int socket_ext_size);
 

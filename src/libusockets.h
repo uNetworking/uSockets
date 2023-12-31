@@ -187,6 +187,9 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
 struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_socket_context_t *context,
     const char *path, int options, int socket_ext_size);
 
+struct us_listen_socket_t *us_socket_context_listen_direct(int ssl, struct us_socket_context_t *context,
+    LIBUS_SOCKET_DESCRIPTOR listen_socket_fd, int options, int socket_ext_size);
+
 /* listen_socket.c/.h */
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
 
