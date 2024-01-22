@@ -275,13 +275,19 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                     /* Todo: stop timer if any */
 
                     do {
-                        /* adopt the newly accepted socket */
-                        us_adopt_accepted_socket(0, us_socket_context(0, &listen_socket->s),
-                            client_fd, listen_socket->socket_ext_size, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
+                        struct us_socket_context_t *context = us_socket_context(0, &listen_socket->s);
+                        /* See if we want to export the FD or keep it here (this event can be unset) */
+                        if (context->on_pre_open == 0 || context->on_pre_open(client_fd) == client_fd) {
 
-                        /* Exit accept loop if listen socket was closed in on_open handler */
-                        if (us_socket_is_closed(0, &listen_socket->s)) {
-                            break;
+                            /* Adopt the newly accepted socket */
+                            us_adopt_accepted_socket(0, context,
+                                client_fd, listen_socket->socket_ext_size, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
+
+                            /* Exit accept loop if listen socket was closed in on_open handler */
+                            if (us_socket_is_closed(0, &listen_socket->s)) {
+                                break;
+                            }
+
                         }
 
                     } while ((client_fd = bsd_accept_socket(us_poll_fd(p), &addr)) != LIBUS_SOCKET_ERROR);

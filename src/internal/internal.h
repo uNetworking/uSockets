@@ -130,6 +130,7 @@ struct us_socket_context_t {
     struct us_socket_t *iterator;
     struct us_socket_context_t *prev, *next;
 
+    LIBUS_SOCKET_DESCRIPTOR (*on_pre_open)(LIBUS_SOCKET_DESCRIPTOR fd);
     struct us_socket_t *(*on_open)(struct us_socket_t *, int is_client, char *ip, int ip_length);
     struct us_socket_t *(*on_data)(struct us_socket_t *, char *data, int length);
     struct us_socket_t *(*on_writable)(struct us_socket_t *);
