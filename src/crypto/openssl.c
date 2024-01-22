@@ -694,6 +694,11 @@ struct us_listen_socket_t *us_internal_ssl_socket_context_listen_unix(struct us_
     return us_socket_context_listen_unix(0, &context->sc, path, options, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
 }
 
+struct us_internal_ssl_socket_t *us_internal_ssl_adopt_accepted_socket(struct us_internal_ssl_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR accepted_fd,
+    unsigned int socket_ext_size, char *addr_ip, int addr_ip_length) {
+    return (struct us_internal_ssl_socket_t *) us_adopt_accepted_socket(0, &context->sc, accepted_fd, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size, addr_ip, addr_ip_length);
+}
+
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {
     return (struct us_internal_ssl_socket_t *) us_socket_context_connect(0, &context->sc, host, port, source_host, options, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
 }
