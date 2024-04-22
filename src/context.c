@@ -225,6 +225,9 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     context->long_timestamp = 0;
     context->global_tick = 0;
 
+    /* Some new events must be set to null for backwards compatibility */
+    context->on_pre_open = 0;
+
     us_internal_loop_link(loop, context);
 
     /* If we are called from within SSL code, SSL code will make further changes to us */
@@ -412,6 +415,12 @@ struct us_socket_t *us_socket_context_adopt_socket(int ssl, struct us_socket_con
     }
 
     return new_s;
+}
+
+/* For backwards compatibility, this function will be set to nullptr by default. */
+void us_socket_context_on_pre_open(int ssl, struct us_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR (*on_pre_open)(LIBUS_SOCKET_DESCRIPTOR fd)) {
+    /* For this event, there is no difference between SSL and non-SSL */
+    context->on_pre_open = on_pre_open;
 }
 
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context, struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length)) {

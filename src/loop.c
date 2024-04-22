@@ -194,6 +194,34 @@ void us_internal_loop_post(struct us_loop_t *loop) {
     loop->data.post_cb(loop);
 }
 
+struct us_socket_t *us_adopt_accepted_socket(int ssl, struct us_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR accepted_fd,
+    unsigned int socket_ext_size, char *addr_ip, int addr_ip_length) {
+#ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return (struct us_socket_t *)us_internal_ssl_adopt_accepted_socket((struct us_internal_ssl_socket_context_t *)context, accepted_fd,
+            socket_ext_size, addr_ip, addr_ip_length);
+    }
+#endif
+    struct us_poll_t *accepted_p = us_create_poll(context->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + socket_ext_size);
+    us_poll_init(accepted_p, accepted_fd, POLL_TYPE_SOCKET);
+    us_poll_start(accepted_p, context->loop, LIBUS_SOCKET_READABLE);
+
+    struct us_socket_t *s = (struct us_socket_t *) accepted_p;
+
+    s->context = context;
+    s->timeout = 255;
+    s->long_timeout = 255;
+    s->low_prio_state = 0;
+
+    /* We always use nodelay */
+    bsd_socket_nodelay(accepted_fd, 1);
+
+    us_internal_socket_context_link_socket(context, s);
+
+    context->on_open(s, 0, addr_ip, addr_ip_length);
+    return s;
+}
+
 void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events) {
     switch (us_internal_poll_type(p)) {
     case POLL_TYPE_CALLBACK: {
@@ -247,27 +275,19 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                     /* Todo: stop timer if any */
 
                     do {
-                        struct us_poll_t *accepted_p = us_create_poll(us_socket_context(0, &listen_socket->s)->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + listen_socket->socket_ext_size);
-                        us_poll_init(accepted_p, client_fd, POLL_TYPE_SOCKET);
-                        us_poll_start(accepted_p, listen_socket->s.context->loop, LIBUS_SOCKET_READABLE);
+                        struct us_socket_context_t *context = us_socket_context(0, &listen_socket->s);
+                        /* See if we want to export the FD or keep it here (this event can be unset) */
+                        if (context->on_pre_open == 0 || context->on_pre_open(client_fd) == client_fd) {
 
-                        struct us_socket_t *s = (struct us_socket_t *) accepted_p;
+                            /* Adopt the newly accepted socket */
+                            us_adopt_accepted_socket(0, context,
+                                client_fd, listen_socket->socket_ext_size, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
 
-                        s->context = listen_socket->s.context;
-                        s->timeout = 255;
-                        s->long_timeout = 255;
-                        s->low_prio_state = 0;
+                            /* Exit accept loop if listen socket was closed in on_open handler */
+                            if (us_socket_is_closed(0, &listen_socket->s)) {
+                                break;
+                            }
 
-                        /* We always use nodelay */
-                        bsd_socket_nodelay(client_fd, 1);
-
-                        us_internal_socket_context_link_socket(listen_socket->s.context, s);
-
-                        listen_socket->s.context->on_open(s, 0, bsd_addr_get_ip(&addr), bsd_addr_get_ip_length(&addr));
-
-                        /* Exit accept loop if listen socket was closed in on_open handler */
-                        if (us_socket_is_closed(0, &listen_socket->s)) {
-                            break;
                         }
 
                     } while ((client_fd = bsd_accept_socket(us_poll_fd(p), &addr)) != LIBUS_SOCKET_ERROR);
@@ -331,9 +351,19 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                     }
                 }
 
-                int length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, LIBUS_RECV_BUFFER_LENGTH, 0);
+                int length;
+                read_more:
+                length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
                     s = s->context->on_data(s, s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, length);
+
+                    /* If we filled the entire recv buffer, we need to immediately read again since otherwise a
+                     * pending hangup event in the same even loop iteration can close the socket before we get
+                     * the chance to read again next iteration */
+                    if (length == LIBUS_RECV_BUFFER_LENGTH && s && !us_socket_is_closed(0, s)) {
+                        goto read_more;
+                    }
+
                 } else if (!length) {
                     if (us_socket_is_shut_down(0, s)) {
                         /* We got FIN back after sending it */

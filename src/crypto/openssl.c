@@ -561,12 +561,13 @@ void us_internal_ssl_socket_context_add_server_name(struct us_internal_ssl_socke
     SSL_CTX *ssl_context = create_ssl_context_from_options(options);
 
     /* Attach the user data to this context */
-    if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
-        printf("CANNOT SET EX DATA!\n");
-    }
-
-    /* We do not want to hold any nullptr's in our SNI tree */
     if (ssl_context) {
+        if (1 != SSL_CTX_set_ex_data(ssl_context, 0, user)) {
+            printf("CANNOT SET EX DATA!\n");
+        }
+
+        /* We do not want to hold any nullptr's in our SNI tree */
+    
         if (sni_add(context->sni, hostname_pattern, ssl_context)) {
             /* If we already had that name, ignore */
             free_ssl_context(ssl_context);
@@ -691,6 +692,11 @@ struct us_listen_socket_t *us_internal_ssl_socket_context_listen(struct us_inter
 
 struct us_listen_socket_t *us_internal_ssl_socket_context_listen_unix(struct us_internal_ssl_socket_context_t *context, const char *path, int options, int socket_ext_size) {
     return us_socket_context_listen_unix(0, &context->sc, path, options, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size);
+}
+
+struct us_internal_ssl_socket_t *us_internal_ssl_adopt_accepted_socket(struct us_internal_ssl_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR accepted_fd,
+    unsigned int socket_ext_size, char *addr_ip, int addr_ip_length) {
+    return (struct us_internal_ssl_socket_t *) us_adopt_accepted_socket(0, &context->sc, accepted_fd, sizeof(struct us_internal_ssl_socket_t) - sizeof(struct us_socket_t) + socket_ext_size, addr_ip, addr_ip_length);
 }
 
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {

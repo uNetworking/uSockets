@@ -155,6 +155,8 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
 void us_socket_context_free(int ssl, struct us_socket_context_t *context);
 
 /* Setters of various async callbacks */
+void us_socket_context_on_pre_open(int ssl, struct us_socket_context_t *context,
+    LIBUS_SOCKET_DESCRIPTOR (*on_pre_open)(LIBUS_SOCKET_DESCRIPTOR fd));
 void us_socket_context_on_open(int ssl, struct us_socket_context_t *context,
     struct us_socket_t *(*on_open)(struct us_socket_t *s, int is_client, char *ip, int ip_length));
 void us_socket_context_on_close(int ssl, struct us_socket_context_t *context,
@@ -189,6 +191,10 @@ struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_sock
 
 /* listen_socket.c/.h */
 void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
+
+/* Adopt a socket which was accepted either internally, or from another accept() outside libusockets */
+struct us_socket_t *us_adopt_accepted_socket(int ssl, struct us_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR client_fd,
+    unsigned int socket_ext_size, char *addr_ip, int addr_ip_length);
 
 /* Land in on_open or on_connection_error or return null or return socket */
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context,
@@ -319,6 +325,9 @@ struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, vo
 
 /* Returns local port or -1 on failure. */
 int us_socket_local_port(int ssl, struct us_socket_t *s);
+
+/* Returns remote ephemeral port or -1 on failure. */
+int us_socket_remote_port(int ssl, struct us_socket_t *s);
 
 /* Copy remote (IP) address of socket, or fail with zero length. */
 void us_socket_remote_address(int ssl, struct us_socket_t *s, char *buf, int *length);
