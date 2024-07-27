@@ -618,6 +618,7 @@ int sni_cb(SSL *ssl, int *al, void *arg) {
             if (resolved_ssl_context) {
                 //printf("Did find matching SNI context for hostname: <%s>!\n", hostname);
                 SSL_set_SSL_CTX(ssl, resolved_ssl_context);
+                SSL_set_verify(ssl, SSL_CTX_get_verify_mode(resolved_ssl_context), SSL_CTX_get_verify_callback(resolved_ssl_context));
             } else {
                 /* Call a blocking callback notifying of missing context */
             }
