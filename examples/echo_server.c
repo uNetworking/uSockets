@@ -41,7 +41,7 @@ struct us_socket_t *on_echo_socket_writable(struct us_socket_t *s) {
 	int written = us_socket_write(SSL, s, es->backpressure, es->length, 0);
 	if (written != es->length) {
 		char *new_buffer = (char *) malloc(es->length - written);
-		memcpy(new_buffer, es->backpressure, es->length - written);
+		memcpy(new_buffer, es->backpressure + written, es->length - written);
 		free(es->backpressure);
 		es->backpressure = new_buffer;
 		es->length -= written;
