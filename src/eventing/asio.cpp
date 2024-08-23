@@ -422,7 +422,7 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
     // these properties are accessed from another thread when wakeup
     cb->m.lock();
     cb->loop = loop; // the only lock needed
-    cb->cb_expects_the_loop = 0;
+    cb->cb_expects_the_loop = 1;
     cb->p.poll_type = POLL_TYPE_CALLBACK; // this is missing from libuv flow
     cb->m.unlock();
 
