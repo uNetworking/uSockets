@@ -491,6 +491,33 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
 
     if (options.dh_params_file_name) {
         /* Set up ephemeral DH parameters. */
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000
+        EVP_PKEY *dhparams = NULL;
+        BIO *paramfile;
+        paramfile = BIO_new_file(options.dh_params_file_name, "r");
+
+        if (paramfile) {
+            dhparams = EVP_PKEY_new();
+            if (!PEM_read_bio_Parameters(paramfile, &dhparams)) {
+                BIO_free(paramfile);
+                free_ssl_context(ssl_context);
+                return NULL;
+            }
+            BIO_free(paramfile);
+        } else {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+
+        const long set_tmp_dh = SSL_CTX_set0_tmp_dh_pkey(ssl_context, dhparams);
+        EVP_PKEY_free(dhparams);
+
+        if (!set_tmp_dh) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+#else
         DH *dh_2048 = NULL;
         FILE *paramfile;
         paramfile = fopen(options.dh_params_file_name, "r");
@@ -515,6 +542,7 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
             free_ssl_context(ssl_context);
             return NULL;
         }
+#endif
 
         /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
         if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
