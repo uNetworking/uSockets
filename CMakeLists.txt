@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 if(NOT CMAKE_PROJECT_NAME)
     project(uSockets C CXX)
 endif()
+message(STATUS "Building uSockets")
 
 # Set C standard to C11 and C++ standard to C++17
 set(CMAKE_C_STANDARD 11)
