@@ -1,5 +1,5 @@
 cc_library(
-    name = "uSockets",
+    name = "usockets",
     srcs = glob([
         "src/*.c",
         "src/eventing/*.c",
@@ -11,5 +11,6 @@ cc_library(
     ),
     defines = ["LIBUS_NO_SSL"],
     includes = ["src"],
+    visibility = ["//visibility:public"],
     deps = ["@liburing"],
 )
