@@ -260,14 +260,14 @@ void us_loop_run(struct us_loop_t *loop) {
 #include <sys/timerfd.h>
 
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+    int timerfd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (timerfd == -1) {
+        return NULL;
+    }
+
     struct us_timer_t *timer = malloc(ext_size + sizeof(struct us_timer_t));
 
     timer->loop = loop;
-
-    int timerfd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
-    if (timerfd == -1) {
-      return NULL;
-    }
 
     timer->fd = timerfd;
 
