@@ -234,6 +234,15 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     return context;
 }
 
+int us_update_socket_context(int ssl, struct us_socket_context_t* ctx, struct us_socket_context_options_t* options) {
+#ifndef LIBUS_NO_SSL
+    if(ssl){
+        return us_internal_update_ssl_socket_context((struct us_internal_ssl_socket_context_t*) ctx, options);
+    }
+#endif
+    return 1;
+}
+
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {

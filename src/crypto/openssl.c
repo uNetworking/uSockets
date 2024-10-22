@@ -43,6 +43,8 @@ void *sni_find(void *sni, const char *hostname);
 #include <wolfssl/openssl/dh.h>
 #endif
 
+#include "ssl_from_pointer.h"
+
 struct loop_ssl_data {
     char *ssl_read_input, *ssl_read_output;
     unsigned int ssl_read_input_length;
@@ -448,7 +450,7 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
 
     /* Important option for lowering memory usage, but lowers performance slightly */
     if (options.ssl_prefer_low_memory_usage) {
-       SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
+        SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
     }
 
     if (options.passphrase) {
@@ -458,50 +460,57 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
         SSL_CTX_set_default_passwd_cb(ssl_context, passphrase_cb);
     }
 
-    /* This one most probably do not need the cert_file_name string to be kept alive */
-    if (options.cert_file_name) {
-        if (SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1) {
+    /* This one most probably do not need the cert_file string to be kept alive */
+    if (options.cert_file) {
+        if (
+          options.cert_data_inline ?
+            SSL_CTX_use_certificate_chain_pointer(ssl_context, options.cert_file, -1) != 1
+          : SSL_CTX_use_certificate_chain_file(ssl_context, options.cert_file_name) != 1
+        ) {
             free_ssl_context(ssl_context);
             return NULL;
         }
     }
 
     /* Same as above - we can discard this string afterwards I suppose */
-    if (options.key_file_name) {
-        if (SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1) {
+    if (options.key_file) {
+        if (
+          options.key_data_inline ?
+            SSL_CTX_use_PrivateKey_pointer(ssl_context, options.key_file, -1) != 1
+          : SSL_CTX_use_PrivateKey_file(ssl_context, options.key_file_name, SSL_FILETYPE_PEM) != 1
+        ) {
             free_ssl_context(ssl_context);
             return NULL;
         }
     }
 
-    if (options.ca_file_name) {
-        STACK_OF(X509_NAME) *ca_list;
-        ca_list = SSL_load_client_CA_file(options.ca_file_name);
+    if (options.ca_file) {
+        STACK_OF(X509_NAME) *ca_list =
+          options.cert_data_inline ?
+            SSL_load_client_CA_pointer(options.ca_file, -1)
+          : SSL_load_client_CA_file(options.ca_file_name);
         if(ca_list == NULL) {
             free_ssl_context(ssl_context);
             return NULL;
         }
         SSL_CTX_set_client_CA_list(ssl_context, ca_list);
-        if (SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1) {
+        if (
+          options.cert_data_inline ?
+            SSL_CTX_load_verify_pointer(ssl_context, options.ca_file, -1) != 1
+          : SSL_CTX_load_verify_locations(ssl_context, options.ca_file_name, NULL) != 1
+        ) {
             free_ssl_context(ssl_context);
             return NULL;
         }
         SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
     }
 
-    if (options.dh_params_file_name) {
+    if (options.dh_params_file) {
         /* Set up ephemeral DH parameters. */
-        DH *dh_2048 = NULL;
-        FILE *paramfile;
-        paramfile = fopen(options.dh_params_file_name, "r");
-
-        if (paramfile) {
-            dh_2048 = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
-            fclose(paramfile);
-        } else {
-            free_ssl_context(ssl_context);
-            return NULL;
-        }
+        DH *dh_2048 =
+          options.dh_params_data_inline ?
+            PEM_read_DHparams_pointer(options.dh_params_file, -1, NULL, NULL, NULL)
+          : PEM_read_DHparams_file(options.dh_params_file_name, NULL, NULL, NULL);
 
         if (dh_2048 == NULL) {
             free_ssl_context(ssl_context);
@@ -532,6 +541,99 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
 
     /* This must be free'd with free_ssl_context, not SSL_CTX_free */
     return ssl_context;
+}
+
+int us_internal_update_ssl_socket_context(struct us_internal_ssl_socket_context_t* ctx, struct us_socket_context_options_t* options){
+    /* Get the context */
+    SSL_CTX *ssl_context = ctx->ssl_context;
+
+    int ret = 1;
+
+    if (options->ssl_prefer_low_memory_usage) {
+        SSL_CTX_set_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
+    }else{
+        SSL_CTX_clear_mode(ssl_context, SSL_MODE_RELEASE_BUFFERS);
+    }
+
+    if (options->passphrase) {
+        /* Free old password */
+        void *oldPassword = SSL_CTX_get_default_passwd_cb_userdata(ssl_context);
+        /* OpenSSL returns NULL if we have no set password */
+        free(oldPassword);
+
+        SSL_CTX_set_default_passwd_cb_userdata(ssl_context, (void *) strdup(options->passphrase));
+        SSL_CTX_set_default_passwd_cb(ssl_context, passphrase_cb);
+    }
+
+    /* This one most probably do not need the cert_file string to be kept alive */
+    if (options->cert_file) {
+        if (
+          options->cert_data_inline ?
+            SSL_CTX_use_certificate_chain_pointer(ssl_context, options->cert_file, -1) != 1
+          : SSL_CTX_use_certificate_chain_file(ssl_context, options->cert_file_name) != 1
+        ) ret = 0;
+    }
+
+    /* Same as above - we can discard this string afterwards I suppose */
+    if (options->key_file) {
+        if (
+          options->key_data_inline ?
+            SSL_CTX_use_PrivateKey_pointer(ssl_context, options->key_file, -1) != 1
+          : SSL_CTX_use_PrivateKey_file(ssl_context, options->key_file_name, SSL_FILETYPE_PEM) != 1
+        ) ret = 0;
+    }
+
+    if (options->ca_file) {
+        STACK_OF(X509_NAME) *ca_list =
+          options->cert_data_inline ?
+            SSL_load_client_CA_pointer(options->ca_file, -1)
+          : SSL_load_client_CA_file(options->ca_file_name);
+        if(ca_list == NULL){
+            ret = 0;
+            goto ca_end;
+        }
+        SSL_CTX_set_client_CA_list(ssl_context, ca_list);
+        if (
+          options->cert_data_inline ?
+            SSL_CTX_load_verify_pointer(ssl_context, options->ca_file, -1) != 1
+          : SSL_CTX_load_verify_locations(ssl_context, options->ca_file_name, NULL) != 1
+        ) {
+            ret = 0;
+            goto ca_end;
+        }
+        SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
+    }
+    ca_end:
+
+    if (options->dh_params_file) {
+        /* Set up ephemeral DH parameters. */
+        DH *dh_2048 =
+          options->dh_params_data_inline ?
+            PEM_read_DHparams_pointer(options->dh_params_file, -1, NULL, NULL, NULL)
+          : PEM_read_DHparams_file(options->dh_params_file_name, NULL, NULL, NULL);
+
+        if (dh_2048 == NULL){
+            ret = 0;
+            goto dh_end;
+        }
+
+        const long set_tmp_dh = SSL_CTX_set_tmp_dh(ssl_context, dh_2048);
+        DH_free(dh_2048);
+
+        if (set_tmp_dh != 1){
+            ret = 0;
+            goto dh_end;
+        }
+
+        /* OWASP Cipher String 'A+' (https://www.owasp.org/index.php/TLS_Cipher_String_Cheat_Sheet) */
+        if (SSL_CTX_set_cipher_list(ssl_context, "DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256") != 1) ret = 0;
+    }
+    dh_end:
+
+    if (options->ssl_ciphers) {
+        if (SSL_CTX_set_cipher_list(ssl_context, options->ssl_ciphers) != 1) ret = 0;
+    }
+    return ret;
 }
 
 /* Returns a servername's userdata if any */
@@ -644,7 +746,7 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
         return NULL;
     }
 
-    /* Otherwise ee continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
+    /* Otherwise we continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
     struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
 
     /* I guess this is the only optional callback */
