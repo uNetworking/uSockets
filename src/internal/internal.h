@@ -164,7 +164,7 @@ void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_so
 struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop,
     int context_ext_size, struct us_socket_context_options_t options);
 
-int us_internal_update_ssl_socket_context(struct us_internal_ssl_socket_context_t* ctx, struct us_socket_context_options_t* options);
+int us_internal_update_ssl_socket_context(struct us_internal_ssl_socket_context_t* ctx, const struct us_socket_context_options_t* options);
 
 void us_internal_ssl_socket_context_free(struct us_internal_ssl_socket_context_t *context);
 void us_internal_ssl_socket_context_on_open(struct us_internal_ssl_socket_context_t *context,

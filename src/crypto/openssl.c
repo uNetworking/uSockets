@@ -544,7 +544,7 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
     return ssl_context;
 }
 
-int us_internal_update_ssl_socket_context(struct us_internal_ssl_socket_context_t* ctx, struct us_socket_context_options_t* options){
+int us_internal_update_ssl_socket_context(struct us_internal_ssl_socket_context_t* ctx, const struct us_socket_context_options_t* options){
     /* Get the context */
     SSL_CTX *ssl_context = ctx->ssl_context;
 

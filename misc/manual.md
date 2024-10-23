@@ -53,7 +53,7 @@ struct us_socket_context_options_t {
 WIN32_EXPORT struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop, int ext_size, struct us_socket_context_options_t options);
 
 /* Update socket context options, for example, to load a new certificate without creating a new socket */
-WIN32_EXPORT int us_update_socket_context(int ssl, struct us_socket_context_t* ctx, struct us_socket_context_options_t* options);
+WIN32_EXPORT int us_update_socket_context(int ssl, struct us_socket_context_t* ctx, const struct us_socket_context_options_t* options);
 
 /* Delete resources allocated at creation time. */
 WIN32_EXPORT void us_socket_context_free(int ssl, struct us_socket_context_t *context);
