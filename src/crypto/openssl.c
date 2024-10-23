@@ -43,6 +43,7 @@ void *sni_find(void *sni, const char *hostname);
 #include <wolfssl/openssl/dh.h>
 #endif
 
+// SSL_*_pointer methods
 #include "ssl_from_pointer.h"
 
 struct loop_ssl_data {

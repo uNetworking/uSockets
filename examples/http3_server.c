@@ -44,16 +44,19 @@ void on_stream_headers(us_quic_stream_t *s) {
     //us_quic_socket_context_set_header(context, 2, "content-type", 12, "text/html", 9);
     us_quic_socket_context_send_headers(context, s, 1, 1);
 
-    /* Write body and shutdown (unknown if content-length must be present?) */
+    /* Write body (unknown if content-length must be present?) */
     us_quic_stream_write(s, "Hello quic!", 11);
-
-    /* Every request has its own stream, so we conceptually serve requests like in HTTP 1.0 */
-    us_quic_stream_shutdown(s);
 }
 
 /* And this would be the body of the request */
 void on_stream_data(us_quic_stream_t *s, char *data, int length) {
     printf("Body length is: %d\n", length);
+}
+
+/* Request finished */
+void on_stream_end(us_quic_stream_t *s) {
+    /* Every request has its own stream, so we conceptually serve requests like in HTTP 1.0 */
+    us_quic_stream_shutdown(s);
 }
 
 void on_stream_writable(us_quic_stream_t *s) {
@@ -89,10 +92,11 @@ int main() {
     };
 
     /* Create quic socket context (assumes h3 for now) */
-    context = us_create_quic_socket_context(loop, options);
+    context = us_create_quic_socket_context(loop, options, 0);
 
     /* Specify application callbacks */
     us_quic_socket_context_on_stream_data(context, on_stream_data);
+    us_quic_socket_context_on_stream_end(context, on_stream_end);
     us_quic_socket_context_on_stream_open(context, on_stream_open);
     us_quic_socket_context_on_stream_close(context, on_stream_close);
     us_quic_socket_context_on_stream_writable(context, on_stream_writable);
@@ -101,7 +105,7 @@ int main() {
     us_quic_socket_context_on_close(context, on_close);
 
     /* The listening socket is the actual UDP socket used */
-    us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "::1", 9004);
+    us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "::1", 9004, 0);
 
     /* Run the event loop */
     us_loop_run(loop);
