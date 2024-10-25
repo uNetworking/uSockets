@@ -77,8 +77,17 @@ WIN32_EXPORT struct us_listen_socket_t *us_socket_context_listen(int ssl, struct
 /* listen_socket.c/.h */
 WIN32_EXPORT void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
 
+/* DNS lookup */
+WIN32_EXPORT struct addrinfo *us_get_addr(const char* host, int port);
+
+/* free data returned by us_get_addr() */
+WIN32_EXPORT void us_free_addr(struct addrinfo *addr);
+
 /* Land in on_open or on_close or return null or return socket */
 WIN32_EXPORT struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context, const char *host, int port, int options, int socket_ext_size);
+
+/* Same as above but use addrinfo object */
+WIN32_EXPORT struct us_socket_t *us_socket_context_connect_addr(int ssl, struct us_socket_context_t *context, const struct addrinfo *host, const struct addrinfo *source_host, int options, int socket_ext_size);
 
 /* Returns the loop for this socket context. */
 WIN32_EXPORT struct us_loop_t *us_socket_context_loop(int ssl, struct us_socket_context_t *context);

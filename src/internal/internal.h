@@ -203,6 +203,9 @@ struct us_internal_ssl_socket_t *us_internal_ssl_adopt_accepted_socket(struct us
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context,
     const char *host, int port, const char *source_host, int options, int socket_ext_size);
 
+struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect_addr(struct us_internal_ssl_socket_context_t *context,
+    const struct addrinfo *host, const char *source_host, int options, int socket_ext_size);
+
     
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect_unix(struct us_internal_ssl_socket_context_t *context,
     const char *server_path, int options, int socket_ext_size);

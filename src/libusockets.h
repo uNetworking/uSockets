@@ -201,9 +201,18 @@ void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
 struct us_socket_t *us_adopt_accepted_socket(int ssl, struct us_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR client_fd,
     unsigned int socket_ext_size, char *addr_ip, int addr_ip_length);
 
+/* DNS lookup */
+struct addrinfo *us_get_addr(const char* host, int port);
+
+/* free data returned by us_get_addr() */
+void us_free_addr(struct addrinfo *addr);
+
 /* Land in on_open or on_connection_error or return null or return socket */
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context,
     const char *host, int port, const char *source_host, int options, int socket_ext_size);
+
+struct us_socket_t *us_socket_context_connect_addr(int ssl, struct us_socket_context_t *context,
+    const struct addrinfo *host, const char *source_host, int options, int socket_ext_size);
 
 struct us_socket_t *us_socket_context_connect_unix(int ssl, struct us_socket_context_t *context,
     const char *server_path, int options, int socket_ext_size);

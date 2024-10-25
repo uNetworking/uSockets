@@ -463,6 +463,25 @@ int bsd_would_block() {
 #endif
 }
 
+struct addrinfo *us_get_addr(const char* host, int port){
+    struct addrinfo hints, *result;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    char port_string[16];
+    snprintf(port_string, 16, "%d", port);
+
+    if (getaddrinfo(host, port_string, &hints, &result) != 0) {
+        return NULL;
+    }
+    return result;
+}
+
+void us_free_addr(struct addrinfo *addr){
+    freeaddrinfo(addr);
+}
+
 // return LIBUS_SOCKET_ERROR or the fd that represents listen socket
 // listen both on ipv6 and ipv4
 LIBUS_SOCKET_DESCRIPTOR bsd_create_listen_socket(const char *host, int port, int options) {
@@ -707,6 +726,30 @@ int bsd_udp_packet_buffer_ecn(void *msgvec, int index) {
     printf("We got no ECN!\n");
 
     return 0; // no ecn defaults to 0
+}
+
+LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket_addr(const struct addrinfo *host, const char *source_host, int options) {
+
+    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_socket(host->ai_family, host->ai_socktype, host->ai_protocol);
+    if (fd == LIBUS_SOCKET_ERROR) {
+        return LIBUS_SOCKET_ERROR;
+    }
+
+    if (source_host) {
+        struct addrinfo *interface_result;
+        if (!getaddrinfo(source_host, NULL, NULL, &interface_result)) {
+            int ret = bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
+            freeaddrinfo(interface_result);
+            if (ret == LIBUS_SOCKET_ERROR) {
+                bsd_close_socket(fd);
+                return LIBUS_SOCKET_ERROR;
+            }
+        }
+    }
+
+    connect(fd, host->ai_addr, (socklen_t) host->ai_addrlen);
+
+    return fd;
 }
 
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options) {
