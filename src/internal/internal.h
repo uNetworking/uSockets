@@ -116,7 +116,7 @@ struct us_listen_socket_t {
     unsigned int socket_ext_size;
 };
 
-/* Listen sockets are keps in their own list */
+/* Listen sockets are kept in their own list */
 void us_internal_socket_context_link_listen_socket(struct us_socket_context_t *context, struct us_listen_socket_t *s);
 void us_internal_socket_context_unlink_listen_socket(struct us_socket_context_t *context, struct us_listen_socket_t *s);
 

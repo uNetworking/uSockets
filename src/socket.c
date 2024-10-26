@@ -93,7 +93,7 @@ int us_socket_is_established(int ssl, struct us_socket_t *s) {
     return us_internal_poll_type((struct us_poll_t *) s) != POLL_TYPE_SEMI_SOCKET;
 }
 
-/* Exactly the same as us_socket_close but does not emit on_close event */
+/* Exactly the same as us_socket_close but does not check priority or emit on_close event */
 struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s) {
     if (!us_socket_is_closed(0, s)) {
         us_internal_socket_context_unlink_socket(s->context, s);
@@ -112,7 +112,7 @@ struct us_socket_t *us_socket_close_connecting(int ssl, struct us_socket_t *s) {
     return s;
 }
 
-/* Same as above but emits on_close */
+/* Same as above but check priority and emits on_close */
 struct us_socket_t *us_socket_close(int ssl, struct us_socket_t *s, int code, void *reason) {
     if (!us_socket_is_closed(0, s)) {
         if (s->low_prio_state == 1) {
