@@ -129,6 +129,15 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     return context;
 }
 
+int us_update_socket_context(int ssl, struct us_socket_context_t* ctx, const struct us_socket_context_options_t* options) {
+#ifndef LIBUS_NO_SSL
+    if(ssl){
+        return us_internal_update_ssl_socket_context((struct us_internal_ssl_socket_context_t*) ctx, options);
+    }
+#endif
+    return 1;
+}
+
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
 
 }
@@ -181,7 +190,53 @@ struct us_listen_socket_t *us_socket_context_listen(int ssl, struct us_socket_co
 struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_socket_context_t *context, const char *path, int options, int socket_ext_size) {
     return 0;
 }
+static int num_sockets;
 
+struct us_socket_t *us_socket_context_connect_addr(int ssl, struct us_socket_context_t *context, const struct addrinfo *host, const char *source_host, int options, int socket_ext_size) {
+
+    struct us_socket_t *s = malloc(sizeof(struct us_socket_t) + socket_ext_size);
+    s->context = context;
+
+    s->timeout = 255;
+    s->long_timeout = 255;
+
+    us_internal_socket_context_link_socket(context, s);
+
+    LIBUS_SOCKET_DESCRIPTOR fd = bsd_create_socket(host->ai_family, host->ai_socktype, host->ai_protocol);
+    bsd_socket_nodelay(fd, 1);
+    
+    if (fd == LIBUS_SOCKET_ERROR) {
+        return NULL;
+    }
+
+    if (source_host) {
+        struct addrinfo *interface_result;
+        if (!getaddrinfo(source_host, NULL, NULL, &interface_result)) {
+            int ret = bind(fd, interface_result->ai_addr, (socklen_t) interface_result->ai_addrlen);
+            freeaddrinfo(interface_result);
+            if (ret == LIBUS_SOCKET_ERROR) {
+                bsd_close_socket(fd);
+                return LIBUS_SOCKET_ERROR;
+            }
+        }
+    }
+
+    struct io_uring_sqe *sqe = io_uring_get_sqe(&context->loop->ring);
+    io_uring_prep_connect(sqe, fd, host->ai_addr, (socklen_t) host->ai_addrlen);
+
+    // register this file add
+    io_uring_register_files_update(&context->loop->ring, num_sockets, &fd, 1);
+
+    s->dd = num_sockets++;
+
+
+    struct iovec iovecs = {s->sendBuf, 16 * 1024};
+    //printf("register: %d\n", io_uring_register_buffers_update_tag(&context->loop->ring, s->dd, &iovecs, 0, 1));
+
+    io_uring_sqe_set_data(sqe, (char *)s + SOCKET_CONNECT);
+    
+    return s;
+}
 
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {
     
@@ -230,26 +285,17 @@ struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_
     struct io_uring_sqe *sqe = io_uring_get_sqe(&context->loop->ring);
     io_uring_prep_connect(sqe, fd, result->ai_addr, (socklen_t) result->ai_addrlen);
 
-        static int num_sockets;
+    freeaddrinfo(result);
 
     // register this file add
     io_uring_register_files_update(&context->loop->ring, num_sockets, &fd, 1);
 
-
-
     s->dd = num_sockets++;
-
 
     struct iovec iovecs = {s->sendBuf, 16 * 1024};
     //printf("register: %d\n", io_uring_register_buffers_update_tag(&context->loop->ring, s->dd, &iovecs, 0, 1));
 
-
     io_uring_sqe_set_data(sqe, (char *)s + SOCKET_CONNECT);
-
-
-    freeaddrinfo(result);
-    
-    
     
     return s;
 }

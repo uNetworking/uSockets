@@ -234,6 +234,15 @@ struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *
     return context;
 }
 
+int us_update_socket_context(int ssl, struct us_socket_context_t* ctx, const struct us_socket_context_options_t* options) {
+#ifndef LIBUS_NO_SSL
+    if(ssl){
+        return us_internal_update_ssl_socket_context((struct us_internal_ssl_socket_context_t*) ctx, options);
+    }
+#endif
+    return 1;
+}
+
 void us_socket_context_free(int ssl, struct us_socket_context_t *context) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
@@ -310,6 +319,35 @@ struct us_listen_socket_t *us_socket_context_listen_unix(int ssl, struct us_sock
     ls->socket_ext_size = socket_ext_size;
 
     return ls;
+}
+
+struct us_socket_t *us_socket_context_connect_addr(int ssl, struct us_socket_context_t *context, const struct addrinfo *host, const char *source_host, int options, int socket_ext_size) {
+    #ifndef LIBUS_NO_SSL
+    if (ssl) {
+        return (struct us_socket_t *) us_internal_ssl_socket_context_connect_addr((struct us_internal_ssl_socket_context_t *) context, host, source_host, options, socket_ext_size);
+    }
+#endif
+
+    LIBUS_SOCKET_DESCRIPTOR connect_socket_fd = bsd_create_connect_socket_addr(host, source_host, options);
+    if (connect_socket_fd == LIBUS_SOCKET_ERROR) {
+        return 0;
+    }
+
+    /* Connect sockets are semi-sockets just like listen sockets */
+    struct us_poll_t *p = us_create_poll(context->loop, 0, sizeof(struct us_socket_t) + socket_ext_size);
+    us_poll_init(p, connect_socket_fd, POLL_TYPE_SEMI_SOCKET);
+    us_poll_start(p, context->loop, LIBUS_SOCKET_WRITABLE);
+
+    struct us_socket_t *connect_socket = (struct us_socket_t *) p;
+
+    /* Link it into context so that timeout fires properly */
+    connect_socket->context = context;
+    connect_socket->timeout = 255;
+    connect_socket->long_timeout = 255;
+    connect_socket->low_prio_state = 0;
+    us_internal_socket_context_link_socket(context, connect_socket);
+
+    return connect_socket;
 }
 
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context, const char *host, int port, const char *source_host, int options, int socket_ext_size) {

@@ -123,15 +123,17 @@ void us_timer_set(struct us_timer_t *timer, void (*cb)(struct us_timer_t *t), in
 struct us_loop_t *us_timer_loop(struct us_timer_t *t);
 
 /* Public interfaces for contexts */
-
 struct us_socket_context_options_t {
-    const char *key_file_name;
-    const char *cert_file_name;
+    union{ const char *key_file_name, *key_file; };
+    union{ const char *cert_file_name, *cert_file; };
     const char *passphrase;
-    const char *dh_params_file_name;
-    const char *ca_file_name;
+    union{ const char *dh_params_file_name, *dh_params_file; };
+    union{ const char *ca_file_name, *ca_file; };
     const char *ssl_ciphers;
-    int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
+    char ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
+    char key_data_inline;
+    char cert_data_inline;
+    char dh_params_data_inline;
 };
 
 /* Return 15-bit timestamp for this context */
@@ -150,6 +152,9 @@ void *us_socket_context_get_native_handle(int ssl, struct us_socket_context_t *c
 /* A socket context holds shared callbacks and user data extension for associated sockets */
 struct us_socket_context_t *us_create_socket_context(int ssl, struct us_loop_t *loop,
     int ext_size, struct us_socket_context_options_t options);
+
+/* Update socket context options, for example, to load a new certificate without creating a new socket */
+int us_update_socket_context(int ssl, struct us_socket_context_t* ctx, const struct us_socket_context_options_t* options);
 
 /* Delete resources allocated at creation time. */
 void us_socket_context_free(int ssl, struct us_socket_context_t *context);
@@ -196,9 +201,18 @@ void us_listen_socket_close(int ssl, struct us_listen_socket_t *ls);
 struct us_socket_t *us_adopt_accepted_socket(int ssl, struct us_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR client_fd,
     unsigned int socket_ext_size, char *addr_ip, int addr_ip_length);
 
+/* DNS lookup */
+struct addrinfo *us_get_addr(const char* host, int port);
+
+/* free data returned by us_get_addr() */
+void us_free_addr(struct addrinfo *addr);
+
 /* Land in on_open or on_connection_error or return null or return socket */
 struct us_socket_t *us_socket_context_connect(int ssl, struct us_socket_context_t *context,
     const char *host, int port, const char *source_host, int options, int socket_ext_size);
+
+struct us_socket_t *us_socket_context_connect_addr(int ssl, struct us_socket_context_t *context,
+    const struct addrinfo *host, const char *source_host, int options, int socket_ext_size);
 
 struct us_socket_t *us_socket_context_connect_unix(int ssl, struct us_socket_context_t *context,
     const char *server_path, int options, int socket_ext_size);

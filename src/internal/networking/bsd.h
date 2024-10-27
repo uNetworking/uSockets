@@ -104,6 +104,8 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port);
 
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket(const char *host, int port, const char *source_host, int options);
 
+LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket_addr(const struct addrinfo *host, const char *source_host, int options);
+
 LIBUS_SOCKET_DESCRIPTOR bsd_create_connect_socket_unix(const char *server_path, int options);
 
 #endif // BSD_H

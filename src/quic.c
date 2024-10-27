@@ -568,6 +568,9 @@ static void on_stream_close (lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
 
 #include "openssl/ssl.h"
 
+// SSL_*_pointer methods
+#include "crypto/ssl_from_pointer.h"
+
 static char s_alpn[0x100];
 
 int add_alpn (const char *alpn)
@@ -667,8 +670,12 @@ struct ssl_ctx_st *get_ssl_ctx(void *peer_ctx, const struct sockaddr *local) {
     printf("Key: %s\n", options->key_file_name);
     printf("Cert: %s\n", options->cert_file_name);
 
-    int a = SSL_CTX_use_certificate_chain_file(ctx, options->cert_file_name);
-    int b = SSL_CTX_use_PrivateKey_file(ctx, options->key_file_name, SSL_FILETYPE_PEM);
+    int a = options->cert_data_inline ?
+        SSL_CTX_use_certificate_chain_pointer(ctx, options->cert_file, -1)
+      : SSL_CTX_use_certificate_chain_file(ctx, options->cert_file_name);
+    int b = options->key_data_inline ?
+        SSL_CTX_use_PrivateKey_pointer(ctx, options->key_file, -1)
+      : SSL_CTX_use_PrivateKey_file(ctx, options->key_file_name, SSL_FILETYPE_PEM);
 
     printf("loaded cert and key? %d, %d\n", a, b);
 

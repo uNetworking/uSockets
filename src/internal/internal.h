@@ -164,6 +164,8 @@ void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_so
 struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(struct us_loop_t *loop,
     int context_ext_size, struct us_socket_context_options_t options);
 
+int us_internal_update_ssl_socket_context(struct us_internal_ssl_socket_context_t* ctx, const struct us_socket_context_options_t* options);
+
 void us_internal_ssl_socket_context_free(struct us_internal_ssl_socket_context_t *context);
 void us_internal_ssl_socket_context_on_open(struct us_internal_ssl_socket_context_t *context,
     struct us_internal_ssl_socket_t *(*on_open)(struct us_internal_ssl_socket_t *s, int is_client, char *ip, int ip_length));
@@ -200,6 +202,9 @@ struct us_internal_ssl_socket_t *us_internal_ssl_adopt_accepted_socket(struct us
 
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect(struct us_internal_ssl_socket_context_t *context,
     const char *host, int port, const char *source_host, int options, int socket_ext_size);
+
+struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect_addr(struct us_internal_ssl_socket_context_t *context,
+    const struct addrinfo *host, const char *source_host, int options, int socket_ext_size);
 
     
 struct us_internal_ssl_socket_t *us_internal_ssl_socket_context_connect_unix(struct us_internal_ssl_socket_context_t *context,

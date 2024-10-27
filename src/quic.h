@@ -8,9 +8,11 @@
 #include "libusockets.h"
 
 typedef struct {
-    const char *cert_file_name;
-    const char *key_file_name;
+    union{ const char *cert_file_name, *cert_file; };
+    union{ const char *key_file_name, *key_file; };
     const char *passphrase;
+    char cert_data_inline;
+    char key_data_inline;
 } us_quic_socket_context_options_t;
 
 
