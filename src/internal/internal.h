@@ -116,7 +116,7 @@ struct us_listen_socket_t {
     unsigned int socket_ext_size;
 };
 
-/* Listen sockets are keps in their own list */
+/* Listen sockets are kept in their own list */
 void us_internal_socket_context_link_listen_socket(struct us_socket_context_t *context, struct us_listen_socket_t *s);
 void us_internal_socket_context_unlink_listen_socket(struct us_socket_context_t *context, struct us_listen_socket_t *s);
 
@@ -130,7 +130,7 @@ struct us_socket_context_t {
     struct us_socket_t *iterator;
     struct us_socket_context_t *prev, *next;
 
-    LIBUS_SOCKET_DESCRIPTOR (*on_pre_open)(LIBUS_SOCKET_DESCRIPTOR fd);
+    LIBUS_SOCKET_DESCRIPTOR (*on_pre_open)(struct us_socket_context_t *context, LIBUS_SOCKET_DESCRIPTOR fd);
     struct us_socket_t *(*on_open)(struct us_socket_t *, int is_client, char *ip, int ip_length);
     struct us_socket_t *(*on_data)(struct us_socket_t *, char *data, int length);
     struct us_socket_t *(*on_writable)(struct us_socket_t *);

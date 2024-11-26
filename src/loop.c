@@ -277,7 +277,7 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                     do {
                         struct us_socket_context_t *context = us_socket_context(0, &listen_socket->s);
                         /* See if we want to export the FD or keep it here (this event can be unset) */
-                        if (context->on_pre_open == 0 || context->on_pre_open(client_fd) == client_fd) {
+                        if (context->on_pre_open == 0 || context->on_pre_open(context, client_fd) == client_fd) {
 
                             /* Adopt the newly accepted socket */
                             us_adopt_accepted_socket(0, context,

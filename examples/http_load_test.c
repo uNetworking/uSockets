@@ -7,12 +7,18 @@ const int SSL = 1;
 #include <stdlib.h>
 #include <string.h>
 
-char request[] = "GET / HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\n\r\n";
+char request_template[] = "GET / HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\n\r\n";
+char request_template_post[] = "POST / HTTP/1.1\r\nHost: localhost:3000\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\nContent-Length: 10\r\n\r\n{\"key\":13}";
+
+char *request;
+int request_size;
 char *host;
 int port;
 int connections;
 
 int responses;
+int pipeline = 1;
+int is_post = 0;
 
 struct http_socket {
     /* How far we have streamed our request */
@@ -37,7 +43,7 @@ struct us_socket_t *on_http_socket_writable(struct us_socket_t *s) {
     struct http_socket *http_socket = (struct http_socket *) us_socket_ext(SSL, s);
 
     /* Stream whatever is remaining of the request */
-    http_socket->offset += us_socket_write(SSL, s, request + http_socket->offset, (sizeof(request) - 1) - http_socket->offset, 0);
+    http_socket->offset += us_socket_write(SSL, s, request + http_socket->offset, (request_size) - http_socket->offset, 0);
 
     return s;
 }
@@ -55,7 +61,7 @@ struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int l
     struct http_socket *http_socket = (struct http_socket *) us_socket_ext(SSL, s);
 
     /* We treat all data events as a response */
-    http_socket->offset = us_socket_write(SSL, s, request, sizeof(request) - 1, 0);
+    http_socket->offset = us_socket_write(SSL, s, request, request_size, 0);
 
     /* */
     responses++;
@@ -70,7 +76,7 @@ struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, ch
     http_socket->offset = 0;
 
     /* Send a request */
-    us_socket_write(SSL, s, request, sizeof(request) - 1, 0);
+    us_socket_write(SSL, s, request, request_size, 0);
 
     if (--connections) {
         us_socket_context_connect(SSL, us_socket_context(SSL, s), host, port, NULL, 0, sizeof(struct http_socket));
@@ -94,7 +100,7 @@ struct us_socket_t *on_http_socket_long_timeout(struct us_socket_t *s) {
 
 struct us_socket_t *on_http_socket_timeout(struct us_socket_t *s) {
     /* Print current statistics */
-    printf("Req/sec: %f\n", ((float)responses) / LIBUS_TIMEOUT_GRANULARITY);
+    printf("Req/sec: %f\n", ((float)pipeline) * ((float)responses) / LIBUS_TIMEOUT_GRANULARITY);
 
     responses = 0;
     us_socket_timeout(SSL, s, LIBUS_TIMEOUT_GRANULARITY);
@@ -111,9 +117,32 @@ struct us_socket_t *on_http_socket_connect_error(struct us_socket_t *s, int code
 int main(int argc, char **argv) {
 
     /* Parse host and port */
-    if (argc != 4) {
-        printf("Usage: connections host port\n");
+    if (argc != 5 && argc != 4 && argc != 6) {
+        printf("Usage: connections host port [pipeline factor] [with body]\n");
         return 0;
+    }
+
+    if (argc >= 5) {
+        pipeline =  atoi(argv[4]);
+        printf("Using pipeline factor of %d\n", pipeline);
+    }
+
+    const char *selected_request = request_template;
+    int selected_request_size = sizeof(request_template) - 1;
+
+    if (argc >= 6) {
+        is_post =  atoi(argv[5]);
+        printf("Using post with body\n");
+
+        selected_request = request_template_post;
+        selected_request_size = sizeof(request_template_post) - 1;
+    }
+    /* Pipeline to 16 */
+    request_size = pipeline * selected_request_size;
+    printf("request size %d\n", request_size);
+    request = malloc(request_size);
+    for (int i = 0; i < pipeline; i++) {
+        memcpy(request + i * selected_request_size, selected_request, selected_request_size);
     }
 
     port = atoi(argv[3]);

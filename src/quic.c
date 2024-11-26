@@ -152,7 +152,7 @@ void on_udp_socket_data_client(struct us_udp_socket_t *s, struct us_udp_packet_b
         }
 
 
-        int ret = lsquic_engine_packet_in(context->client_engine, payload, length, (struct sockaddr *) &local_addr, peer_addr, (void *) s, 0);
+        int ret = lsquic_engine_packet_in(context->client_engine, (unsigned char *) payload, length, (struct sockaddr *) &local_addr, peer_addr, (void *) s, 0);
         //printf("Engine returned: %d\n", ret);
 
     
@@ -215,7 +215,7 @@ void on_udp_socket_data(struct us_udp_socket_t *s, struct us_udp_packet_buffer_t
         }
 
 
-        int ret = lsquic_engine_packet_in(context->engine, payload, length, (struct sockaddr *) &local_addr, peer_addr, (void *) s, 0);
+        int ret = lsquic_engine_packet_in(context->engine, (unsigned char *) payload, length, (struct sockaddr *) &local_addr, peer_addr, (void *) s, 0);
         //printf("Engine returned: %d\n", ret);
 
     
