@@ -192,17 +192,17 @@ void us_loop_run(struct us_loop_t *loop) {
     uv_run(loop->uv_loop, UV_RUN_DEFAULT);
 }
 
-struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll_t *p = (struct us_poll_t *) malloc(sizeof(struct us_poll_t) + ext_size);
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size) {
+    struct us_poll_t *p = (struct us_poll_t *) malloc(size);
     p->uv_p = malloc(sizeof(uv_poll_t));
     p->uv_p->data = p;
     return p;
 }
 
 /* If we update our block position we have to updarte the uv_poll data to point to us */
-struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size) {
 
-    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
+    struct us_poll_t *new_p = realloc(p, size);
     new_p->uv_p->data = new_p;
 
     return new_p;

@@ -303,16 +303,16 @@ void us_loop_run(struct us_loop_t *loop) {
     }
 }
 
-struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll_t *p = (struct us_poll_t *) malloc(sizeof(struct us_poll_t) + ext_size);
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size) {
+    struct us_poll_t *p = (struct us_poll_t *) malloc(size);
     p->boost_block = new boost_block_poll_t( (LIBUS_ASIO_LOOP *)loop->io, p);
 
     return p;
 }
 
 /* If we update our block position we have to updarte the uv_poll data to point to us */
-struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
-    p = (struct us_poll_t *) realloc(p, sizeof(struct us_poll_t) + ext_size);
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size) {
+    p = (struct us_poll_t *) realloc(p, size);
 
     // captures must never capture p directly, only boost_block and derive p from there
     ((struct boost_block_poll_t *) p->boost_block)->p = p;

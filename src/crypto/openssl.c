@@ -407,7 +407,7 @@ void *us_internal_ssl_socket_context_get_native_handle(struct us_internal_ssl_so
 struct us_internal_ssl_socket_context_t *us_internal_create_child_ssl_socket_context(struct us_internal_ssl_socket_context_t *context, int context_ext_size) {
     /* Create a new non-SSL context */
     struct us_socket_context_options_t options = {0};
-    struct us_internal_ssl_socket_context_t *child_context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, context->sc.loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
+    struct us_internal_ssl_socket_context_t *child_context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, context->sc.loop, sizeof(struct us_internal_ssl_socket_context_t) - sizeof(struct us_socket_context_t) + context_ext_size, options);
 
     /* The only thing we share is SSL_CTX */
     child_context->ssl_context = context->ssl_context;
@@ -645,7 +645,7 @@ struct us_internal_ssl_socket_context_t *us_internal_create_ssl_socket_context(s
     }
 
     /* Otherwise ee continue by creating a non-SSL context, but with larger ext to hold our SSL stuff */
-    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) + context_ext_size, options);
+    struct us_internal_ssl_socket_context_t *context = (struct us_internal_ssl_socket_context_t *) us_create_socket_context(0, loop, sizeof(struct us_internal_ssl_socket_context_t) - sizeof(struct us_socket_context_t) + context_ext_size, options);
 
     /* I guess this is the only optional callback */
     context->on_server_name = NULL;

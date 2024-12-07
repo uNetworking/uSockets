@@ -147,7 +147,7 @@ WIN32_EXPORT struct us_loop_t *us_timer_loop(struct us_timer_t *t);
 ## us_poll_t - The eventing foundation of a socket or anything that has a file descriptor
 ```c
 /* A fallthrough poll does not keep the loop running, it falls through */
-WIN32_EXPORT struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size);
+WIN32_EXPORT struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size);
 
 /* After stopping a poll you must manually free the memory */
 WIN32_EXPORT void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop);
@@ -170,5 +170,5 @@ WIN32_EXPORT void *us_poll_ext(struct us_poll_t *p);
 WIN32_EXPORT LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p);
 
 /* Resize an active poll */
-WIN32_EXPORT struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size);
+WIN32_EXPORT struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size);
 ```

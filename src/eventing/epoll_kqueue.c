@@ -40,11 +40,11 @@ void us_loop_free(struct us_loop_t *loop) {
 }
 
 /* Poll */
-struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size) {
     if (!fallthrough) {
         loop->num_polls++;
     }
-    return malloc(sizeof(struct us_poll_t) + ext_size);
+    return malloc(size);
 }
 
 /* Todo: this one should be us_internal_poll_free */
@@ -202,10 +202,10 @@ int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_d
 }
 #endif
 
-struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size) {
     int events = us_poll_events(p);
 
-    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
+    struct us_poll_t *new_p = realloc(p, size);
     if (p != new_p && events) {
 #ifdef LIBUS_USE_EPOLL
         /* Hack: forcefully update poll by stripping away already set events */
