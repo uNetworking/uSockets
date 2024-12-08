@@ -161,16 +161,16 @@ LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p) {
     return p->fd;
 }
 
-struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size) {
-    struct us_poll_t *poll = (struct us_poll_t *) malloc(size);
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
+    struct us_poll_t *poll = (struct us_poll_t *) malloc(sizeof(struct us_poll_t) + ext_size);
 
     return poll;
 }
 
-struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size) {
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
 
-    struct us_poll_t *new_p = realloc(p, size + 1024);
+    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size + 1024);
     if (p != new_p) {
         /* It is a program error to release suspended filters */
         us_poll_change(new_p, loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);

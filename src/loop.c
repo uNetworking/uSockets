@@ -202,7 +202,7 @@ struct us_socket_t *us_adopt_accepted_socket(int ssl, struct us_socket_context_t
             socket_ext_size, addr_ip, addr_ip_length);
     }
 #endif
-    struct us_poll_t *accepted_p = us_create_poll(context->loop, 0, sizeof(struct us_socket_t) + socket_ext_size);
+    struct us_poll_t *accepted_p = us_create_poll(context->loop, 0, sizeof(struct us_socket_t) - sizeof(struct us_poll_t) + socket_ext_size);
     us_poll_init(accepted_p, accepted_fd, POLL_TYPE_SOCKET);
     us_poll_start(accepted_p, context->loop, LIBUS_SOCKET_READABLE);
 

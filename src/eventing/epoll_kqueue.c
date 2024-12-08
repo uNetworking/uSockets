@@ -40,11 +40,11 @@ void us_loop_free(struct us_loop_t *loop) {
 }
 
 /* Poll */
-struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size) {
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
     if (!fallthrough) {
         loop->num_polls++;
     }
-    return malloc(size);
+    return malloc(sizeof(struct us_poll_t) + ext_size);
 }
 
 /* Todo: this one should be us_internal_poll_free */
@@ -202,10 +202,10 @@ int kqueue_change(int kqfd, int fd, int old_events, int new_events, void *user_d
 }
 #endif
 
-struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size) {
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size) {
     int events = us_poll_events(p);
 
-    struct us_poll_t *new_p = realloc(p, size);
+    struct us_poll_t *new_p = realloc(p, sizeof(struct us_poll_t) + ext_size);
     if (p != new_p && events) {
 #ifdef LIBUS_USE_EPOLL
         /* Hack: forcefully update poll by stripping away already set events */
@@ -287,7 +287,7 @@ unsigned int us_internal_accept_poll_event(struct us_poll_t *p) {
 /* Timer */
 #ifdef LIBUS_USE_EPOLL
 struct us_timer_t *us_create_timer(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) + ext_size);
+    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) - sizeof(struct us_poll_t) + ext_size);
     int timerfd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
     if (timerfd == -1) {
       return NULL;
@@ -372,7 +372,7 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
 /* Async (internal helper for loop's wakeup feature) */
 #ifdef LIBUS_USE_EPOLL
 struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int fallthrough, unsigned int ext_size) {
-    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) + ext_size);
+    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_callback_t) - sizeof(struct us_poll_t) + ext_size);
     us_poll_init(p, eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC), POLL_TYPE_CALLBACK);
 
     struct us_internal_callback_t *cb = (struct us_internal_callback_t *) p;

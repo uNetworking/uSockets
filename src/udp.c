@@ -118,7 +118,7 @@ struct us_udp_socket_t *us_create_udp_socket(struct us_loop_t *loop, struct us_u
     int ext_size = 0;
     int fallthrough = 0;
 
-    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_udp_t) + ext_size);
+    struct us_poll_t *p = us_create_poll(loop, fallthrough, sizeof(struct us_internal_udp_t) - sizeof(struct us_poll_t) + ext_size);
     us_poll_init(p, fd, POLL_TYPE_CALLBACK);
 
     struct us_internal_udp_t *cb = (struct us_internal_udp_t *) p;

@@ -251,7 +251,7 @@ long long us_loop_iteration_number(struct us_loop_t *loop);
 /* Public interfaces for polls */
 
 /* A fallthrough poll does not keep the loop running, it falls through */
-struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int size);
+struct us_poll_t *us_create_poll(struct us_loop_t *loop, int fallthrough, unsigned int ext_size);
 
 /* After stopping a poll you must manually free the memory */
 void us_poll_free(struct us_poll_t *p, struct us_loop_t *loop);
@@ -274,7 +274,7 @@ void *us_poll_ext(struct us_poll_t *p);
 LIBUS_SOCKET_DESCRIPTOR us_poll_fd(struct us_poll_t *p);
 
 /* Resize an active poll */
-struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int size);
+struct us_poll_t *us_poll_resize(struct us_poll_t *p, struct us_loop_t *loop, unsigned int ext_size);
 
 /* Public interfaces for sockets */
 
