@@ -42,11 +42,7 @@ endif
 # WITH_ASIO builds with asio/boost::asio event-loop
 ifeq ($(WITH_ASIO),1)
 	override CFLAGS += -DLIBUS_USE_ASIO
-	ifeq ($(ASIO_STANDALONE),1)
-		override CXXFLAGS += -pthread -DLIBUS_USE_ASIO -DASIO_STANDALONE
-	else
-		override CXXFLAGS += -pthread -DLIBUS_USE_ASIO
-	endif
+	override CXXFLAGS += -pthread -DLIBUS_USE_ASIO 
 	override LDFLAGS += -lstdc++ -lpthread
 endif
 

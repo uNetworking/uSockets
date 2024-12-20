@@ -23,27 +23,16 @@ extern "C" {
 
 #ifdef LIBUS_USE_ASIO
 
-#ifdef ASIO_STANDALONE
 #include <asio.hpp>
 #include <asio/version.hpp>
 #include <system_error>
-#else
-#include <boost/asio.hpp>
-#include <boost/version.hpp>
-#endif
 #include <iostream>
 #include <mutex>
 #include <memory>
 
-#ifdef ASIO_STANDALONE
 namespace net = asio;
 using error_code = std::error_code;
 namespace chronons = asio::chrono;
-#else
-namespace net = boost::asio;
-using error_code = boost::system::error_code;
-namespace chronons = boost::posix_time;
-#endif
 
 // New interfaces require boost 1.66.0 or asio standalone 1.10.0
 #if BOOST_VERSION < 106600 || ASIO_VERSION < 101000
@@ -61,11 +50,8 @@ int polls = 0; // temporary solution keeping track of outstanding work
 // define a timer internally as something that inherits from callback_t
 // us_timer_t is convertible to this one
 struct boost_timer : us_internal_callback_t {
-    #ifdef ASIO_STANDALONE
     net::steady_timer timer;
-    #else
-    net::deadline_timer timer;
-    #endif
+
     std::shared_ptr<boost_timer> isValid;
 
     unsigned char nr = 0;
