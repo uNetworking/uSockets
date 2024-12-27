@@ -89,7 +89,7 @@ int main() {
     };
 
     /* Create quic socket context (assumes h3 for now) */
-    context = us_create_quic_socket_context(loop, options);
+    context = us_create_quic_socket_context(loop, options, 0);
 
     /* Specify application callbacks */
     us_quic_socket_context_on_stream_data(context, on_stream_data);
@@ -101,7 +101,7 @@ int main() {
     us_quic_socket_context_on_close(context, on_close);
 
     /* The listening socket is the actual UDP socket used */
-    us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "::1", 9004);
+    us_quic_listen_socket_t *listen_socket = us_quic_socket_context_listen(context, "::1", 9004, 0);
 
     /* Run the event loop */
     us_loop_run(loop);
