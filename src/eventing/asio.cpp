@@ -455,7 +455,7 @@ void us_internal_async_wakeup(struct us_internal_async *a) {
     cb->m.unlock();
 
     // should increase and decrease polls (again, loop mutex)
-    io->post([weakBoostBlock = std::weak_ptr<boost_async>(cb->isValid)]() {
+    boost::asio::post(*io, [weakBoostBlock = std::weak_ptr<boost_async>(cb->isValid)]() {
 
         // was the async deleted before we came here?
         struct boost_async *cb;
