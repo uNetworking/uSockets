@@ -340,10 +340,14 @@ struct us_loop_t *us_create_loop(void *hint, void (*wakeup_cb)(struct us_loop_t 
 
     // create buffer ring here
     struct io_uring_buf_reg reg = {0};
-    posix_memalign(&reg.ring_addr, 1024 * 4, sizeof(struct io_uring_buf) * 4096);
+    {
+        void* temp_addr = NULL;
+        posix_memalign(&temp_addr, 1024 * 4, sizeof(struct io_uring_buf) * 4096);
+        reg.ring_addr = (__u64)temp_addr;
+    }
     reg.ring_entries = 4096;
     reg.bgid = 1337;
-    loop->buf_ring = reg.ring_addr;
+    loop->buf_ring = (struct io_uring_buf_ring*)reg.ring_addr;
 
     // registrera buffer ring bvuffer
     if (io_uring_register_buf_ring(&loop->ring, &reg, 0)) {
