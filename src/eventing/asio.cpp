@@ -45,7 +45,7 @@ int polls = 0; // temporary solution keeping track of outstanding work
 // define a timer internally as something that inherits from callback_t
 // us_timer_t is convertible to this one
 struct boost_timer : us_internal_callback_t {
-    boost::asio::deadline_timer timer;
+    boost::asio::steady_timer timer;
     std::shared_ptr<boost_timer> isValid;
 
     unsigned char nr = 0;
@@ -375,7 +375,7 @@ void poll_for_timeout(struct boost_timer *b_timer, int repeat_ms) {
                     return;
                 }
 
-                b_timer->timer.expires_at(b_timer->timer.expires_at() + boost::posix_time::milliseconds(repeat_ms));
+                b_timer->timer.expires_at(b_timer->timer.expiry() + std::chrono::milliseconds(repeat_ms));
                 poll_for_timeout(b_timer, repeat_ms);
             }
             us_internal_dispatch_ready_poll((struct us_poll_t *)b_timer, 0, LIBUS_SOCKET_READABLE);
@@ -392,7 +392,7 @@ void us_timer_set(struct us_timer_t *t, void (*cb)(struct us_timer_t *t), int ms
     } else {
         b_timer->cb = (void(*)(struct us_internal_callback_t *)) cb;
 
-        b_timer->timer.expires_from_now(boost::posix_time::milliseconds(ms));
+        b_timer->timer.expires_after(std::chrono::milliseconds(ms));
         poll_for_timeout(b_timer, repeat_ms);
     }
 }
