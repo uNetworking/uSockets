@@ -430,7 +430,6 @@ struct us_internal_async *us_internal_create_async(struct us_loop_t *loop, int f
 void us_internal_async_close(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
-    /* Note: This will fail most of the time as there probably is no pending trigger */
     struct kevent event;
     EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_DELETE, 0, 0, internal_cb);
     kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
@@ -443,14 +442,19 @@ void us_internal_async_set(struct us_internal_async *a, void (*cb)(struct us_int
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
     internal_cb->cb = (void (*)(struct us_internal_callback_t *)) cb;
+
+    /* Register once: FreeBSD does not trigger NOTE_TRIGGER on initial EV_ADD.
+     * EV_CLEAR resets each delivered wakeup while keeping the event registered. */
+    struct kevent event;
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, internal_cb);
+    kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
 }
 
 void us_internal_async_wakeup(struct us_internal_async *a) {
     struct us_internal_callback_t *internal_cb = (struct us_internal_callback_t *) a;
 
-    /* In kqueue you really only need to add a triggered oneshot event */
     struct kevent event;
-    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, EV_ADD | EV_ONESHOT, NOTE_TRIGGER, 0, internal_cb);
+    EV_SET(&event, (uintptr_t) internal_cb, EVFILT_USER, 0, NOTE_TRIGGER, 0, internal_cb);
     kevent(internal_cb->loop->fd, &event, 1, NULL, 0, NULL);
 }
 #endif
