@@ -12,6 +12,14 @@ char request_template_post[] = "POST %s HTTP/1.1\r\nHost: localhost:3000\r\nUser
 
 char *request;
 int request_size;
+/* One request of the pipelined batch */
+int single_request_size;
+
+/* A {n} in the path becomes a number that changes on every request, written over a fixed width so
+ * the request keeps its size: a server cannot answer it from the bytes of the one before */
+#define VARY_WIDTH 8
+int vary_offset = -1;
+unsigned int vary_counter;
 char *host;
 int port;
 int connections;
@@ -24,6 +32,21 @@ struct http_socket {
     /* How far we have streamed our request */
     int offset;
 };
+
+/* Writes the next numbers into every request of the batch */
+void vary_request() {
+    if (vary_offset < 0) {
+        return;
+    }
+    for (int i = 0; i < pipeline; i++) {
+        unsigned int n = vary_counter++;
+        char *digits = request + i * single_request_size + vary_offset;
+        for (int d = VARY_WIDTH - 1; d >= 0; d--) {
+            digits[d] = '0' + n % 10;
+            n /= 10;
+        }
+    }
+}
 
 /* We don't need any of these */
 void on_wakeup(struct us_loop_t *loop) {
@@ -61,6 +84,7 @@ struct us_socket_t *on_http_socket_data(struct us_socket_t *s, char *data, int l
     struct http_socket *http_socket = (struct http_socket *) us_socket_ext(SSL, s);
 
     /* We treat all data events as a response */
+    vary_request();
     http_socket->offset = us_socket_write(SSL, s, request, request_size, 0);
 
     /* */
@@ -76,6 +100,7 @@ struct us_socket_t *on_http_socket_open(struct us_socket_t *s, int is_client, ch
     http_socket->offset = 0;
 
     /* Send a request */
+    vary_request();
     us_socket_write(SSL, s, request, request_size, 0);
 
     if (--connections) {
@@ -118,7 +143,7 @@ int main(int argc, char **argv) {
 
     /* Parse host and port */
     if (argc < 4 || argc > 7) {
-        printf("Usage: connections host port [path] [pipeline factor] [with body]\n");
+        printf("Usage: connections host port [path, a {n} in it changes on every request] [pipeline factor] [with body]\n");
         return 0;
     }
 
@@ -140,8 +165,22 @@ int main(int argc, char **argv) {
         }
     }
 
-    int selected_request_size = sprintf(formatted_request, tmpl, path);
+    /* {n} goes out as VARY_WIDTH digits, rewritten before every send */
+    char varied_path[512];
+    const char *placeholder = strstr(path, "{n}");
+    if (placeholder) {
+        snprintf(varied_path, sizeof(varied_path), "%.*s%0*d%s", (int) (placeholder - path), path, VARY_WIDTH, 0, placeholder + 3);
+    }
+
+    int selected_request_size = sprintf(formatted_request, tmpl, placeholder ? varied_path : path);
     const char *selected_request = formatted_request;
+    single_request_size = selected_request_size;
+
+    if (placeholder) {
+        /* The path starts after the method and its space */
+        vary_offset = (int) (strchr(formatted_request, ' ') + 1 - formatted_request) + (int) (placeholder - path);
+        printf("Varying %s on every request\n", path);
+    }
 
     /* Pipeline to 16 */
     request_size = pipeline * selected_request_size;
