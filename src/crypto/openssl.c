@@ -35,6 +35,7 @@ void *sni_find(void *sni, const char *hostname);
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/dh.h>
+#include <openssl/rand.h>
 #elif LIBUS_USE_WOLFSSL
 #include <wolfssl/options.h>
 #include <wolfssl/openssl/ssl.h>
@@ -486,6 +487,15 @@ SSL_CTX *create_ssl_context_from_options(struct us_socket_context_options_t opti
             free_ssl_context(ssl_context);
             return NULL;
         }
+#ifdef LIBUS_USE_OPENSSL
+        /* Bind resumed client authentication to this verification context. */
+        unsigned char session_context[SSL_MAX_SID_CTX_LENGTH];
+        if (RAND_bytes(session_context, sizeof(session_context)) != 1 ||
+            SSL_CTX_set_session_id_context(ssl_context, session_context, sizeof(session_context)) != 1) {
+            free_ssl_context(ssl_context);
+            return NULL;
+        }
+#endif
         SSL_CTX_set_verify(ssl_context, SSL_VERIFY_PEER, NULL);
     }
 
