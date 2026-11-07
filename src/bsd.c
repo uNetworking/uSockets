@@ -306,7 +306,11 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_socket(int domain, int type, int protocol) {
 
     LIBUS_SOCKET_DESCRIPTOR created_fd = socket(domain, type | flags, protocol);
 
+#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+    return apple_no_sigpipe(created_fd);
+#else
     return bsd_set_nonblocking(apple_no_sigpipe(created_fd));
+#endif
 }
 
 void bsd_close_socket(LIBUS_SOCKET_DESCRIPTOR fd) {
@@ -400,7 +404,11 @@ LIBUS_SOCKET_DESCRIPTOR bsd_accept_socket(LIBUS_SOCKET_DESCRIPTOR fd, struct bsd
 
     internal_finalize_bsd_addr(addr);
 
+#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+    return apple_no_sigpipe(accepted_fd);
+#else
     return bsd_set_nonblocking(apple_no_sigpipe(accepted_fd));
+#endif
 }
 
 int bsd_recv(LIBUS_SOCKET_DESCRIPTOR fd, void *buf, int length, int flags) {
