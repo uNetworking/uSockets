@@ -134,6 +134,8 @@ struct us_socket_context_options_t {
     const char *dh_params_file_name;
     const char *ca_file_name;
     const char *ssl_ciphers;
+    const char **alpn_protocols;
+    unsigned int alpn_protocols_length;
     int ssl_prefer_low_memory_usage; /* Todo: rename to prefer_low_memory_usage and apply for TCP as well */
 };
 
