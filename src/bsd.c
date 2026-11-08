@@ -418,7 +418,15 @@ int bsd_write2(LIBUS_SOCKET_DESCRIPTOR fd, const char *header, int header_length
     chunks[1].iov_base = (char *)payload;
     chunks[1].iov_len = payload_length;
     
+#ifdef MSG_NOSIGNAL
+    /* Match bsd_send: a disconnected peer must not terminate the process. */
+    struct msghdr message = {0};
+    message.msg_iov = chunks;
+    message.msg_iovlen = 2;
+    return sendmsg(fd, &message, MSG_NOSIGNAL);
+#else
     return writev(fd, chunks, 2);
+#endif
 }
 #else
 int bsd_write2(LIBUS_SOCKET_DESCRIPTOR fd, const char *header, int header_length, const char *payload, int payload_length) {
@@ -432,6 +440,27 @@ int bsd_write2(LIBUS_SOCKET_DESCRIPTOR fd, const char *header, int header_length
     return written;
 }
 #endif
+
+int bsd_write3(LIBUS_SOCKET_DESCRIPTOR fd, const char *prefix, int prefix_length, const char *data, int data_length, const char *suffix, int suffix_length) {
+#ifndef _WIN32
+    struct iovec chunks[3] = {{(char *) prefix, (size_t) prefix_length},
+                             {(char *) data, (size_t) data_length},
+                             {(char *) suffix, (size_t) suffix_length}};
+#ifdef MSG_NOSIGNAL
+    struct msghdr message = {0};
+    message.msg_iov = chunks;
+    message.msg_iovlen = 3;
+    return sendmsg(fd, &message, MSG_NOSIGNAL);
+#else
+    return writev(fd, chunks, 3);
+#endif
+#else
+    int written = bsd_send(fd, prefix, prefix_length, 1);
+    if (written != prefix_length) return written;
+    int more = bsd_write2(fd, data, data_length, suffix, suffix_length);
+    return written + (more < 0 ? 0 : more);
+#endif
+}
 
 int bsd_send(LIBUS_SOCKET_DESCRIPTOR fd, const char *buf, int length, int msg_more) {
 

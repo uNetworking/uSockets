@@ -293,6 +293,9 @@ int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length
 /* Special path for non-SSL sockets. Used to send header and payload in one go. Works like us_socket_write. */
 int us_socket_write2(int ssl, struct us_socket_t *s, const char *header, int header_length, const char *payload, int payload_length);
 
+/* Same non-SSL semantics as write2, with three buffers. Their combined length must fit in an int. */
+int us_socket_write3(int ssl, struct us_socket_t *s, const char *prefix, int prefix_length, const char *data, int data_length, const char *suffix, int suffix_length);
+
 /* Set a low precision, high performance timer on a socket. A socket can only have one single active timer
  * at any given point in time. Will remove any such pre set timer */
 void us_socket_timeout(int ssl, struct us_socket_t *s, unsigned int seconds);

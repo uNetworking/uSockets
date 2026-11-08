@@ -171,6 +171,18 @@ int us_socket_write2(int ssl, struct us_socket_t *s, const char *header, int hea
     return written < 0 ? 0 : written;
 }
 
+int us_socket_write3(int ssl, struct us_socket_t *s, const char *prefix, int prefix_length, const char *data, int data_length, const char *suffix, int suffix_length) {
+    if (us_socket_is_closed(ssl, s) || us_socket_is_shut_down(ssl, s)) {
+        return 0;
+    }
+    int written = bsd_write3(us_poll_fd(&s->p), prefix, prefix_length, data, data_length, suffix, suffix_length);
+    if (written != prefix_length + data_length + suffix_length) {
+        s->context->loop->data.last_write_failed = 1;
+        us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
+    }
+    return written < 0 ? 0 : written;
+}
+
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
