@@ -23,6 +23,11 @@
 #define LIBUS_RECV_BUFFER_LENGTH 524288
 #endif
 
+/* At most 4 full receive buffers (2mb) are read from one socket per readable event */
+#ifndef LIBUS_RECV_MAX_FULL_READS
+#define LIBUS_RECV_MAX_FULL_READS 4
+#endif
+
 /* A timeout granularity of 4 seconds means give or take 4 seconds from set timeout */
 #define LIBUS_TIMEOUT_GRANULARITY 4
 /* 32 byte padding of receive buffer ends */
