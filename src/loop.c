@@ -302,6 +302,18 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
 
             /* Such as epollerr epollhup */
             if (error) {
+                /* Nothing new can arrive after a hangup, so first deliver what the peer sent before it. The
+                 * readable path below relies on this when it leaves data for the next iteration */
+                if (events & LIBUS_SOCKET_READABLE) {
+                    int length;
+                    while ((length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, LIBUS_RECV_BUFFER_LENGTH, 0)) > 0) {
+                        s = s->context->on_data(s, s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, length);
+                        if (!s || us_socket_is_closed(0, s)) {
+                            return;
+                        }
+                    }
+                }
+
                 /* Todo: decide what code we give here */
                 s = us_socket_close(0, s, 0, NULL);
                 return;
@@ -352,15 +364,17 @@ void us_internal_dispatch_ready_poll(struct us_poll_t *p, int error, int events)
                 }
 
                 int length;
+                int full_reads = 0;
                 read_more:
                 length = bsd_recv(us_poll_fd(&s->p), s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, LIBUS_RECV_BUFFER_LENGTH, 0);
                 if (length > 0) {
                     s = s->context->on_data(s, s->context->loop->data.recv_buf + LIBUS_RECV_BUFFER_PADDING, length);
 
-                    /* If we filled the entire recv buffer, we need to immediately read again since otherwise a
-                     * pending hangup event in the same even loop iteration can close the socket before we get
-                     * the chance to read again next iteration */
-                    if (length == LIBUS_RECV_BUFFER_LENGTH && s && !us_socket_is_closed(0, s)) {
+                    /* If we filled the entire recv buffer, read again right away, but only a few times: a peer
+                     * that refills the buffer during on_data would otherwise hold the loop, with no timer or other
+                     * socket running, for as long as it keeps sending. The poll is level-triggered, so what is left
+                     * is read next iteration, and a hangup that comes first is drained above before closing */
+                    if (length == LIBUS_RECV_BUFFER_LENGTH && s && !us_socket_is_closed(0, s) && ++full_reads < LIBUS_RECV_MAX_FULL_READS) {
                         goto read_more;
                     }
 
